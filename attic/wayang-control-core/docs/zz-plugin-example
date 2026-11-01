@@ -1,0 +1,226 @@
+{
+  "// ==================== EXAMPLE PLUGIN MANIFEST ====================": "",
+  "id": "tech.kayys.custom-nodes",
+  "name": "Custom Business Nodes",
+  "version": "1.0.0",
+  "author": "ACME Corp",
+  "description": "Custom nodes for ACME business workflows",
+  "nodes": [
+    {
+      "type": "acme.customer.lookup",
+      "label": "Customer Lookup",
+      "category": "ACME",
+      "subCategory": "CRM",
+      "description": "Look up customer information from CRM",
+      "icon": "user-search",
+      "color": "#3B82F6",
+      "isComposite": false,
+      "config": [
+        {
+          "name": "customerId",
+          "label": "Customer ID",
+          "type": "text",
+          "required": true,
+          "description": "Unique customer identifier"
+        },
+        {
+          "name": "includeHistory",
+          "label": "Include Purchase History",
+          "type": "toggle",
+          "required": false,
+          "defaultValue": false
+        },
+        {
+          "name": "crmEndpoint",
+          "label": "CRM API Endpoint",
+          "type": "url",
+          "required": true,
+          "defaultValue": "https://crm.acme.com/api"
+        }
+      ],
+      "inputs": [
+        {
+          "id": "customerId",
+          "label": "Customer ID",
+          "type": "string"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "customer",
+          "label": "Customer Data",
+          "type": "object"
+        },
+        {
+          "id": "history",
+          "label": "Purchase History",
+          "type": "array"
+        }
+      ],
+      "ui": {
+        "width": 250,
+        "height": 120,
+        "icon": "user-search",
+        "color": "#3B82F6",
+        "style": "rounded",
+        "badge": "CRM"
+      }
+    },
+    {
+      "type": "acme.fraud.detection",
+      "label": "Fraud Detection",
+      "category": "ACME",
+      "subCategory": "Security",
+      "description": "AI-powered fraud detection composite node",
+      "icon": "shield-alert",
+      "color": "#EF4444",
+      "isComposite": true,
+      "components": [
+        {
+          "id": "preprocessor",
+          "nodeType": "tool.python",
+          "config": {
+            "script": "# Preprocess transaction data"
+          }
+        },
+        {
+          "id": "mlModel",
+          "nodeType": "llm.openai",
+          "config": {
+            "model": "gpt-4",
+            "temperature": 0.3
+          }
+        },
+        {
+          "id": "ruleEngine",
+          "nodeType": "control.decision",
+          "config": {}
+        }
+      ],
+      "config": [
+        {
+          "name": "threshold",
+          "label": "Fraud Threshold",
+          "type": "slider",
+          "required": true,
+          "defaultValue": 0.7,
+          "validation": {
+            "min": 0,
+            "max": 1,
+            "step": 0.05
+          }
+        },
+        {
+          "name": "rules",
+          "label": "Custom Rules (JSON)",
+          "type": "code",
+          "required": false,
+          "uiProps": {
+            "language": "json"
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "id": "transaction",
+          "label": "Transaction Data",
+          "type": "object"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "fraudScore",
+          "label": "Fraud Score",
+          "type": "number"
+        },
+        {
+          "id": "isFraud",
+          "label": "Is Fraudulent",
+          "type": "boolean"
+        },
+        {
+          "id": "reasons",
+          "label": "Detection Reasons",
+          "type": "array"
+        }
+      ],
+      "ui": {
+        "width": 300,
+        "height": 180,
+        "icon": "shield-alert",
+        "color": "#EF4444",
+        "style": "gradient",
+        "badge": "AI",
+        "showComponents": true
+      }
+    },
+    {
+      "type": "acme.inventory.check",
+      "label": "Inventory Checker",
+      "category": "ACME",
+      "subCategory": "Warehouse",
+      "description": "Check product inventory across warehouses",
+      "icon": "package",
+      "color": "#10B981",
+      "isComposite": false,
+      "config": [
+        {
+          "name": "productSku",
+          "label": "Product SKU",
+          "type": "text",
+          "required": true,
+          "placeholder": "e.g., PROD-12345"
+        },
+        {
+          "name": "warehouses",
+          "label": "Warehouses",
+          "type": "multi_select",
+          "required": true,
+          "options": [
+            "US-EAST",
+            "US-WEST",
+            "EU-CENTRAL",
+            "ASIA-PACIFIC"
+          ]
+        },
+        {
+          "name": "checkReserved",
+          "label": "Include Reserved Stock",
+          "type": "toggle",
+          "defaultValue": true
+        }
+      ],
+      "inputs": [
+        {
+          "id": "sku",
+          "label": "SKU",
+          "type": "string"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "available",
+          "label": "Available Quantity",
+          "type": "number"
+        },
+        {
+          "id": "warehouses",
+          "label": "Warehouse Details",
+          "type": "array"
+        },
+        {
+          "id": "inStock",
+          "label": "In Stock",
+          "type": "boolean"
+        }
+      ],
+      "ui": {
+        "width": 250,
+        "height": 140,
+        "icon": "package",
+        "color": "#10B981",
+        "style": "rounded"
+      }
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "id": "tier-rules",
+  "decisions": [
+    {
+      "name": "discount",
+      "type": "table",
+      "hitPolicy": "COLLECT",
+      "aggregator": "SUM",
+      "inputs": ["tier", "amount"],
+      "outputs": ["discount"],
+      "rules": [
+        {"when": ["\"gold\",\"platinum\"", "-"], "then": ["10"]},
+        {"when": ["-", "[100..500]"], "then": ["5"]},
+        {"when": ["-", "< 100"], "then": ["0"]},
+        {"when": ["-", "> 500"], "then": ["7"]}
+      ]
+    }
+  ]
+}

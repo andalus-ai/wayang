@@ -1,0 +1,27 @@
+{
+  "id": "risk-rules",
+  "decisions": [
+    {
+      "name": "risk",
+      "type": "table",
+      "hitPolicy": "FIRST",
+      "aggregator": "NONE",
+      "inputs": ["amount"],
+      "outputs": ["risk"],
+      "rules": [
+        {"when": ["> 5000"], "then": ["\"high\""], "note": "Large exposure"},
+        {"when": ["-"], "then": ["\"low\""]}
+      ]
+    }
+  ],
+  "studio": {
+    "meta": {
+      "title": "Risk rules",
+      "columns": {
+        "inputs": [{"id": "in1", "label": "Amount", "type": "number"}],
+        "outputs": [{"id": "out1", "label": "Risk", "type": "string"}]
+      },
+      "ruleIds": ["r1", "r2"]
+    }
+  }
+}

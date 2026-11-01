@@ -1,0 +1,65 @@
+// Copied verbatim from andalus-ai/numu identity/numou-identity-adapter/src/main/proto/auth_check.proto (commit 2c7e951).
+// Keep it identical: it is Numu's published contract. Wayang only calls ResolvePrincipal and CheckPermissions.
+syntax = "proto3";
+
+package tech.kayys.numou.identity.grpc;
+
+option java_package = "tech.kayys.numou.identity.grpc";
+option java_multiple_files = true;
+
+// Called inline by adapters and coordinators on every request that needs an authz decision.
+service AuthCheckService {
+  // Resolves every permission the principal holds at requestedPath (via itself or
+  // any ancestor scope) and reports whether requiredPermission is among them.
+  rpc CheckPermission (CheckPermissionRequest) returns (CheckPermissionResponse);
+
+  // Bulk variant for plan-time checks that need several permissions resolved at once.
+  rpc CheckPermissions (CheckPermissionsRequest) returns (CheckPermissionsResponse);
+
+  // Validates a bearer credential (JWT or PAT) and returns the resolved principal.
+  rpc ResolvePrincipal (ResolvePrincipalRequest) returns (ResolvePrincipalResponse);
+}
+
+enum PrincipalType {
+  PRINCIPAL_TYPE_UNSPECIFIED = 0;
+  USER = 1;
+  SERVICE_ACCOUNT = 2;
+}
+
+message CheckPermissionRequest {
+  PrincipalType principal_type = 1;
+  string principal_id = 2;        // UUID string
+  string requested_path = 3;      // e.g. "org.space.sales.dataset.orders"
+  string required_permission = 4; // e.g. "catalog.dataset.read"
+}
+
+message CheckPermissionResponse {
+  bool allowed = 1;
+}
+
+message CheckPermissionsRequest {
+  PrincipalType principal_type = 1;
+  string principal_id = 2;
+  repeated PathPermissionPair checks = 3;
+}
+
+message PathPermissionPair {
+  string requested_path = 1;
+  string required_permission = 2;
+}
+
+message CheckPermissionsResponse {
+  repeated bool results = 1;
+}
+
+message ResolvePrincipalRequest {
+  // Either a bearer JWT or a raw PAT ("pat_xxx")
+  string credential = 1;
+}
+
+message ResolvePrincipalResponse {
+  bool valid = 1;
+  PrincipalType principal_type = 2;
+  string principal_id = 3;
+  string display_name = 4;
+}

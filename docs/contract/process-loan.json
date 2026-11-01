@@ -1,0 +1,30 @@
+{
+  "id": "loan-approval",
+  "name": "Loan approval",
+  "elements": [
+    {"id": "start", "type": "START_EVENT", "name": "Start", "config": {}},
+    {"id": "score", "type": "BUSINESS_RULE_TASK", "name": "Score risk", "config": {"model": "risk-rules"}},
+    {"id": "route", "type": "EXCLUSIVE_GATEWAY", "name": "High risk?", "config": {}},
+    {"id": "review", "type": "USER_TASK", "name": "Manual review", "config": {"title": "Review application", "assignee": "underwriter"}},
+    {"id": "notify", "type": "SERVICE_TASK", "name": "Notify", "config": {"connector": "http", "url": "https://example.com/hook", "method": "POST", "headers": {"Authorization": "Bearer ${secret:HOOK_TOKEN}"}}},
+    {"id": "done", "type": "END_EVENT", "name": "Done", "config": {}}
+  ],
+  "flows": [
+    {"id": "f1", "source": "start", "target": "score", "default": false},
+    {"id": "f2", "source": "score", "target": "route", "default": false},
+    {"id": "f3", "source": "route", "target": "review", "condition": "score.result = \"high\"", "default": false},
+    {"id": "f4", "source": "route", "target": "notify", "default": true},
+    {"id": "f5", "source": "review", "target": "done", "default": false},
+    {"id": "f6", "source": "notify", "target": "done", "default": false}
+  ],
+  "studio": {
+    "layout": {
+      "start": {"x": 80, "y": 120}, "score": {"x": 240, "y": 120}, "route": {"x": 430, "y": 120},
+      "review": {"x": 600, "y": 60}, "notify": {"x": 600, "y": 200}, "done": {"x": 780, "y": 120}
+    },
+    "meta": {
+      "lanes": [{"id": "lane-1", "name": "Underwriting", "order": 0, "height": 220}],
+      "nodeLanes": {"review": "lane-1"}
+    }
+  }
+}

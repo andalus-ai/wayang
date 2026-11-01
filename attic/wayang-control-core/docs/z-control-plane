@@ -1,0 +1,636 @@
+package tech.kayys.gamelan.controlplane.api;
+
+import io.quarkus.security.Authenticated;
+import io.smallrye.mutiny.Uni;
+import jakarta.inject.Inject;
+import jakarta.validation.Valid;
+import jakarta.ws.rs.*;
+import jakarta.ws.rs.core.*;
+import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.openapi.annotations.tags.Tag;
+import org.jboss.logging.Logger;
+import org.jboss.resteasy.reactive.RestResponse;
+import tech.kayys.gamelan.plugin.refined.*;
+import tech.kayys.gamelan.executor.sdk.*;
+
+import java.net.URI;
+import java.time.Instant;
+import java.util.*;
+
+/**
+ * ============================================================================
+ * CONTROL PLANE API - AUTHORITATIVE REGISTRY ENDPOINTS
+ * ============================================================================
+ * 
+ * Control Plane is the authority for:
+ * - Node definitions
+ * - Executor registrations
+ * - Widget definitions
+ * - Routing decisions
+ * 
+ * Responsibilities:
+ * GET /control-plane/nodes          → Node catalog for UI
+ * GET /control-plane/executors      → Executor registry
+ * GET /control-plane/widgets        → Widget registry
+ * POST /control-plane/executors/register → Executor self-registration
+ */
+
+// ==================== NODE CATALOG API ====================
+
+@Path("/api/v1/control-plane/nodes")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+@Authenticated
+@Tag(name = "Control Plane - Nodes", description = "Node definition catalog")
+public class NodeCatalogResource {
+    
+    private static final Logger LOG = Logger.getLogger(NodeCatalogResource.class);
+    
+    @Inject
+    ControlPlaneNodeRegistry nodeRegistry;
+    
+    @Inject
+    ControlPlaneExecutorRegistry executorRegistry;
+    
+    @Inject
+    ControlPlaneWidgetRegistry widgetRegistry;
+    
+    /**
+     * Get complete node catalog (for UI Designer)
+     */
+    @GET
+    @Operation(summary = "Get complete node catalog", 
+               description = "Returns all registered nodes with UI and executor bindings")
+    public Uni<NodeCatalogResponse> getNodeCatalog(
+            @QueryParam("category") String category) {
+        
+        return Uni.createFrom().item(() -> {
+            List<NodeDefinition> nodes;
+            
+            if (category != null && !category.isEmpty()) {
+                nodes = nodeRegistry.getByCategory(category);
+            } else {
+                nodes = nodeRegistry.getAll();
+            }
+            
+            // Convert to DTOs with enriched information
+            List<NodeCatalogEntry> entries = nodes.stream()
+                .map(this::toNodeCatalogEntry)
+                .toList();
+            
+            // Get all categories
+            Set<String> categories = nodes.stream()
+                .map(n -> n.category)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+            
+            return new NodeCatalogResponse(
+                entries,
+                new ArrayList<>(categories),
+                entries.size()
+            );
+        });
+    }
+    
+    /**
+     * Get specific node definition
+     */
+    @GET
+    @Path("/{nodeType}")
+    @Operation(summary = "Get node definition by type")
+    public Uni<RestResponse<NodeCatalogEntry>> getNode(
+            @PathParam("nodeType") String nodeType) {
+        
+        return Uni.createFrom().item(() -> {
+            NodeDefinition node = nodeRegistry.get(nodeType);
+            if (node == null) {
+                return RestResponse.notFound();
+            }
+            
+            return RestResponse.ok(toNodeCatalogEntry(node));
+        });
+    }
+    
+    /**
+     * Validate node configuration
+     */
+    @POST
+    @Path("/{nodeType}/validate-config")
+    @Operation(summary = "Validate node configuration against schema")
+    public Uni<ValidationResultDTO> validateConfig(
+            @PathParam("nodeType") String nodeType,
+            @Valid Map<String, Object> config) {
+        
+        return Uni.createFrom().item(() -> {
+            ValidationResult result = nodeRegistry.validateConfig(nodeType, config);
+            return new ValidationResultDTO(result.isValid(), result.getMessage());
+        });
+    }
+    
+    /**
+     * Validate node inputs
+     */
+    @POST
+    @Path("/{nodeType}/validate-inputs")
+    @Operation(summary = "Validate node inputs against schema")
+    public Uni<ValidationResultDTO> validateInputs(
+            @PathParam("nodeType") String nodeType,
+            @Valid Map<String, Object> inputs) {
+        
+        return Uni.createFrom().item(() -> {
+            ValidationResult result = nodeRegistry.validateInputs(nodeType, inputs);
+            return new ValidationResultDTO(result.isValid(), result.getMessage());
+        });
+    }
+    
+    private NodeCatalogEntry toNodeCatalogEntry(NodeDefinition node) {
+        // Get executor information
+        ExecutorInfo executorInfo = null;
+        if (node.executorBinding != null) {
+            ExecutorRegistration executor = executorRegistry.get(
+                node.executorBinding.executorId);
+            if (executor != null) {
+                executorInfo = new ExecutorInfo(
+                    executor.executorId,
+                    executor.executorType,
+                    executor.protocol,
+                    executor.status,
+                    executor.endpoint != null ? executor.endpoint.toString() : null
+                );
+            }
+        }
+        
+        // Get widget information
+        WidgetInfo widgetInfo = null;
+        if (node.uiReference != null) {
+            UIWidgetDefinition widget = widgetRegistry.get(node.uiReference.widgetId);
+            if (widget != null) {
+                widgetInfo = new WidgetInfo(
+                    widget.widgetId,
+                    widget.type,
+                    widget.entryPoint
+                );
+            }
+        }
+        
+        return new NodeCatalogEntry(
+            node.type,
+            node.label,
+            node.category,
+            node.subCategory,
+            node.description,
+            node.version,
+            extractSchemaJson(node.configSchema),
+            extractSchemaJson(node.inputSchema),
+            extractSchemaJson(node.outputSchema),
+            executorInfo,
+            widgetInfo,
+            node.metadata,
+            node.tags
+        );
+    }
+    
+    private String extractSchemaJson(com.networknt.schema.JsonSchema schema) {
+        if (schema == null) return null;
+        // Convert schema back to JSON string
+        return schema.getSchemaNode().toString();
+    }
+}
+
+/**
+ * Node catalog response
+ */
+record NodeCatalogResponse(
+    List<NodeCatalogEntry> nodes,
+    List<String> categories,
+    int totalCount
+) {}
+
+
+
+/**
+ * Executor info in catalog
+ */
+record ExecutorInfo(
+    String executorId,
+    String executorType,
+    CommunicationProtocol protocol,
+    ExecutorStatus status,
+    String endpoint
+) {}
+
+/**
+ * Widget info in catalog
+ */
+record WidgetInfo(
+    String widgetId,
+    String type,
+    String entryPoint
+) {}
+
+/**
+ * Validation result DTO
+ */
+record ValidationResultDTO(
+    boolean valid,
+    String message
+) {}
+
+// ==================== EXECUTOR REGISTRY API ====================
+
+@Path("/api/v1/control-plane/executors")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+@Tag(name = "Control Plane - Executors", description = "Executor registry and management")
+public class ExecutorRegistryResource {
+    
+    private static final Logger LOG = Logger.getLogger(ExecutorRegistryResource.class);
+    
+    @Inject
+    ControlPlaneExecutorRegistry executorRegistry;
+    
+    /**
+     * Executor self-registration endpoint
+     * Called by executors on startup
+     */
+    @POST
+    @Path("/register")
+    @Operation(summary = "Register executor", 
+               description = "Executors call this on startup to register themselves")
+    public Uni<RestResponse<ExecutorRegistrationResponse>> registerExecutor(
+            @Valid ExecutorRegistrationRequest request) {
+        
+        LOG.infof("Registering executor: %s (%s) at %s",
+            request.executorId,
+            request.protocol,
+            request.endpoint);
+        
+        ExecutorRegistration registration = new ExecutorRegistration();
+        registration.executorId = request.executorId;
+        registration.executorType = request.executorType;
+        registration.endpoint = URI.create(request.endpoint);
+        registration.protocol = request.protocol;
+        registration.capabilities = new HashSet<>(request.capabilities);
+        registration.supportedNodes = new HashSet<>(request.supportedNodes);
+        registration.metadata = request.metadata;
+        registration.registeredAt = Instant.now();
+        
+        return executorRegistry.register(registration)
+            .map(v -> RestResponse.ok(new ExecutorRegistrationResponse(
+                true,
+                registration.executorId,
+                "Executor registered successfully"
+            )))
+            .onFailure().recoverWithItem(error ->
+                RestResponse.status(RestResponse.Status.INTERNAL_SERVER_ERROR,
+                    new ExecutorRegistrationResponse(
+                        false,
+                        request.executorId,
+                        "Registration failed: " + error.getMessage()
+                    ))
+            );
+    }
+    
+    /**
+     * Executor heartbeat endpoint
+     */
+    @POST
+    @Path("/{executorId}/heartbeat")
+    @Operation(summary = "Executor heartbeat",
+               description = "Executors send periodic heartbeats to indicate health")
+    public Uni<RestResponse<Void>> heartbeat(
+            @PathParam("executorId") String executorId) {
+        
+        return Uni.createFrom().item(() -> {
+            ExecutorRegistration registration = executorRegistry.get(executorId);
+            if (registration == null) {
+                return RestResponse.notFound();
+            }
+            
+            registration.lastHeartbeat = Instant.now();
+            registration.status = ExecutorStatus.HEALTHY;
+            
+            LOG.debugf("Heartbeat received from executor: %s", executorId);
+            
+            return RestResponse.ok();
+        });
+    }
+    
+    /**
+     * List all executors
+     */
+    @GET
+    @Operation(summary = "List all registered executors")
+    public Uni<List<ExecutorSummary>> listExecutors(
+            @QueryParam("status") ExecutorStatus status,
+            @QueryParam("capability") String capability) {
+        
+        return Uni.createFrom().item(() -> {
+            List<ExecutorRegistration> executors;
+            
+            if (capability != null) {
+                executors = executorRegistry.getByCapability(capability);
+            } else {
+                executors = executorRegistry.getAll();
+            }
+            
+            return executors.stream()
+                .filter(e -> status == null || e.status == status)
+                .map(e -> new ExecutorSummary(
+                    e.executorId,
+                    e.executorType,
+                    e.protocol,
+                    e.status,
+                    e.endpoint != null ? e.endpoint.toString() : null,
+                    new ArrayList<>(e.capabilities),
+                    new ArrayList<>(e.supportedNodes),
+                    e.registeredAt,
+                    e.lastHeartbeat
+                ))
+                .toList();
+        });
+    }
+    
+    /**
+     * Get executor details
+     */
+    @GET
+    @Path("/{executorId}")
+    @Operation(summary = "Get executor details")
+    public Uni<RestResponse<ExecutorDetails>> getExecutor(
+            @PathParam("executorId") String executorId) {
+        
+        return Uni.createFrom().item(() -> {
+            ExecutorRegistration executor = executorRegistry.get(executorId);
+            if (executor == null) {
+                return RestResponse.notFound();
+            }
+            
+            return RestResponse.ok(new ExecutorDetails(
+                executor.executorId,
+                executor.executorType,
+                executor.protocol,
+                executor.status,
+                executor.endpoint != null ? executor.endpoint.toString() : null,
+                new ArrayList<>(executor.capabilities),
+                new ArrayList<>(executor.supportedNodes),
+                executor.metadata,
+                executor.registeredAt,
+                executor.lastHeartbeat
+            ));
+        });
+    }
+    
+    /**
+     * Unregister executor
+     */
+    @DELETE
+    @Path("/{executorId}")
+    @Operation(summary = "Unregister executor")
+    public Uni<RestResponse<Void>> unregisterExecutor(
+            @PathParam("executorId") String executorId) {
+        
+        return Uni.createFrom().item(() -> {
+            executorRegistry.unregister(executorId);
+            LOG.infof("Executor unregistered: %s", executorId);
+            return RestResponse.ok();
+        });
+    }
+}
+
+/**
+ * Executor registration request
+ */
+record ExecutorRegistrationRequest(
+    String executorId,
+    String executorType,
+    String endpoint,
+    CommunicationProtocol protocol,
+    List<String> capabilities,
+    List<String> supportedNodes,
+    ExecutorMetadata metadata
+) {}
+
+/**
+ * Executor registration response
+ */
+record ExecutorRegistrationResponse(
+    boolean success,
+    String executorId,
+    String message
+) {}
+
+/**
+ * Executor summary
+ */
+record ExecutorSummary(
+    String executorId,
+    String executorType,
+    CommunicationProtocol protocol,
+    ExecutorStatus status,
+    String endpoint,
+    List<String> capabilities,
+    List<String> supportedNodes,
+    Instant registeredAt,
+    Instant lastHeartbeat
+) {}
+
+/**
+ * Executor details
+ */
+record ExecutorDetails(
+    String executorId,
+    String executorType,
+    CommunicationProtocol protocol,
+    ExecutorStatus status,
+    String endpoint,
+    List<String> capabilities,
+    List<String> supportedNodes,
+    ExecutorMetadata metadata,
+    Instant registeredAt,
+    Instant lastHeartbeat
+) {}
+
+// ==================== WIDGET REGISTRY API ====================
+
+@Path("/api/v1/control-plane/widgets")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+@Tag(name = "Control Plane - Widgets", description = "UI widget registry")
+public class WidgetRegistryResource {
+    
+    private static final Logger LOG = Logger.getLogger(WidgetRegistryResource.class);
+    
+    @Inject
+    ControlPlaneWidgetRegistry widgetRegistry;
+    
+    /**
+     * Get all widgets
+     */
+    @GET
+    @Operation(summary = "List all registered widgets")
+    public Uni<List<WidgetDTO>> listWidgets(
+            @QueryParam("type") String type) {
+        
+        return Uni.createFrom().item(() -> {
+            List<UIWidgetDefinition> widgets = widgetRegistry.getAll();
+            
+            return widgets.stream()
+                .filter(w -> type == null || type.equals(w.type))
+                .map(w -> new WidgetDTO(
+                    w.widgetId,
+                    w.type,
+                    new ArrayList<>(w.supportedDataTypes),
+                    new ArrayList<>(w.capabilities),
+                    w.entryPoint,
+                    w.version,
+                    w.defaultProps
+                ))
+                .toList();
+        });
+    }
+    
+    /**
+     * Get widget details
+     */
+    @GET
+    @Path("/{widgetId}")
+    @Operation(summary = "Get widget details")
+    public Uni<RestResponse<WidgetDTO>> getWidget(
+            @PathParam("widgetId") String widgetId) {
+        
+        return Uni.createFrom().item(() -> {
+            UIWidgetDefinition widget = widgetRegistry.get(widgetId);
+            if (widget == null) {
+                return RestResponse.notFound();
+            }
+            
+            return RestResponse.ok(new WidgetDTO(
+                widget.widgetId,
+                widget.type,
+                new ArrayList<>(widget.supportedDataTypes),
+                new ArrayList<>(widget.capabilities),
+                widget.entryPoint,
+                widget.version,
+                widget.defaultProps
+            ));
+        });
+    }
+    
+    /**
+     * Register widget
+     */
+    @POST
+    @Operation(summary = "Register widget")
+    public Uni<RestResponse<WidgetRegistrationResponse>> registerWidget(
+            @Valid WidgetRegistrationRequest request) {
+        
+        LOG.infof("Registering widget: %s (%s)", request.widgetId, request.type);
+        
+        UIWidgetDefinition widget = new UIWidgetDefinition();
+        widget.widgetId = request.widgetId;
+        widget.type = request.type;
+        widget.supportedDataTypes = new HashSet<>(request.supportedDataTypes);
+        widget.capabilities = new HashSet<>(request.capabilities);
+        widget.entryPoint = request.entryPoint;
+        widget.version = request.version;
+        widget.defaultProps = request.defaultProps;
+        
+        widgetRegistry.register(widget);
+        
+        return Uni.createFrom().item(RestResponse.ok(
+            new WidgetRegistrationResponse(true, widget.widgetId, "Widget registered")
+        ));
+    }
+}
+
+/**
+ * Widget DTO
+ */
+record WidgetDTO(
+    String widgetId,
+    String type,
+    List<String> supportedDataTypes,
+    List<String> capabilities,
+    String entryPoint,
+    String version,
+    Map<String, Object> defaultProps
+) {}
+
+/**
+ * Widget registration request
+ */
+record WidgetRegistrationRequest(
+    String widgetId,
+    String type,
+    List<String> supportedDataTypes,
+    List<String> capabilities,
+    String entryPoint,
+    String version,
+    Map<String, Object> defaultProps
+) {}
+
+/**
+ * Widget registration response
+ */
+record WidgetRegistrationResponse(
+    boolean success,
+    String widgetId,
+    String message
+) {}
+
+// ==================== EXECUTION CONTRACT API ====================
+
+@Path("/api/v1/control-plane/execution")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+@Tag(name = "Control Plane - Execution", description = "Execution contract management")
+public class ExecutionContractResource {
+    
+    private static final Logger LOG = Logger.getLogger(ExecutionContractResource.class);
+    
+    @Inject
+    ExecutionContractBuilder contractBuilder;
+    
+    /**
+     * Create execution contract
+     * Called by Workflow Engine when it needs to execute a node
+     */
+    @POST
+    @Path("/create-contract")
+    @Operation(summary = "Create execution contract",
+               description = "Workflow Engine calls this to get execution contract for a node")
+    public Uni<RestResponse<ExecutionContract>> createContract(
+            @Valid ContractCreationRequest request) {
+        
+        LOG.infof("Creating execution contract for node %s in workflow %s",
+            request.nodeType, request.workflowRunId);
+        
+        return contractBuilder.build(
+            request.workflowRunId,
+            request.nodeType,
+            request.nodeInstanceId,
+            request.inputs,
+            request.config,
+            request.context
+        )
+        .map(RestResponse::ok)
+        .onFailure().recoverWithItem(error -> {
+            LOG.errorf(error, "Failed to create execution contract");
+            return RestResponse.status(
+                RestResponse.Status.INTERNAL_SERVER_ERROR);
+        });
+    }
+}
+
+/**
+ * Contract creation request
+ */
+record ContractCreationRequest(
+    String workflowRunId,
+    String nodeType,
+    String nodeInstanceId,
+    Map<String, Object> inputs,
+    Map<String, Object> config,
+    ExecutionContext context
+) {}

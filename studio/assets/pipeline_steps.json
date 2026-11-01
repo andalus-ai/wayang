@@ -1,0 +1,520 @@
+[
+ {
+  "type": "parse",
+  "label": "Parse",
+  "group": "Format",
+  "icon": "data_object",
+  "description": "Turn text into structured data (json, csv, xml)",
+  "template": {
+   "type": "parse",
+   "format": "json"
+  }
+ },
+ {
+  "type": "serialize",
+  "label": "Serialize",
+  "group": "Format",
+  "icon": "text_snippet",
+  "description": "Turn structured data into text (json, csv, xml)",
+  "template": {
+   "type": "serialize",
+   "format": "json"
+  }
+ },
+ {
+  "type": "map",
+  "label": "Map fields",
+  "group": "Transform",
+  "icon": "swap_horiz",
+  "description": "Build a new body and/or headers with the mapper DSL",
+  "template": {
+   "type": "map",
+   "mapping": {
+    "id": "body.id"
+   }
+  }
+ },
+ {
+  "type": "transform",
+  "label": "Transform",
+  "group": "Transform",
+  "icon": "auto_fix_high",
+  "description": "Set the body or headers from expressions",
+  "template": {
+   "type": "transform",
+   "body": "body"
+  }
+ },
+ {
+  "type": "contentFilter",
+  "label": "Content filter",
+  "group": "Transform",
+  "icon": "filter_alt",
+  "description": "Keep or remove fields",
+  "template": {
+   "type": "contentFilter",
+   "remove": [
+    "secret"
+   ]
+  }
+ },
+ {
+  "type": "envelope",
+  "label": "Envelope",
+  "group": "Transform",
+  "icon": "mail_outline",
+  "description": "Wrap the body in an envelope, or unwrap it",
+  "template": {
+   "type": "envelope",
+   "wrap": "payload"
+  }
+ },
+ {
+  "type": "lookup",
+  "label": "Lookup table",
+  "group": "Transform",
+  "icon": "table_rows",
+  "description": "Look a value up in a fixed table",
+  "template": {
+   "type": "lookup",
+   "table": {
+    "a": "Alpha"
+   },
+   "key": "body.code",
+   "into": "label",
+   "default": "unknown"
+  }
+ },
+ {
+  "type": "tokenize",
+  "label": "Tokenize",
+  "group": "Transform",
+  "icon": "segment",
+  "description": "Split a string into a list",
+  "template": {
+   "type": "tokenize",
+   "from": "body.text",
+   "separator": ",",
+   "trim": true,
+   "skipEmpty": true
+  }
+ },
+ {
+  "type": "validate",
+  "label": "Validate",
+  "group": "Quality",
+  "icon": "rule",
+  "description": "Check required fields, types and rules",
+  "template": {
+   "type": "validate",
+   "required": [
+    "id"
+   ],
+   "types": {
+    "amount": "number"
+   },
+   "rules": [
+    {
+     "when": "body.amount > 0",
+     "message": "amount must be positive"
+    }
+   ],
+   "onInvalid": "fail"
+  }
+ },
+ {
+  "type": "label",
+  "label": "Label",
+  "group": "Quality",
+  "icon": "sell",
+  "description": "Name this point in the flow",
+  "template": {
+   "type": "label",
+   "name": "checkpoint"
+  }
+ },
+ {
+  "type": "correlate",
+  "label": "Correlate",
+  "group": "Quality",
+  "icon": "link",
+  "description": "Set a correlation id",
+  "template": {
+   "type": "correlate",
+   "key": "body.id"
+  }
+ },
+ {
+  "type": "filter",
+  "label": "Filter",
+  "group": "Routing",
+  "icon": "filter_list",
+  "description": "Drop messages that do not match",
+  "template": {
+   "type": "filter",
+   "when": "body.amount > 0"
+  }
+ },
+ {
+  "type": "choice",
+  "label": "Choice",
+  "group": "Routing",
+  "icon": "call_split",
+  "description": "First matching branch wins",
+  "template": {
+   "type": "choice",
+   "branches": [
+    {
+     "when": "body.vip",
+     "steps": [
+      {
+       "type": "label",
+       "name": "vip"
+      }
+     ]
+    }
+   ],
+   "otherwise": [
+    {
+     "type": "label",
+     "name": "standard"
+    }
+   ]
+  }
+ },
+ {
+  "type": "switch",
+  "label": "Switch",
+  "group": "Routing",
+  "icon": "alt_route",
+  "description": "Pick a branch by value",
+  "template": {
+   "type": "switch",
+   "on": "body.kind",
+   "cases": {
+    "a": [
+     {
+      "type": "label",
+      "name": "a"
+     }
+    ]
+   },
+   "default": [
+    {
+     "type": "label",
+     "name": "other"
+    }
+   ]
+  }
+ },
+ {
+  "type": "router",
+  "label": "Router",
+  "group": "Routing",
+  "icon": "route",
+  "description": "Send to a named route",
+  "template": {
+   "type": "router",
+   "routes": [
+    {
+     "when": "body.vip",
+     "to": "fast"
+    }
+   ],
+   "otherwise": "slow"
+  }
+ },
+ {
+  "type": "recipientList",
+  "label": "Recipient list",
+  "group": "Routing",
+  "icon": "groups",
+  "description": "Tag a message with every route that matches",
+  "template": {
+   "type": "recipientList",
+   "routes": [
+    {
+     "when": "body.a",
+     "to": "a"
+    },
+    {
+     "when": "body.b",
+     "to": "b"
+    }
+   ]
+  }
+ },
+ {
+  "type": "loadBalance",
+  "label": "Load balance",
+  "group": "Routing",
+  "icon": "shuffle",
+  "description": "Spread messages over targets",
+  "template": {
+   "type": "loadBalance",
+   "strategy": "roundRobin",
+   "name": "lb",
+   "targets": {
+    "one": [
+     {
+      "type": "label",
+      "name": "one"
+     }
+    ],
+    "two": [
+     {
+      "type": "label",
+      "name": "two"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "type": "routingSlip",
+  "label": "Routing slip",
+  "group": "Routing",
+  "icon": "playlist_play",
+  "description": "Follow a list of stages carried by the message",
+  "template": {
+   "type": "routingSlip",
+   "slip": "headers.slip",
+   "stages": {
+    "a": [
+     {
+      "type": "label",
+      "name": "a"
+     }
+    ]
+   },
+   "skipUnknown": true
+  }
+ },
+ {
+  "type": "multicast",
+  "label": "Multicast",
+  "group": "Routing",
+  "icon": "call_merge",
+  "description": "Send to all branches (scatter-gather with gather)",
+  "template": {
+   "type": "multicast",
+   "gather": true,
+   "parallel": false,
+   "branches": {
+    "a": [
+     {
+      "type": "label",
+      "name": "a"
+     }
+    ],
+    "b": [
+     {
+      "type": "label",
+      "name": "b"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "type": "splitter",
+  "label": "Splitter",
+  "group": "Routing",
+  "icon": "call_split",
+  "description": "One message per item of a list",
+  "template": {
+   "type": "splitter",
+   "items": "body.items"
+  }
+ },
+ {
+  "type": "aggregate",
+  "label": "Aggregate",
+  "group": "Routing",
+  "icon": "merge",
+  "description": "Combine messages of one run by correlation",
+  "template": {
+   "type": "aggregate",
+   "correlation": "headers.correlationId",
+   "size": 2,
+   "incomplete": "fail"
+  }
+ },
+ {
+  "type": "collect",
+  "label": "Collect (durable)",
+  "group": "Routing",
+  "icon": "inventory",
+  "description": "Gather messages across separate runs",
+  "template": {
+   "type": "collect",
+   "key": "body.orderId",
+   "size": 3,
+   "timeoutSeconds": 3600,
+   "onTimeout": "emit"
+  }
+ },
+ {
+  "type": "resequence",
+  "label": "Resequence",
+  "group": "Routing",
+  "icon": "sort",
+  "description": "Put messages in order",
+  "template": {
+   "type": "resequence",
+   "by": "body.seq"
+  }
+ },
+ {
+  "type": "batch",
+  "label": "Batch",
+  "group": "Routing",
+  "icon": "view_module",
+  "description": "Group messages into lists",
+  "template": {
+   "type": "batch",
+   "size": 10
+  }
+ },
+ {
+  "type": "guard",
+  "label": "Guard (dead letter)",
+  "group": "Reliability",
+  "icon": "shield",
+  "description": "Catch failures, route the original to a dead letter",
+  "template": {
+   "type": "guard",
+   "deadLetter": "dlq",
+   "steps": [
+    {
+     "type": "label",
+     "name": "risky"
+    }
+   ]
+  }
+ },
+ {
+  "type": "retry",
+  "label": "Retry",
+  "group": "Reliability",
+  "icon": "replay",
+  "description": "Run again on failure",
+  "template": {
+   "type": "retry",
+   "attempts": 3,
+   "backoffMs": 200,
+   "deadLetter": "dead-letter",
+   "steps": [
+    {
+     "type": "label",
+     "name": "try"
+    }
+   ]
+  }
+ },
+ {
+  "type": "circuitBreaker",
+  "label": "Circuit breaker",
+  "group": "Reliability",
+  "icon": "electrical_services",
+  "description": "Stop calling something that keeps failing",
+  "template": {
+   "type": "circuitBreaker",
+   "name": "downstream",
+   "failureThreshold": 5,
+   "openSeconds": 30,
+   "steps": [
+    {
+     "type": "label",
+     "name": "call"
+    }
+   ],
+   "fallback": [
+    {
+     "type": "label",
+     "name": "fallback"
+    }
+   ]
+  }
+ },
+ {
+  "type": "throttle",
+  "label": "Throttle",
+  "group": "Reliability",
+  "icon": "speed",
+  "description": "Limit the rate",
+  "template": {
+   "type": "throttle",
+   "name": "rate",
+   "perSecond": 10,
+   "onExceed": "fail"
+  }
+ },
+ {
+  "type": "delay",
+  "label": "Delay",
+  "group": "Reliability",
+  "icon": "hourglass_empty",
+  "description": "Wait a short time",
+  "template": {
+   "type": "delay",
+   "ms": 500
+  }
+ },
+ {
+  "type": "idempotent",
+  "label": "Idempotent",
+  "group": "Reliability",
+  "icon": "fingerprint",
+  "description": "Skip messages already seen",
+  "template": {
+   "type": "idempotent",
+   "key": "body.id"
+  }
+ },
+ {
+  "type": "loop",
+  "label": "Loop",
+  "group": "Reliability",
+  "icon": "loop",
+  "description": "Repeat steps",
+  "template": {
+   "type": "loop",
+   "times": 3,
+   "steps": [
+    {
+     "type": "label",
+     "name": "again"
+    }
+   ]
+  }
+ },
+ {
+  "type": "claimCheck",
+  "label": "Claim check",
+  "group": "Reliability",
+  "icon": "receipt_long",
+  "description": "Park a big body and carry a ticket",
+  "template": {
+   "type": "claimCheck",
+   "action": "store",
+   "ttlSeconds": 3600
+  }
+ },
+ {
+  "type": "call",
+  "label": "Call connector",
+  "group": "Integration",
+  "icon": "cloud_upload",
+  "description": "Call a connector (enrich, or tap)",
+  "template": {
+   "type": "call",
+   "connector": "http",
+   "config": {
+    "url": "https://example.org/api",
+    "method": "GET"
+   },
+   "into": "result"
+  }
+ }
+]
