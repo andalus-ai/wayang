@@ -43,6 +43,18 @@ public final class WayangApi {
     private final EventBus bus;
     private final Clock clock;
 
+    private volatile tech.kayys.wayang.runtime.Profile profile = tech.kayys.wayang.runtime.Profile.fromEnvironment();
+
+    /** Which features this deployment serves: hides the rest from the palette and refuses to save them. */
+    public WayangApi withProfile(tech.kayys.wayang.runtime.Profile profile) {
+        this.profile = profile;
+        return this;
+    }
+
+    public tech.kayys.wayang.runtime.Profile profile() {
+        return profile;
+    }
+
     public WayangApi(DefinitionStore store, RunEngine engine, WaitRegistry waits, EventBus bus, Clock clock) {
         this(store, new ProjectStore.InMemory(), engine, waits, bus, clock);
     }
@@ -167,6 +179,9 @@ public final class WayangApi {
                         items.add(new ValidationReport.Item(i.severity().name(), i.elementId(), i.message()));
                     }
                     for (var e : m.elements().values()) {
+                        if (!profile.allows(e.type())) {
+                            items.add(new ValidationReport.Item("ERROR", e.id(), e.type() + " is not available in the '" + profile + "' profile"));
+                        }
                         for (String problem : NodeCatalog.validateConfig(e.type(), e.config())) {
                             items.add(new ValidationReport.Item("ERROR", e.id(), "config " + problem));
                         }
@@ -311,7 +326,7 @@ public final class WayangApi {
     /** The Studio palette with config schemas. */
     public List<Map<String, Object>> nodeCatalog(Principal p) {
         requireAnywhere(p, Permission.DEFINITION_READ);
-        return NodeCatalog.entries().stream().map(NodeCatalog.Entry::toMap).toList();
+        return NodeCatalog.entries().stream().filter(e -> profile.allows(tech.kayys.wayang.bpmn.ElementType.valueOf(e.type()))).map(NodeCatalog.Entry::toMap).toList();
     }
 
     public Object evalExpression(Principal p, String expression, Map<String, Object> variables) {

@@ -350,6 +350,24 @@ class TemplateServiceTest {
     }
 
     @Test
+    void webSearchIsOptInReadOnlyAndKeepsItsKeyInASecret() {
+        assertThrows(ApiException.class, () -> templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "webSearch", "yes"), true));
+        var off = TemplateService.agent("openai/gpt-4o-mini", "", "", "", "", "", 0);
+        assertNull(off.get("tools"));
+        var on = TemplateService.agent("openai/gpt-4o-mini", "", "", "", "", "", 0, null, true);
+        var tool = (Map<?, ?>) ((List<?>) on.get("tools")).get(0);
+        assertEquals("web_search", tool.get("name"));
+        assertNull(on.get("requireApproval"), "a read-only search needs no approval");
+        String text = String.valueOf(tool);
+        assertTrue(text.contains("${secret:BRAVE_API_KEY}") && text.contains("https://api.search.brave.com/"), text);
+        assertTrue(String.valueOf(on.get("systemPrompt")).contains("never instructions"));
+        var r = templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "123456", "webSearch", "true"), true);
+        assertTrue(r.ok(), r.problems().toString());
+        var both = TemplateService.agent("openai/gpt-4o-mini", "", "", "", "", "", 0, "google", true);
+        assertEquals(3, ((List<?>) both.get("tools")).size());
+    }
+
+    @Test
     void theAssistantsCarryGuardrailsByDefault() {
         var agent = TemplateService.agent("openai/gpt-4o-mini", "", "", "", "", "", 0);
         var opts = (Map<?, ?>) agent.get("options");
@@ -391,5 +409,14 @@ class TemplateServiceTest {
         assertEquals("Done. I have forgotten this conversation.", sent.get(sent.size() - 1).get("text"));
         say.apply("/forget");
         assertEquals("There was nothing to forget.", sent.get(sent.size() - 1).get("text"));
+    }
+
+    @Test
+    void templatesNeedTheAgentFeature() {
+        var none = new TemplateService(ws).withProfile(tech.kayys.wayang.runtime.Profile.INTEGRATION);
+        assertTrue(none.list().isEmpty());
+        assertThrows(ApiException.class, () -> none.instantiate(new Principal("acme", "ann", java.util.Set.of(Role.ADMIN)), "assistant-telegram",
+                Map.of("chatId", "123"), true));
+        assertEquals(4, new TemplateService(ws).withProfile(tech.kayys.wayang.runtime.Profile.AGENTIC).list().size());
     }
 }
