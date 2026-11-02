@@ -521,4 +521,17 @@ class PublishTest {
         assertTrue(text(p, "pom.xml").contains("wayang-connectors"));
         assertTrue(text(p, "src/main/java/com/acme/release/Processes.java").contains("\"http\""), "the http connector is listed for wiring");
     }
+
+    @Test
+    void aProfileRefusesReleasesThatNeedAFeatureItLacks() {
+        ReleaseOptions integration = ReleaseOptions.of(Map.of("target", "GAMELAN", "profile", "integration"), "my-release", "0.0.1");
+        assertEquals("integration", integration.profile());
+        // the report process only has service + human tasks: human is not in 'integration'
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> Publisher.generate(bundle(true, false, "x"), integration));
+        assertTrue(e.getMessage().contains("'integration' profile") && e.getMessage().contains("approve"), e.getMessage());
+        ReleaseOptions automation = ReleaseOptions.of(Map.of("target", "GAMELAN", "profile", "automation"), "my-release", "0.0.1");
+        assertTrue(text(Publisher.generate(bundle(true, false, "x"), automation), "Dockerfile").contains("WAYANG_PROFILE=automation"));
+        assertThrows(IllegalArgumentException.class, () -> ReleaseOptions.of(Map.of("profile", "agnt\nRUN evil"), "a", "0.0.1"));
+        assertEquals("full", OPTS.profile());
+    }
 }
