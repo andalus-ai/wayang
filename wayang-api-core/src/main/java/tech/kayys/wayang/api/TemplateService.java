@@ -37,7 +37,19 @@ public final class TemplateService {
         this.workspace = workspace;
     }
 
+    private volatile tech.kayys.wayang.runtime.Profile profile = tech.kayys.wayang.runtime.Profile.fromEnvironment();
+
+    /** The starter projects here all use an agent, so a profile without AGENT offers none of them. */
+    public TemplateService withProfile(tech.kayys.wayang.runtime.Profile profile) {
+        this.profile = profile;
+        return this;
+    }
+
     public List<Info> list() {
+        return profile.has(tech.kayys.wayang.runtime.Profile.Feature.AGENT) ? all() : List.of();
+    }
+
+    private List<Info> all() {
         return List.of(new Info("assistant-telegram", "Personal assistant on Telegram",
                 "Answers your Telegram messages with an agent. A decision table keeps anything about money, passwords or deleting, or any reply "
                         + "containing a link, for your approval before it is sent; everything else goes out by itself.",
@@ -94,6 +106,9 @@ public final class TemplateService {
      * @throws ApiException 400 for an unknown template or a bad parameter
      */
     public WorkspaceService.Report instantiate(Principal p, String id, Map<String, Object> params, boolean dryRun) {
+        if (!profile.has(tech.kayys.wayang.runtime.Profile.Feature.AGENT)) {
+            throw ApiException.badRequest("Template '" + id + "' needs agents, which the '" + profile + "' profile does not enable");
+        }
         if (id != null && id.startsWith("daily-brief-")) {
             return instantiateBrief(p, id, params, dryRun);
         }

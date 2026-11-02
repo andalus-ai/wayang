@@ -392,4 +392,13 @@ class TemplateServiceTest {
         say.apply("/forget");
         assertEquals("There was nothing to forget.", sent.get(sent.size() - 1).get("text"));
     }
+
+    @Test
+    void templatesNeedTheAgentFeature() {
+        var none = new TemplateService(ws).withProfile(tech.kayys.wayang.runtime.Profile.INTEGRATION);
+        assertTrue(none.list().isEmpty());
+        assertThrows(ApiException.class, () -> none.instantiate(new Principal("acme", "ann", java.util.Set.of(Role.ADMIN)), "assistant-telegram",
+                Map.of("chatId", "123"), true));
+        assertEquals(4, new TemplateService(ws).withProfile(tech.kayys.wayang.runtime.Profile.AGENTIC).list().size());
+    }
 }

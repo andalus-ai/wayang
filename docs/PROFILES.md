@@ -25,7 +25,11 @@ A typo is an error, never "everything enabled".
 - Release generation takes `profile` in the options (`{"profile":"integration"}`): a bundle needing a disabled feature
   is refused up front, and the generated Dockerfile sets `WAYANG_PROFILE`.
 
-Not yet: Studio palette/templates filtered by profile, server-side refusal at save time, and dropping the
+- The server (`WayangApi.withProfile`, default from `WAYANG_PROFILE`) hides disabled node types from the palette
+  (`/node-catalog`), reports them as validation errors (so they cannot be published) and offers no starter
+  templates without the agent feature. Studio needs no change: it renders whatever the catalog returns.
+
+Not yet: dropping the
 disabled `@Executor` classes from the Gamelan worker's registration (today a disabled type fails at run time
 instead of never being claimed by that worker). The enforcement points above are the hooks for these.
 
