@@ -29,7 +29,7 @@ A typo is an error, never "everything enabled".
   (`/node-catalog`), reports them as validation errors (so they cannot be published) and offers no starter
   templates without the agent feature. Studio needs no change: it renders whatever the catalog returns.
 
-Not yet: dropping the
+Not yet: and dropping the
 disabled `@Executor` classes from the Gamelan worker's registration (today a disabled type fails at run time
 instead of never being claimed by that worker). The enforcement points above are the hooks for these.
 
