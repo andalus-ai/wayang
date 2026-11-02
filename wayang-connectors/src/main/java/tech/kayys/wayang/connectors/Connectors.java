@@ -18,6 +18,16 @@ public final class Connectors {
     }
 
     public static Map<String, ServiceHandler.Connector> defaults(UrlGuard guard) {
+        return defaults(guard, tech.kayys.wayang.runtime.Extensions.none());
+    }
+
+    /** Built-ins plus the connectors contributed by extensions (a name clash fails). */
+    public static Map<String, ServiceHandler.Connector> defaults(UrlGuard guard,
+            tech.kayys.wayang.runtime.Extensions ext) {
+        return ext.mergeConnectors(builtIn(guard));
+    }
+
+    private static Map<String, ServiceHandler.Connector> builtIn(UrlGuard guard) {
         Map<String, ServiceHandler.Connector> m = new LinkedHashMap<>();
         m.put("http", new HttpConnector(guard));
         m.put("telegram", new Telegram.Sender(guard));
@@ -44,6 +54,15 @@ public final class Connectors {
 
     /** Pollers for triggers, by name. */
     public static Map<String, tech.kayys.wayang.runtime.Poller> pollers(UrlGuard guard) {
+        return pollers(guard, tech.kayys.wayang.runtime.Extensions.none());
+    }
+
+    public static Map<String, tech.kayys.wayang.runtime.Poller> pollers(UrlGuard guard,
+            tech.kayys.wayang.runtime.Extensions ext) {
+        return ext.mergePollers(builtInPollers(guard));
+    }
+
+    private static Map<String, tech.kayys.wayang.runtime.Poller> builtInPollers(UrlGuard guard) {
         Map<String, tech.kayys.wayang.runtime.Poller> m = new LinkedHashMap<>();
         m.put("telegram", new Telegram.Updates(guard));
         m.put("gmail", new Gmail.Inbox(guard));
@@ -58,6 +77,15 @@ public final class Connectors {
 
     /** Webhook providers for triggers of kind WEBHOOK with {@code auth} set to the provider's name. */
     public static Map<String, tech.kayys.wayang.runtime.WebhookProvider> webhookProviders() {
+        return webhookProviders(tech.kayys.wayang.runtime.Extensions.none());
+    }
+
+    public static Map<String, tech.kayys.wayang.runtime.WebhookProvider> webhookProviders(
+            tech.kayys.wayang.runtime.Extensions ext) {
+        return ext.mergeWebhookProviders(builtInWebhooks());
+    }
+
+    private static Map<String, tech.kayys.wayang.runtime.WebhookProvider> builtInWebhooks() {
         Map<String, tech.kayys.wayang.runtime.WebhookProvider> m = new LinkedHashMap<>();
         m.put("slack", new Slack.Webhook());
         m.put("whatsapp", new WhatsApp.Webhook());
