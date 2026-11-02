@@ -327,6 +327,22 @@ class WayangApiTest {
         assertNotNull(api.nodeCatalog(viewer));
     }
 
+    @Test
+    void aProfileHidesAndRefusesTheFeaturesItDoesNotServe() {
+        Map<String, Object> doc = Map.of("id", "p", "elements", List.of(Map.of("id", "s", "type", "START_EVENT"),
+                Map.of("id", "a", "type", "AGENT_TASK", "config", Map.of("agent", "helper")), Map.of("id", "e", "type", "END_EVENT")),
+                "flows", List.of(Map.of("id", "f1", "source", "s", "target", "a"), Map.of("id", "f2", "source", "a", "target", "e")));
+        var restricted = new WayangApi(store, engine, waits, bus, clock).withProfile(tech.kayys.wayang.runtime.Profile.AUTOMATION);
+        var r = restricted.validate(acme, DefinitionKind.PROCESS, doc);
+        assertTrue(r.items().stream().anyMatch(i -> "a".equals(i.elementId()) && i.message().contains("'automation' profile")), String.valueOf(r.items()));
+        assertFalse(r.valid());
+        var types = restricted.nodeCatalog(acme).stream().map(m -> m.get("type")).toList();
+        assertFalse(types.contains("AGENT_TASK"));
+        assertFalse(types.contains("EIP_TASK"), "EIP is not in automation either");
+        assertTrue(types.contains("BUSINESS_RULE_TASK") && types.contains("START_EVENT"));
+        assertTrue(api.nodeCatalog(acme).size() == tech.kayys.wayang.bpmn.ElementType.values().length || System.getenv("WAYANG_PROFILE") != null);
+    }
+
     private static Map<String, Object> gatherProcess() {
         Map<String, Object> collect = Map.of("type", "collect", "key", "'all'", "size", 3, "timeoutSeconds", 60, "sweepTo", "late");
         return Map.of("id", "orders", "name", "Orders", "elements", List.of(Map.of("id", "s", "type", "START_EVENT"),
