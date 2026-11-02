@@ -137,4 +137,59 @@ class MemoryTest {
             srv.stop(0);
         }
     }
+
+    @Test
+    void aForgetStepClearsOnlyThatChatsMemoryWithoutCallingTheModel() throws Exception {
+        List<List<?>> seen = new ArrayList<>();
+        HttpServer srv = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        srv.createContext("/chat/completions", ex -> {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> req = (Map<String, Object>) Json.read(new String(ex.getRequestBody().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+            seen.add((List<?>) req.get("messages"));
+            byte[] out = Json.write(Map.of("choices", List.of(Map.of("message", Map.of("role", "assistant", "content", "ok"))))).getBytes();
+            ex.getResponseHeaders().add("Content-Type", "application/json");
+            ex.sendResponseHeaders(200, out.length);
+            ex.getResponseBody().write(out);
+            ex.close();
+        });
+        srv.start();
+        try {
+            // one process, as in the assistant templates: the memory is private to tenant + process + agent
+            ProcessModel chat = ProcessModel.builder("chat").name("Chat").start("s").exclusive("g")
+                    .task("think", ElementType.AGENT_TASK, Map.of("agent", "bot"))
+                    .task("f", ElementType.AGENT_TASK, Map.of("agent", "bot", "forget", true))
+                    .end("e").end("e2")
+                    .flow("s", "g").flow("g", "f", "cmd = \"forget\"").defaultFlow("g", "think").flow("think", "e").flow("f", "e2").build();
+            Map<String, Object> agent = new LinkedHashMap<>(Map.of("id", "bot", "name", "Bot", "model", "ollama/x", "systemPrompt", "Be brief.",
+                    "inputTemplate", "{{ text }}", "maxSteps", 2, "timeoutSeconds", 20));
+            agent.put("options", Map.of("memory", Map.of("key", "{{ chat }}", "turns", 5)));
+            Map<String, Object> b = new LinkedHashMap<>();
+            b.put("format", "wayang.workspace");
+            b.put("formatVersion", 1);
+            b.put("project", Map.of("name", "M"));
+            b.put("definitions", List.of(Map.of("kind", "PROCESS", "id", "chat", "publishedVersion", 1, "document", ProcessMaps.toMap(chat)),
+                    Map.of("kind", "AGENT", "id", "bot", "publishedVersion", 1, "document", agent)));
+            b.put("config", Map.of());
+            b.put("requires", Map.of("secrets", List.of(), "externalSecrets", List.of(), "oauthConnections", List.of(), "config", List.of()));
+            b.put("integrity", Map.of("sha256", "abc"));
+            var bundle = ReleaseBundle.parse(Json.write(b));
+            Map<String, String> env = Map.of("WAYANG_LLM_OLLAMA_URL", "http://127.0.0.1:" + srv.getAddress().getPort());
+            var rt = new EmbeddedRuntime(bundle, Map.of(), new LlmAgentInvoker(Map.of(), null, null, env::get), null, null, Clock.systemUTC());
+
+            rt.start("chat", Map.of("chat", "A", "text", "secret one"));
+            rt.start("chat", Map.of("chat", "B", "text", "other chat"));
+            int calls = seen.size();
+            var r = rt.start("chat", Map.of("chat", "A", "cmd", "forget"));
+            assertEquals("COMPLETED", r.status(), String.valueOf(r.error()));
+            assertTrue(String.valueOf(r.variables()).contains("Done. I have forgotten this conversation."), String.valueOf(r.variables()));
+            assertEquals(calls, seen.size(), "forgetting is not a model call");
+            assertTrue(String.valueOf(rt.start("chat", Map.of("chat", "A", "cmd", "forget")).variables()).contains("There was nothing to forget."));
+            rt.start("chat", Map.of("chat", "A", "text", "who am I?"));
+            assertEquals(2, seen.get(seen.size() - 1).size(), "chat A starts over: system + the new message");
+            rt.start("chat", Map.of("chat", "B", "text", "again"));
+            assertEquals(4, seen.get(seen.size() - 1).size(), "chat B still remembers its own exchange");
+        } finally {
+            srv.stop(0);
+        }
+    }
 }

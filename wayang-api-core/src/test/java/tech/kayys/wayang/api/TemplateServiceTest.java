@@ -360,4 +360,36 @@ class TemplateServiceTest {
         assertTrue(t.ok(), t.problems().toString());
         assertEquals(Map.of("perHour", 60), triggers.list(acme).get(0).config().get("rateLimit"));
     }
+
+    @Test
+    void aForgetMessageClearsTheChatsMemoryAndTheAssistantSaysSo() {
+        var r = templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "123456", "memoryTurns", "5"), false);
+        assertTrue(r.ok(), r.problems().toString());
+        List<Map<String, Object>> sent = new java.util.ArrayList<>();
+        var connectors = Map.<String, tech.kayys.wayang.runtime.ServiceHandler.Connector>of("telegram", in -> {
+            sent.add(in);
+            return Map.of("ok", true);
+        });
+        List<List<?>> histories = new java.util.ArrayList<>();
+        var eng = new ReferenceRunEngine(store, waits, connectors, (spec, in) -> {
+            histories.add((List<?>) in.get("history"));
+            return Map.of("output", "fine");
+        }, bus, clock).withMemory(new tech.kayys.wayang.agent.ConversationMemory.InMemory(100));
+        var api2 = new WayangApi(store, projects, eng, waits, bus, clock);
+        java.util.function.Function<String, RunView> say = text -> api2.startRun(acme, "personal-assistant", null,
+                Map.of("event", Map.of("chatId", 123456L, "text", text), "trigger", "assistant-inbox"));
+        say.apply("remember: my cat is Momo");
+        say.apply("what is my cat called?");
+        assertEquals(2, histories.get(1).size(), "the second message came with the first exchange");
+        int draftsBefore = histories.size();
+        say.apply("/forget");
+        assertEquals(draftsBefore, histories.size(), "the agent was not asked");
+        assertEquals("Done. I have forgotten this conversation.", sent.get(sent.size() - 1).get("text"));
+        say.apply("and now?");
+        assertTrue(histories.get(histories.size() - 1).isEmpty(), "nothing is remembered any more");
+        say.apply("forget me");
+        assertEquals("Done. I have forgotten this conversation.", sent.get(sent.size() - 1).get("text"));
+        say.apply("/forget");
+        assertEquals("There was nothing to forget.", sent.get(sent.size() - 1).get("text"));
+    }
 }
