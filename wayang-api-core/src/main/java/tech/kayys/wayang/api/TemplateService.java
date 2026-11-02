@@ -444,6 +444,14 @@ public final class TemplateService {
     /** message, agent drafts, policy, then send by itself or after a person approves; a rejected draft is dropped. */
     static ProcessModel process(boolean slack) {
         return ProcessModel.builder("personal-assistant").name("Personal assistant").start("received")
+                .exclusive("command")
+                .task("forget", ElementType.AGENT_TASK, Map.of("agent", "replier", "forget", true))
+                .task("confirm", ElementType.SERVICE_TASK, slack
+                        ? Map.of("connector", "slack", "botToken", "${secret:SLACK_BOT_TOKEN}",
+                                "inputs", Map.of("channel", "event.channel", "text", "forget.output"))
+                        : Map.of("connector", "telegram", "botToken", "${secret:TELEGRAM_TOKEN}",
+                                "inputs", Map.of("chatId", "event.chatId", "text", "forget.output")))
+                .end("forgotten")
                 .task("draft", ElementType.AGENT_TASK, Map.of("agent", "replier"))
                 .task("policy", ElementType.BUSINESS_RULE_TASK, Map.of("model", "assistant"))
                 .exclusive("route")
@@ -462,7 +470,9 @@ public final class TemplateService {
                         : Map.of("connector", "telegram", "botToken", "${secret:TELEGRAM_TOKEN}",
                                 "inputs", Map.of("chatId", "event.chatId", "text", "draft.output")))
                 .end("sent").end("dropped")
-                .flow("received", "draft").flow("draft", "policy").flow("policy", "route")
+                .flow("received", "command").flow("command", "forget", "event.text = \"/forget\" or event.text = \"forget me\"").defaultFlow("command", "draft")
+                .flow("forget", "confirm").flow("confirm", "forgotten")
+                .flow("draft", "policy").flow("policy", "route")
                 .flow("route", "ask", "policy.result = \"approve\"").flow("ask", "approve").defaultFlow("route", "join")
                 .flow("approve", "decision")
                 .flow("decision", "join", "approve.approved = true").defaultFlow("decision", "dropped")

@@ -156,7 +156,8 @@ public final class NodeCatalog {
                         "decisions", Map.of("type", "array", "items", Map.of("type", "string"))), false)));
         l.add(new Entry("AGENT_TASK", "AI agent", "Tasks", "Runs an agent by id or an inline spec", false, Integer.MAX_VALUE, 1,
                 obj(List.of("agent"), Map.of("agent", Map.of("type", List.of("string", "object"),
-                        "description", "Id of a published AGENT, or an inline agent spec")), true)));
+                        "description", "Id of a published AGENT, or an inline agent spec"),
+                        "forget", Map.of("type", "boolean", "description", "Instead of asking the model, forget this conversation (the agent's memory for the key of this message)")), true)));
         l.add(new Entry("EIP_TASK", "Integration pipeline (EIP)", "Tasks", "Runs an inline message pipeline", false, Integer.MAX_VALUE, 1,
                 obj(List.of("pipeline"), Map.of("pipeline", Map.of("type", "object"), "message", EXPRESSION), true)));
         l.add(new Entry("USER_TASK", "Human task", "Tasks", "Creates a task for a person and waits", true, Integer.MAX_VALUE, 1,

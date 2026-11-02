@@ -78,7 +78,14 @@ public final class AgentHandler implements DomainHandler {
                 // private to tenant + process + agent: no conversation is ever read across them
                 ns = (vars.get(SecretResolver.TENANT_VARIABLE) instanceof String t ? t : "") + "|"
                         + (vars.get(SecretResolver.PROCESS_VARIABLE) instanceof String pr ? pr : "") + "|" + spec.id();
+                if (Boolean.TRUE.equals(node.config().get("forget"))) {
+                    // not a model call: the person asked to be forgotten
+                    boolean had = memory.clear(ns, convKey);
+                    return new NodeOutcome.Completed(Map.of("output", had ? "Done. I have forgotten this conversation." : "There was nothing to forget.", "forgotten", had));
+                }
                 input.put("history", tech.kayys.wayang.agent.ConversationMemory.asMessages(memory.load(ns, convKey, mem.turns())));
+            } else if (Boolean.TRUE.equals(node.config().get("forget"))) {
+                return new NodeOutcome.Completed(Map.of("output", "I do not keep any memory of conversations.", "forgotten", false));
             }
             Map<String, Object> result = invoker.invoke(spec, input);
             if (mem != null && result != null && result.get("output") instanceof String answer && !answer.isBlank()) {
