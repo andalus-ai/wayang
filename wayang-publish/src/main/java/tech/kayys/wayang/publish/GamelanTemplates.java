@@ -356,10 +356,10 @@ final class GamelanTemplates {
                 WORKDIR /app
                 COPY --from=build /src/target/quarkus-app/ /app/
                 USER 10001
-                ENV WAYANG_BIND=0.0.0.0 WAYANG_PORT=%2$d
+                ENV WAYANG_BIND=0.0.0.0 WAYANG_PORT=%2$d WAYANG_PROFILE=%3$s
                 EXPOSE %2$d
                 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/quarkus-run.jar"]
-                """.formatted(o.artifactId(), o.port());
+                """.formatted(o.artifactId(), o.port(), o.profile());
     }
 
     static String envExample(List<String> extra) {

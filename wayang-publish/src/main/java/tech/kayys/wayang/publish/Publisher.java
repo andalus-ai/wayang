@@ -59,6 +59,15 @@ public final class Publisher {
         if (processes.isEmpty()) {
             throw new IllegalArgumentException("The bundle has no process to release");
         }
+        tech.kayys.wayang.runtime.Profile profile = tech.kayys.wayang.runtime.Profile.parse(o.profile());
+        for (var plan : profile == tech.kayys.wayang.runtime.Profile.FULL ? List.<tech.kayys.wayang.bpmn.ExecutionPlan>of()
+                : new tech.kayys.wayang.embed.ReleaseDefinitions(bundle).plans().values()) {
+            List<String> bad = profile.violations(plan);
+            if (!bad.isEmpty()) {
+                throw new IllegalArgumentException("Process '" + plan.processId() + "' does not fit the '" + profile + "' profile: "
+                        + String.join("; ", bad));
+            }
+        }
         Set<String> known = Connectors.defaults().keySet();
         addAgentToolConnectors(bundle, used);
         used.remove(tech.kayys.wayang.embed.AgentActions.NAME); // built in: it only needs the other connectors and the secrets
@@ -568,10 +577,10 @@ public final class Publisher {
                 COPY --from=build /src/target/app.jar app.jar
                 COPY --from=build /src/target/lib lib
                 USER 10001
-                ENV WAYANG_BIND=0.0.0.0 WAYANG_PORT=%2$d
+                ENV WAYANG_BIND=0.0.0.0 WAYANG_PORT=%2$d WAYANG_PROFILE=%3$s
                 EXPOSE %2$d
                 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "app.jar"]
-                """.formatted(o.artifactId(), o.port());
+                """.formatted(o.artifactId(), o.port(), o.profile());
     }
 
     private static String envExample(ReleaseOptions o, ReleaseBundle b, List<String> secrets) {
