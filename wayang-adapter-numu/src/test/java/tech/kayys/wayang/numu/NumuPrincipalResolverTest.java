@@ -11,13 +11,13 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 import tech.kayys.wayang.api.ApiException;
-import tech.kayys.wayang.api.DefinitionKind;
-import tech.kayys.wayang.api.DefinitionStore;
-import tech.kayys.wayang.api.EventBus;
+import tech.kayys.wayang.api.definition.DefinitionKind;
+import tech.kayys.wayang.api.definition.DefinitionStore;
+import tech.kayys.wayang.api.run.EventBus;
 import tech.kayys.wayang.api.Permission;
 import tech.kayys.wayang.api.Principal;
-import tech.kayys.wayang.api.ReferenceRunEngine;
-import tech.kayys.wayang.api.RunEngine;
+import tech.kayys.wayang.api.run.ReferenceRunEngine;
+import tech.kayys.wayang.api.run.RunEngine;
 import tech.kayys.wayang.api.WayangApi;
 import tech.kayys.wayang.runtime.WaitRegistry;
 

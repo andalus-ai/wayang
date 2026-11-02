@@ -11,8 +11,8 @@ import jakarta.inject.Inject;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import tech.kayys.wayang.api.McpService;
-import tech.kayys.wayang.api.McpStore;
+import tech.kayys.wayang.api.mcp.McpService;
+import tech.kayys.wayang.api.mcp.McpStore;
 import tech.kayys.wayang.connectors.HttpConnector;
 import tech.kayys.wayang.connectors.UrlGuard;
 import tech.kayys.wayang.mcp.OpenApiExecutor;
@@ -43,14 +43,14 @@ public class McpConfig {
     @Inject
     tech.kayys.wayang.api.WayangApi api;
     @Inject
-    tech.kayys.wayang.api.DefinitionStore definitions;
+    tech.kayys.wayang.api.definition.DefinitionStore definitions;
 
     private volatile McpService service;
-    private volatile tech.kayys.wayang.api.ProcessMcpService processes;
+    private volatile tech.kayys.wayang.api.mcp.ProcessMcpService processes;
 
-    public synchronized tech.kayys.wayang.api.ProcessMcpService processes() {
+    public synchronized tech.kayys.wayang.api.mcp.ProcessMcpService processes() {
         if (processes == null) {
-            processes = new tech.kayys.wayang.api.ProcessMcpService(api, definitions);
+            processes = new tech.kayys.wayang.api.mcp.ProcessMcpService(api, definitions);
         }
         return processes;
     }

@@ -1,5 +1,7 @@
 package tech.kayys.wayang.api;
 
+import tech.kayys.wayang.api.definition.Studio;
+
 import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.Map;

@@ -11,8 +11,8 @@ import java.util.Optional;
 
 import javax.sql.DataSource;
 
-import tech.kayys.wayang.api.SealedSecret;
-import tech.kayys.wayang.api.SecretStore;
+import tech.kayys.wayang.api.secret.SealedSecret;
+import tech.kayys.wayang.api.secret.SecretStore;
 
 /** Stores ciphertext only; compare-and-set is done in SQL so it holds across nodes. */
 public final class JdbcSecretStore implements SecretStore {

@@ -12,9 +12,9 @@ import jakarta.inject.Inject;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import tech.kayys.wayang.api.TriggerService;
+import tech.kayys.wayang.api.trigger.TriggerService;
 import tech.kayys.wayang.api.WayangApi;
-import tech.kayys.wayang.api.WorkspaceService;
+import tech.kayys.wayang.api.project.WorkspaceService;
 
 /**
  * Workspace export/import. Optional signing: with {@code wayang.workspace.signing-key-file} (a file holding at least 32 characters,

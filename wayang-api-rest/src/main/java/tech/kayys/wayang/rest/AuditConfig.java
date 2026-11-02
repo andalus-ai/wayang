@@ -7,8 +7,8 @@ import jakarta.inject.Inject;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import tech.kayys.wayang.api.AuditService;
-import tech.kayys.wayang.api.AuditStore;
+import tech.kayys.wayang.api.audit.AuditService;
+import tech.kayys.wayang.api.audit.AuditStore;
 import tech.kayys.wayang.store.jdbc.JdbcAuditStore;
 
 /** The audit log lives in the same store kind as the rest ({@code wayang.store}): memory is bounded and lost on restart. */

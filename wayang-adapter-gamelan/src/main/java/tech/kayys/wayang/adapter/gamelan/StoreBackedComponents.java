@@ -6,9 +6,9 @@ import java.util.function.Function;
 
 import tech.kayys.wayang.agent.AgentSpec;
 import tech.kayys.wayang.agent.AgentSpecLoader;
-import tech.kayys.wayang.api.DefinitionKind;
-import tech.kayys.wayang.api.DefinitionStore;
-import tech.kayys.wayang.api.StoredDefinition;
+import tech.kayys.wayang.api.definition.DefinitionKind;
+import tech.kayys.wayang.api.definition.DefinitionStore;
+import tech.kayys.wayang.api.definition.StoredDefinition;
 import tech.kayys.wayang.dmn.DecisionModel;
 import tech.kayys.wayang.dmn.DmnLoader;
 
@@ -34,12 +34,12 @@ public final class StoreBackedComponents implements WayangComponents {
 
     @Override
     public Function<String, DecisionModel> decisionLookup() {
-        return ref -> resolve(ref, DefinitionKind.DECISION, decisions, d -> DmnLoader.load(tech.kayys.wayang.api.Studio.executable(d.document())));
+        return ref -> resolve(ref, DefinitionKind.DECISION, decisions, d -> DmnLoader.load(tech.kayys.wayang.api.definition.Studio.executable(d.document())));
     }
 
     @Override
     public Function<String, AgentSpec> agentLookup() {
-        return ref -> resolve(ref, DefinitionKind.AGENT, agents, d -> AgentSpecLoader.fromMap(tech.kayys.wayang.api.Studio.executable(d.document())));
+        return ref -> resolve(ref, DefinitionKind.AGENT, agents, d -> AgentSpecLoader.fromMap(tech.kayys.wayang.api.definition.Studio.executable(d.document())));
     }
 
     private <T> T resolve(String ref, DefinitionKind kind, Map<Key, T> cache, Function<StoredDefinition, T> parse) {

@@ -10,7 +10,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
 import io.smallrye.common.annotation.Blocking;
-import tech.kayys.wayang.api.ConnectorTester;
+import tech.kayys.wayang.api.connector.ConnectorTester;
 
 /** "Test this node" for the Studio: a real call, read-only operations only, explicit confirm required. */
 @Path("/api/v1/connectors")

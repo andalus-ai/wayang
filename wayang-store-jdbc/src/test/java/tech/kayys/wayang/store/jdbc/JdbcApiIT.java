@@ -11,13 +11,13 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
-import tech.kayys.wayang.api.DefinitionKind;
-import tech.kayys.wayang.api.EventBus;
+import tech.kayys.wayang.api.definition.DefinitionKind;
+import tech.kayys.wayang.api.run.EventBus;
 import tech.kayys.wayang.api.Principal;
-import tech.kayys.wayang.api.ReferenceRunEngine;
+import tech.kayys.wayang.api.run.ReferenceRunEngine;
 import tech.kayys.wayang.api.Role;
-import tech.kayys.wayang.api.RunStatus;
-import tech.kayys.wayang.api.RunView;
+import tech.kayys.wayang.api.run.RunStatus;
+import tech.kayys.wayang.api.run.RunView;
 import tech.kayys.wayang.api.WayangApi;
 
 /**

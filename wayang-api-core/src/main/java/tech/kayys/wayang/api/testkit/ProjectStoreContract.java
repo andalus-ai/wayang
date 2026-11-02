@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.function.Supplier;
 
 import tech.kayys.wayang.api.ApiException;
-import tech.kayys.wayang.api.ProjectStore;
+import tech.kayys.wayang.api.project.ProjectStore;
 
 /** Behavioural contract for {@link ProjectStore} implementations (pass a factory returning an empty store). */
 public final class ProjectStoreContract {

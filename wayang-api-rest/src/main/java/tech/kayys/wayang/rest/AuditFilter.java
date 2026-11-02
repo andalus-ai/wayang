@@ -14,7 +14,7 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.ext.Provider;
 
 /**
- * Feeds {@link tech.kayys.wayang.api.AuditService}: after each response, the route template (never the raw URL, so no query
+ * Feeds {@link tech.kayys.wayang.api.audit.AuditService}: after each response, the route template (never the raw URL, so no query
  * string or token reaches the log), its path parameters and the final status. Only the authenticated principal that the
  * resource already resolved is used ({@link Principals#peek()}), so the filter never calls the identity service itself.
  */

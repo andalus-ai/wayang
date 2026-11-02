@@ -14,7 +14,7 @@ import jakarta.ws.rs.core.MediaType;
 
 import io.smallrye.common.annotation.Blocking;
 import tech.kayys.wayang.api.ApiException;
-import tech.kayys.wayang.api.WorkspaceService;
+import tech.kayys.wayang.api.project.WorkspaceService;
 
 /**
  * A project as a portable bundle. Export is a read; import is a write and is a dry run unless {@code options.dryRun} is false.

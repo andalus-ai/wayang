@@ -17,7 +17,7 @@ import jakarta.ws.rs.core.Response;
 
 import io.smallrye.common.annotation.Blocking;
 import tech.kayys.wayang.api.ApiException;
-import tech.kayys.wayang.api.SecretService;
+import tech.kayys.wayang.api.secret.SecretService;
 
 /**
  * Write-only secrets, tenant taken from the authenticated principal (never from the request). There is no

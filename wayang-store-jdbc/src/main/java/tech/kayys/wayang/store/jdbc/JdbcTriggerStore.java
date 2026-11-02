@@ -14,8 +14,8 @@ import java.util.Optional;
 import javax.sql.DataSource;
 
 import tech.kayys.wayang.api.ApiException;
-import tech.kayys.wayang.api.Trigger;
-import tech.kayys.wayang.api.TriggerStore;
+import tech.kayys.wayang.api.trigger.Trigger;
+import tech.kayys.wayang.api.trigger.TriggerStore;
 import tech.kayys.wayang.runtime.json.Json;
 
 /** {@link TriggerStore} over plain JDBC ({@code wayang_trigger}). The config holds secret *references*, never values. */

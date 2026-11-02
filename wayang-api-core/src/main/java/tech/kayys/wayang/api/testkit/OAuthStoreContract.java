@@ -5,8 +5,8 @@ import java.util.List;
 import java.util.function.Supplier;
 
 import tech.kayys.wayang.api.ApiException;
-import tech.kayys.wayang.api.OAuthConnection;
-import tech.kayys.wayang.api.OAuthStore;
+import tech.kayys.wayang.api.oauth.OAuthConnection;
+import tech.kayys.wayang.api.oauth.OAuthStore;
 
 /** Behavioural contract for {@link OAuthStore} implementations (pass a factory returning an empty store). */
 public final class OAuthStoreContract {

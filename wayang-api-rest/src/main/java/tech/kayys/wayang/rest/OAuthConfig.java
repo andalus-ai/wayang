@@ -9,8 +9,8 @@ import jakarta.inject.Inject;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import tech.kayys.wayang.api.OAuthService;
-import tech.kayys.wayang.api.OAuthStore;
+import tech.kayys.wayang.api.oauth.OAuthService;
+import tech.kayys.wayang.api.oauth.OAuthStore;
 import tech.kayys.wayang.connectors.OAuthHttp;
 import tech.kayys.wayang.connectors.UrlGuard;
 import tech.kayys.wayang.runtime.SecretResolver;
@@ -68,9 +68,9 @@ public class OAuthConfig {
         // each external prefix is read from its own source when that is configured: vault., file., aws., azure., gcp.
         java.util.Map<String, SecretResolver> by = new java.util.LinkedHashMap<>(cloud.resolvers());
         vault.resolver().ifPresent(v -> by.put("vault.", v));
-        fileDir.ifPresent(d -> by.put("file.", new tech.kayys.wayang.api.FileSecretResolver(java.nio.file.Path.of(d),
+        fileDir.ifPresent(d -> by.put("file.", new tech.kayys.wayang.api.secret.FileSecretResolver(java.nio.file.Path.of(d),
                 m -> java.util.logging.Logger.getLogger("wayang.secrets").warning(m))));
-        return by.isEmpty() ? local : tech.kayys.wayang.api.ExternalSecrets.routing(local, by);
+        return by.isEmpty() ? local : tech.kayys.wayang.api.secret.ExternalSecrets.routing(local, by);
     }
 
 }

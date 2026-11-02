@@ -12,8 +12,8 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 import tech.kayys.wayang.api.ApiException;
-import tech.kayys.wayang.api.AuditEntry;
-import tech.kayys.wayang.api.AuditStore;
+import tech.kayys.wayang.api.audit.AuditEntry;
+import tech.kayys.wayang.api.audit.AuditStore;
 import tech.kayys.wayang.runtime.json.Json;
 
 /** {@link AuditStore} over plain JDBC. INSERT and SELECT only; the application never updates or deletes audit rows. */
