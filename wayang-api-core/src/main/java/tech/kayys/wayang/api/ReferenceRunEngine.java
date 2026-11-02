@@ -145,6 +145,7 @@ public final class ReferenceRunEngine implements RunEngine {
         NodeRunner runner = new NodeRunner(List.of(new ControlHandler(waits, clock), new HumanHandler(waits),
                 new DmnHandler(decisions), new EipHandler(idempotency, connectors, claims, aggregation, eipState), new AgentHandler(invoker, agents).withMemory(memory),
                 new ServiceHandler(connectors)));
+        runner.withProfile(tech.kayys.wayang.runtime.Profile.fromEnvironment());
         if (secrets != null) {
             runner.withSecrets(secrets);
         }

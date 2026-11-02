@@ -25,7 +25,9 @@ import tech.kayys.wayang.runtime.ControlHandler;
 import tech.kayys.wayang.runtime.DmnHandler;
 import tech.kayys.wayang.runtime.EipHandler;
 import tech.kayys.wayang.runtime.HumanHandler;
+import tech.kayys.wayang.runtime.Extensions;
 import tech.kayys.wayang.runtime.NodeRunner;
+import tech.kayys.wayang.runtime.Profile;
 import tech.kayys.wayang.runtime.ReferenceEngine;
 import tech.kayys.wayang.runtime.SecretResolver;
 import tech.kayys.wayang.runtime.ServiceHandler;
@@ -83,6 +85,15 @@ public final class EmbeddedRuntime implements ReleaseEngine {
         this.secrets = secrets;
         ReleaseDefinitions defs = new ReleaseDefinitions(bundle);
         plans.putAll(defs.plans());
+        Profile profile = Profile.fromEnvironment();
+        Extensions ext = Extensions.load(profile);
+        for (ExecutionPlan plan : plans.values()) {
+            List<String> bad = profile.violations(plan);
+            if (!bad.isEmpty()) {
+                throw new IllegalStateException("Process '" + plan.processId() + "' does not fit the '" + profile
+                        + "' profile: " + String.join("; ", bad));
+            }
+        }
         versions.putAll(defs.versions());
         Map<String, DecisionModel> decisions = defs.decisions();
         Map<String, AgentSpec> agents = defs.agents();
@@ -92,7 +103,7 @@ public final class EmbeddedRuntime implements ReleaseEngine {
         this.sweeper = new tech.kayys.wayang.eip.CollectSweeper(aggregation,
                 (tenant, process, node) -> TENANT.equals(tenant) ? tech.kayys.wayang.eip.CollectSweeper.find(tenant, processDocs.get(process), node) : null,
                 (tenant, process, input) -> start(process, input), clock, null);
-        Map<String, ServiceHandler.Connector> all = AgentActions.with(connectors, secrets, config);
+        Map<String, ServiceHandler.Connector> all = AgentActions.with(ext.mergeConnectors(connectors == null ? Map.of() : connectors), secrets, config);
         AgentInvoker inv = invoker != null ? invoker : (spec, input) -> {
             throw new IllegalStateException("No agent runtime is configured in this release");
         };
@@ -101,6 +112,7 @@ public final class EmbeddedRuntime implements ReleaseEngine {
                         aggregation, new EipState()),
                 new AgentHandler(inv, agents).withMemory(memory != null ? memory : new tech.kayys.wayang.agent.ConversationMemory.InMemory(10_000)),
                 new ServiceHandler(all)));
+        runner.withProfile(profile).withExtensions(ext);
         if (secrets != null) {
             runner.withSecrets(secrets);
         }

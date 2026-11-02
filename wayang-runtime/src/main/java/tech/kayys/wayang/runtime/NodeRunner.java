@@ -59,6 +59,25 @@ public final class NodeRunner {
             tech.kayys.wayang.bpmn.ElementType.EIP_TASK);
     private static final java.util.regex.Pattern SECRET_REF = java.util.regex.Pattern.compile("\\$\\{(secret|config):([A-Za-z0-9_.-]{1,100})}");
 
+    /** Drops handlers the profile does not serve; nodes needing them then fail with a clear message. */
+    public NodeRunner withProfile(Profile profile) {
+        this.profile = profile;
+        handlers.keySet().removeIf(t -> !profile.allowsExecutor(t));
+        return this;
+    }
+
+    /** Adds extension handlers (custom executor types); a type that is already served is an error. */
+    public NodeRunner withExtensions(Extensions extensions) {
+        for (DomainHandler h : extensions.handlers()) {
+            if (handlers.putIfAbsent(h.executorType(), h) != null) {
+                throw new IllegalArgumentException("Two handlers for executor type " + h.executorType());
+            }
+        }
+        return this;
+    }
+
+    private Profile profile = Profile.FULL;
+
     public boolean supports(String executorType) {
         return handlers.containsKey(executorType);
     }
@@ -99,6 +118,10 @@ public final class NodeRunner {
             }
             DomainHandler h = handlers.get(node.executorType());
             if (h == null) {
+                if (!profile.allowsExecutor(node.executorType())) {
+                    return new NodeOutcome.Failed("Node " + node.id() + " needs " + node.executorType()
+                            + ", which the '" + profile.name() + "' profile does not enable", false);
+                }
                 return new NodeOutcome.Failed("No handler registered for executor type '" + node.executorType()
                         + "' (node " + node.id() + ")", false);
             }
