@@ -398,6 +398,11 @@ class TemplateServiceTest {
         var agent = TemplateService.agent("openai/gpt-4o-mini", "", "", "", "", "", 0, "google", false,
                 new TemplateService.Email("work", List.of("boss@example.com")));
         assertEquals(java.util.Set.of("calendar_create", "email_send"), java.util.Set.copyOf((List<?>) agent.get("requireApproval")));
+        var tools = (List<?>) agent.get("tools");
+        var names = tools.stream().map(t -> ((Map<?, ?>) t).get("name")).toList();
+        assertTrue(names.containsAll(List.of("email_send", "email_search", "email_read")), names.toString());
+        assertFalse(java.util.Set.copyOf((List<?>) agent.get("requireApproval")).contains("email_read"), "reading needs no approval");
+        assertFalse(java.util.Set.copyOf((List<?>) agent.get("requireApproval")).contains("email_search"));
         var send = (Map<?, ?>) ((List<?>) agent.get("tools")).get(0);
         assertEquals("email_send", send.get("name"));
         assertEquals("gmail", send.get("type"));
