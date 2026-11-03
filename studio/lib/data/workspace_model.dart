@@ -393,6 +393,11 @@ String? assistantFieldProblem(String field, String value) {
           : 'Five fields, for example 0 8 * * 1-5';
     case 'timezone':
       return RegExp(r'^[A-Za-z][A-Za-z0-9_+/-]{0,60}$').hasMatch(v) ? null : 'A time zone such as Asia/Jakarta or UTC';
+    case 'memoryTurns':
+      {
+        final n = int.tryParse(v);
+        return n != null && n >= 0 && n <= 30 ? null : 'A whole number from 0 to 30 (0 = no memory)';
+      }
     case 'persona':
       return v.length <= 1000 ? null : 'At most 1000 characters';
     case 'name':
