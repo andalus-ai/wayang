@@ -113,3 +113,25 @@ names with spaces; `==`, `&&`, `||` aliases; `"a" + 1` concatenates; `replace`/`
 - Message buffer is not tenant-namespaced (a buffered message can be consumed by another tenant's waiter with the same name+key).
 - Flutter web cannot send an Authorization header on WebSocket upgrade: needs a short-lived ticket endpoint. gRPC needs grpc-web for Flutter web.
 - No audit log, rate limiting or pagination cursors on the API yet.
+
+## Package map of `wayang-api-core`
+
+`tech.kayys.wayang.api` holds only the facade and shared vocabulary; everything else is grouped by concern.
+
+| Package | Contents |
+|---|---|
+| `api` | `WayangApi` (facade), `ApiException`, `Principal`, `Role`, `TenantGate`, `Views`, `RateLimiter` |
+| `api.definition` | definition store/kinds, `NodeCatalog`, `Studio` document helpers, `AutoLayout`, `JsonSchemaLite`, validation, mapper |
+| `api.project` | projects, workspace import/export (`WorkspaceService`, `WorkspaceBundle`), `TemplateService`, `ReleaseService` |
+| `api.run` | `RunEngine`, `ReferenceRunEngine`, run/task views, `EventBus`, WebSocket rooms/sessions/tickets, collect sweep |
+| `api.trigger` | `Trigger`, `TriggerStore`, `TriggerService` |
+| `api.secret` | secret store/service, sealing and keyrings, archives, file resolver |
+| `api.secret.cloud` | Vault, AWS, Azure, GCP secret backends and their HTTP/token helpers |
+| `api.config` | non-secret settings (`ConfigStore`, `ConfigService`) |
+| `api.oauth` | OAuth connections, store and service |
+| `api.mcp` | MCP server definitions, store, service, process-as-MCP-tool |
+| `api.audit` | audit entries, store, service |
+| `api.connector` | connector inspection and test calls |
+| `api.testkit` | store contract tests reused by persistence modules |
+
+Tests live in the package of the class they exercise.

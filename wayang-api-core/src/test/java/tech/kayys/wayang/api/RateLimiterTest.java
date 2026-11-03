@@ -1,5 +1,8 @@
 package tech.kayys.wayang.api;
 
+import tech.kayys.wayang.api.connector.ConnectorInspector;
+import tech.kayys.wayang.api.connector.ConnectorTester;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.time.Clock;

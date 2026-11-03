@@ -9,9 +9,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 import tech.kayys.wayang.api.ApiException;
-import tech.kayys.wayang.api.DefinitionKind;
-import tech.kayys.wayang.api.DefinitionStore;
-import tech.kayys.wayang.api.StoredDefinition;
+import tech.kayys.wayang.api.definition.DefinitionKind;
+import tech.kayys.wayang.api.definition.DefinitionStore;
+import tech.kayys.wayang.api.definition.StoredDefinition;
 
 /**
  * Behavioural contract every {@link DefinitionStore} must satisfy. Run it

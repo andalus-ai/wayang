@@ -14,10 +14,10 @@ import java.util.Optional;
 import javax.sql.DataSource;
 
 import tech.kayys.wayang.api.ApiException;
-import tech.kayys.wayang.api.DefinitionKind;
-import tech.kayys.wayang.api.DefinitionStore;
+import tech.kayys.wayang.api.definition.DefinitionKind;
+import tech.kayys.wayang.api.definition.DefinitionStore;
 import tech.kayys.wayang.api.DefinitionSummary;
-import tech.kayys.wayang.api.StoredDefinition;
+import tech.kayys.wayang.api.definition.StoredDefinition;
 import tech.kayys.wayang.runtime.json.Json;
 
 /**
@@ -254,7 +254,7 @@ public final class JdbcDefinitionStore implements DefinitionStore {
     }
 
     private static String projectOf(String json) {
-        return tech.kayys.wayang.api.Studio.projectId(parse(json));
+        return tech.kayys.wayang.api.definition.Studio.projectId(parse(json));
     }
 
     private static String nameOf(String json, String fallback) {

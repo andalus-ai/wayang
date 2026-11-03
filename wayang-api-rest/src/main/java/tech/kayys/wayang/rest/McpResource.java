@@ -19,8 +19,8 @@ import jakarta.ws.rs.core.Response;
 
 import io.smallrye.common.annotation.Blocking;
 import tech.kayys.wayang.api.ApiException;
-import tech.kayys.wayang.api.McpServerDef;
-import tech.kayys.wayang.api.McpService;
+import tech.kayys.wayang.api.mcp.McpServerDef;
+import tech.kayys.wayang.api.mcp.McpService;
 import tech.kayys.wayang.mcp.OpenApiToMcp;
 
 /** Generate MCP servers from OpenAPI/Swagger and serve them. Tenant comes from the authenticated principal. */

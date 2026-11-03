@@ -15,14 +15,14 @@ import jakarta.inject.Inject;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import tech.kayys.wayang.api.AwsCredentialSources;
-import tech.kayys.wayang.api.AwsSecretsManager;
-import tech.kayys.wayang.api.AwsSigV4;
-import tech.kayys.wayang.api.AzureKeyVault;
-import tech.kayys.wayang.api.CloudHttp;
-import tech.kayys.wayang.api.CloudSecretResolver;
-import tech.kayys.wayang.api.CloudTokens;
-import tech.kayys.wayang.api.GcpSecretManager;
+import tech.kayys.wayang.api.secret.cloud.AwsCredentialSources;
+import tech.kayys.wayang.api.secret.cloud.AwsSecretsManager;
+import tech.kayys.wayang.api.secret.cloud.AwsSigV4;
+import tech.kayys.wayang.api.secret.cloud.AzureKeyVault;
+import tech.kayys.wayang.api.secret.cloud.CloudHttp;
+import tech.kayys.wayang.api.secret.cloud.CloudSecretResolver;
+import tech.kayys.wayang.api.secret.cloud.CloudTokens;
+import tech.kayys.wayang.api.secret.cloud.GcpSecretManager;
 import tech.kayys.wayang.runtime.SecretResolver;
 
 /**
