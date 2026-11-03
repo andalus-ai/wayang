@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/utils.dart';
 import '../../core/widgets.dart';
 import '../../data/api_client.dart';
 import '../../data/workspace_model.dart';
@@ -268,9 +267,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         ref.invalidate(projectsProvider);
         if (r.ok && _tplBrief) {
           showToast(context, 'Created. The schedule is off: set ${_tplSlack ? 'SLACK_BOT_TOKEN' : 'TELEGRAM_TOKEN'} under Secrets, then enable it.');
-        } else if (r.ok) showToast(context, _tplSlack
-            ? 'Created. The Slack trigger is off: set SLACK_BOT_TOKEN and SLACK_SIGNING_SECRET under Secrets, then enable it.'
-            : 'Created. The Telegram trigger is off: set TELEGRAM_TOKEN under Secrets, then enable it.');
+        } else if (r.ok) {
+          showToast(context, _tplSlack
+              ? 'Created. The Slack trigger is off: set SLACK_BOT_TOKEN and SLACK_SIGNING_SECRET under Secrets, then enable it.'
+              : 'Created. The Telegram trigger is off: set TELEGRAM_TOKEN under Secrets, then enable it.');
+        }
       }
     } catch (e) {
       if (mounted) setState(() => _tplReport = null);
