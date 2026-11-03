@@ -6,7 +6,6 @@ import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/api_client.dart';
 import '../../models/wayang.dart';
-import '../../providers/app_providers.dart';
 import '../../providers/bpmn_provider.dart';
 import 'bpmn_canvas.dart';
 import 'bpmn_panels.dart';

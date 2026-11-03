@@ -27,18 +27,18 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "25" # Gamelan and Andalus compile with release 25; Wayang itself targets 21
           cache: maven
       # Wayang builds against Gamelan and Andalus (versions in the parent pom); install them from source.
       - name: Gamelan
         uses: actions/checkout@v4
         with:
-          repository: bhangun/gamelan
+          repository: andalus-ai/gamelan
           path: deps/gamelan
       - name: Andalus
         uses: actions/checkout@v4
         with:
-          repository: bhangun/andalus
+          repository: andalus-ai/andalus
           path: deps/andalus
       - name: Install Gamelan and Andalus
         run: |
@@ -62,5 +62,5 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter analyze
+      - run: flutter analyze --no-fatal-infos # deprecation/const hints are not failures; warnings and errors are
       - run: flutter test
