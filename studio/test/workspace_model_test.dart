@@ -171,6 +171,10 @@ void main() {
     expect(assistantFieldProblem('model', 'openai/gpt-4o-mini'), isNull);
     expect(assistantFieldProblem('model', 'gpt4'), isNotNull);
     expect(assistantFieldProblem('persona', 'x' * 1001), isNotNull);
+    expect(assistantFieldProblem('memoryTurns', '0'), isNull);
+    expect(assistantFieldProblem('memoryTurns', '30'), isNull);
+    expect(assistantFieldProblem('memoryTurns', '31'), isNotNull);
+    expect(assistantFieldProblem('memoryTurns', 'ten'), isNotNull);
     expect(assistantFieldProblem('name', ' '), isNotNull);
     expect(assistantFieldProblem('lookupUrl', ''), isNull);
     expect(assistantFieldProblem('lookupUrl', 'https://api.example.com/v1/search'), isNull);

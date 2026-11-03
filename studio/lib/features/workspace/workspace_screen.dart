@@ -244,6 +244,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   bool _tplSlack = false;
   bool _tplBrief = false;
   bool _tplCalendar = false;
+  bool _tplWebSearch = false;
+  final _tplMemory = TextEditingController(text: '10');
   final _tplCalConn = TextEditingController(text: 'google');
   ImportReport? _tplReport;
 
@@ -259,6 +261,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         'lookupSecret': _tplLookupSecret.text.trim(),
         'name': _tplName.text.trim(),
         if (!_tplBrief && _tplCalendar) ...{'calendar': 'true', 'calendarConnection': _tplCalConn.text.trim()},
+        if (!_tplBrief && _tplWebSearch) 'webSearch': 'true',
+        if (!_tplBrief) 'memoryTurns': _tplMemory.text.trim(),
         if (_tplBrief) ...{'topic': _tplTopic.text.trim(), 'cron': _tplCron.text.trim(), 'timezone': _tplZone.text.trim()},
       }, dryRun: dry);
       if (!mounted) return;
@@ -283,7 +287,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
 
   Widget _templateCard() {
     final idKey = _tplSlack ? 'channelId' : 'chatId';
-    final fields = {idKey: _tplChat, 'model': _tplModel, 'persona': _tplPersona, 'name': _tplName, 'lookupUrl': _tplLookup, 'lookupDescription': _tplLookupDesc, 'lookupSecret': _tplLookupSecret, if (_tplBrief) ...{'cron': _tplCron, 'timezone': _tplZone}, if (!_tplBrief && _tplCalendar) 'calendarConnection': _tplCalConn};
+    final fields = {idKey: _tplChat, 'model': _tplModel, 'persona': _tplPersona, 'name': _tplName, 'lookupUrl': _tplLookup, 'lookupDescription': _tplLookupDesc, 'lookupSecret': _tplLookupSecret, if (_tplBrief) ...{'cron': _tplCron, 'timezone': _tplZone}, if (!_tplBrief && _tplCalendar) 'calendarConnection': _tplCalConn, if (!_tplBrief) 'memoryTurns': _tplMemory};
     final ok = fields.entries.every((e) => assistantFieldProblem(e.key, e.value.text) == null) && (!_tplBrief || assistantFieldProblem('topic', _tplTopic.text) == null);
     Widget field(String key, String label, TextEditingController c, {int lines = 1}) => SizedBox(
           width: 260,
@@ -330,6 +334,17 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 _tplReport = null;
               }),
             ),
+          if (!_tplBrief)
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Web search (Brave Search API; needs the secret BRAVE_API_KEY; results are treated as untrusted)'),
+              value: _tplWebSearch,
+              onChanged: (v) => setState(() {
+                _tplWebSearch = v;
+                _tplReport = null;
+              }),
+            ),
           const SizedBox(height: 4),
           Text(_tplBrief
               ? 'An agent writes a short brief on a cron schedule and sends it to you. A run missed while the release was down is skipped, not sent late. The schedule is created switched off.'
@@ -341,6 +356,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             field('model', 'Model (provider/model)', _tplModel),
             field('name', 'Project name', _tplName),
             field('persona', 'Persona (optional)', _tplPersona),
+            if (!_tplBrief) field('memoryTurns', 'Remembered exchanges per chat (0 to 30)', _tplMemory),
             field('lookupUrl', 'Read-only lookup address (optional, https)', _tplLookup),
             field('lookupDescription', 'What that address answers (optional)', _tplLookupDesc),
             field('lookupSecret', 'Secret name sent as a bearer token (optional)', _tplLookupSecret),
