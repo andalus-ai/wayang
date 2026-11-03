@@ -389,6 +389,27 @@ class TemplateServiceTest {
     }
 
     @Test
+    void emailSendIsRestrictedToListedRecipientsAndNeedsApproval() {
+        for (String bad : new String[] {"nobody", "a@b", "a@example.com,", "x@y.zz\nBcc: z@example.com"}) {
+            assertThrows(ApiException.class, () -> templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "emailRecipients", bad), true), bad);
+        }
+        assertThrows(ApiException.class, () -> templates.instantiate(acme, "assistant-telegram",
+                Map.of("chatId", "1", "emailRecipients", "a@example.com", "emailConnection", "a b"), true));
+        var agent = TemplateService.agent("openai/gpt-4o-mini", "", "", "", "", "", 0, "google", false,
+                new TemplateService.Email("work", List.of("boss@example.com")));
+        assertEquals(java.util.Set.of("calendar_create", "email_send"), java.util.Set.copyOf((List<?>) agent.get("requireApproval")));
+        var send = (Map<?, ?>) ((List<?>) agent.get("tools")).get(0);
+        assertEquals("email_send", send.get("name"));
+        assertEquals("gmail", send.get("type"));
+        String text = String.valueOf(send);
+        assertTrue(text.contains("${secret:oauth.work}") && text.contains("allowedRecipients=[boss@example.com]"), text);
+        assertTrue(String.valueOf(agent.get("systemPrompt")).contains("email_send"));
+        var r = templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "123456", "emailRecipients", "Boss@Example.com, ann@example.org"), true);
+        assertTrue(r.ok(), r.problems().toString());
+        assertNull(TemplateService.agent("openai/gpt-4o-mini", "", "", "", "", "", 0).get("requireApproval"));
+    }
+
+    @Test
     void theAssistantsCarryGuardrailsByDefault() {
         var agent = TemplateService.agent("openai/gpt-4o-mini", "", "", "", "", "", 0);
         var opts = (Map<?, ?>) agent.get("options");
