@@ -11,7 +11,7 @@ import jakarta.ws.rs.core.MediaType;
 
 import io.smallrye.common.annotation.Blocking;
 import tech.kayys.wayang.api.Permission;
-import tech.kayys.wayang.api.WsTickets;
+import tech.kayys.wayang.api.run.WsTickets;
 
 /**
  * {@code POST /api/v1/ws/ticket}: a 30-second single-use ticket for {@code /ws/events?ticket=...}, for browsers that cannot send an

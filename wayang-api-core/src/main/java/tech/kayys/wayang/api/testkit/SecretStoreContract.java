@@ -3,8 +3,8 @@ package tech.kayys.wayang.api.testkit;
 import java.time.Instant;
 import java.util.function.Supplier;
 
-import tech.kayys.wayang.api.SealedSecret;
-import tech.kayys.wayang.api.SecretStore;
+import tech.kayys.wayang.api.secret.SealedSecret;
+import tech.kayys.wayang.api.secret.SecretStore;
 
 /** Behavioural contract for {@link SecretStore} implementations (pass a factory returning an empty store). */
 public final class SecretStoreContract {

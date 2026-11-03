@@ -12,10 +12,10 @@ import jakarta.inject.Inject;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import tech.kayys.wayang.api.InMemorySecretStore;
-import tech.kayys.wayang.api.SecretCipher;
-import tech.kayys.wayang.api.SecretService;
-import tech.kayys.wayang.api.SecretStore;
+import tech.kayys.wayang.api.secret.InMemorySecretStore;
+import tech.kayys.wayang.api.secret.SecretCipher;
+import tech.kayys.wayang.api.secret.SecretService;
+import tech.kayys.wayang.api.secret.SecretStore;
 import tech.kayys.wayang.store.jdbc.JdbcSecretStore;
 
 /**
@@ -72,14 +72,14 @@ public class SecretsConfig {
             throw new IllegalStateException("Set only one of wayang.secrets.key, wayang.secrets.key-file, wayang.secrets.vault-keyring-path");
         }
         if (keyFile.isPresent()) {
-            return tech.kayys.wayang.api.Keyring.fromFile(java.nio.file.Path.of(keyFile.get()), keyFileLoose).cipher();
+            return tech.kayys.wayang.api.secret.Keyring.fromFile(java.nio.file.Path.of(keyFile.get()), keyFileLoose).cipher();
         }
         if (vaultKeyringPath.isPresent()) {
             var c = vault.client().orElseThrow(() -> new IllegalStateException("wayang.secrets.vault-keyring-path needs wayang.vault.address"));
             Map<String, String> data = c.readKv2(vault.mount(), vaultKeyringPath.get());
             StringBuilder text = new StringBuilder();
             data.forEach((k, v) -> text.append(k.equals("active") ? "active=" : k + ":").append(v).append('\n'));
-            return tech.kayys.wayang.api.Keyring.parse(text.toString()).cipher();
+            return tech.kayys.wayang.api.secret.Keyring.parse(text.toString()).cipher();
         }
         Map<String, byte[]> ring = new HashMap<>();
         ring.put(keyId, Base64.getDecoder().decode(key.get().trim()));

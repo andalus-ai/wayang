@@ -7,12 +7,12 @@ import jakarta.inject.Inject;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import tech.kayys.wayang.api.ConfigService;
-import tech.kayys.wayang.api.ConfigStore;
-import tech.kayys.wayang.api.DefinitionKind;
-import tech.kayys.wayang.api.DefinitionStore;
-import tech.kayys.wayang.api.ProjectStore;
-import tech.kayys.wayang.api.Studio;
+import tech.kayys.wayang.api.config.ConfigService;
+import tech.kayys.wayang.api.config.ConfigStore;
+import tech.kayys.wayang.api.definition.DefinitionKind;
+import tech.kayys.wayang.api.definition.DefinitionStore;
+import tech.kayys.wayang.api.project.ProjectStore;
+import tech.kayys.wayang.api.definition.Studio;
 import tech.kayys.wayang.store.jdbc.JdbcConfigStore;
 
 /**

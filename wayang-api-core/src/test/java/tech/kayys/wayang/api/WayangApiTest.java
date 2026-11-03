@@ -1,5 +1,22 @@
 package tech.kayys.wayang.api;
 
+import tech.kayys.wayang.api.definition.AutoLayout;
+import tech.kayys.wayang.api.run.CollectSweepService;
+import tech.kayys.wayang.api.definition.DefinitionKind;
+import tech.kayys.wayang.api.definition.DefinitionStore;
+import tech.kayys.wayang.api.run.EventBus;
+import tech.kayys.wayang.api.project.Project;
+import tech.kayys.wayang.api.project.ProjectStore;
+import tech.kayys.wayang.api.run.ReferenceRunEngine;
+import tech.kayys.wayang.api.run.RunEngine;
+import tech.kayys.wayang.api.run.RunEvent;
+import tech.kayys.wayang.api.run.RunStatus;
+import tech.kayys.wayang.api.run.RunView;
+import tech.kayys.wayang.api.definition.StoredDefinition;
+import tech.kayys.wayang.api.definition.Studio;
+import tech.kayys.wayang.api.run.TaskView;
+import tech.kayys.wayang.api.run.WsSession;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.time.Clock;
@@ -325,6 +342,22 @@ class WayangApiTest {
         assertTrue(r.items().stream().anyMatch(i -> "t".equals(i.elementId()) && i.message().contains("connector")));
         assertEquals(tech.kayys.wayang.bpmn.ElementType.values().length, api.nodeCatalog(acme).size());
         assertNotNull(api.nodeCatalog(viewer));
+    }
+
+    @Test
+    void aProfileHidesAndRefusesTheFeaturesItDoesNotServe() {
+        Map<String, Object> doc = Map.of("id", "p", "elements", List.of(Map.of("id", "s", "type", "START_EVENT"),
+                Map.of("id", "a", "type", "AGENT_TASK", "config", Map.of("agent", "helper")), Map.of("id", "e", "type", "END_EVENT")),
+                "flows", List.of(Map.of("id", "f1", "source", "s", "target", "a"), Map.of("id", "f2", "source", "a", "target", "e")));
+        var restricted = new WayangApi(store, engine, waits, bus, clock).withProfile(tech.kayys.wayang.runtime.Profile.AUTOMATION);
+        var r = restricted.validate(acme, DefinitionKind.PROCESS, doc);
+        assertTrue(r.items().stream().anyMatch(i -> "a".equals(i.elementId()) && i.message().contains("'automation' profile")), String.valueOf(r.items()));
+        assertFalse(r.valid());
+        var types = restricted.nodeCatalog(acme).stream().map(m -> m.get("type")).toList();
+        assertFalse(types.contains("AGENT_TASK"));
+        assertFalse(types.contains("EIP_TASK"), "EIP is not in automation either");
+        assertTrue(types.contains("BUSINESS_RULE_TASK") && types.contains("START_EVENT"));
+        assertTrue(api.nodeCatalog(acme).size() == tech.kayys.wayang.bpmn.ElementType.values().length || System.getenv("WAYANG_PROFILE") != null);
     }
 
     private static Map<String, Object> gatherProcess() {

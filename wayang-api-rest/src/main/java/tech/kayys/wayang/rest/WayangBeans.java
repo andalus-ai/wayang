@@ -17,11 +17,11 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import tech.kayys.wayang.adapter.gamelan.GamelanClients;
 import tech.kayys.wayang.adapter.gamelan.GamelanRunEngine;
 import tech.kayys.wayang.adapter.gamelan.WayangRuntime;
-import tech.kayys.wayang.api.DefinitionStore;
-import tech.kayys.wayang.api.EventBus;
-import tech.kayys.wayang.api.ProjectStore;
-import tech.kayys.wayang.api.ReferenceRunEngine;
-import tech.kayys.wayang.api.RunEngine;
+import tech.kayys.wayang.api.definition.DefinitionStore;
+import tech.kayys.wayang.api.run.EventBus;
+import tech.kayys.wayang.api.project.ProjectStore;
+import tech.kayys.wayang.api.run.ReferenceRunEngine;
+import tech.kayys.wayang.api.run.RunEngine;
 import tech.kayys.wayang.api.WayangApi;
 import tech.kayys.wayang.runtime.WaitRegistry;
 import tech.kayys.wayang.store.jdbc.JdbcDefinitionStore;
@@ -153,9 +153,9 @@ public class WayangBeans {
 
     @Produces
     @ApplicationScoped
-    tech.kayys.wayang.api.TriggerStore triggerStore() {
+    tech.kayys.wayang.api.trigger.TriggerStore triggerStore() {
         return switch (storeKind) {
-            case "memory" -> new tech.kayys.wayang.api.TriggerStore.InMemory();
+            case "memory" -> new tech.kayys.wayang.api.trigger.TriggerStore.InMemory();
             case "jdbc" -> new tech.kayys.wayang.store.jdbc.JdbcTriggerStore(jdbc());
             default -> throw new IllegalStateException("wayang.store must be memory or jdbc, not '" + storeKind + "'");
         };
@@ -163,17 +163,17 @@ public class WayangBeans {
 
     @Produces
     @ApplicationScoped
-    tech.kayys.wayang.api.TriggerService triggers(tech.kayys.wayang.api.TriggerStore store, WayangApi api,
+    tech.kayys.wayang.api.trigger.TriggerService triggers(tech.kayys.wayang.api.trigger.TriggerStore store, WayangApi api,
             ConnectorsConfig connectors, OAuthConfig secrets, Clock clock, TenantGateConfig gate) {
-        return new tech.kayys.wayang.api.TriggerService(store, api, connectors.pollers(), connectors.webhookProviders(),
+        return new tech.kayys.wayang.api.trigger.TriggerService(store, api, connectors.pollers(), connectors.webhookProviders(),
                 secrets.resolver(), clock).withTenantGate(gate.gate());
     }
 
     /** Hard deadlines for {@code collect} groups with {@code sweepTo}; ticked by {@link TimerTicker}. */
     @Produces
     @ApplicationScoped
-    tech.kayys.wayang.api.CollectSweepService collectSweeper(DefinitionStore store, WayangApi api, EipConfig eip, Clock clock, TenantGateConfig gate) {
-        return new tech.kayys.wayang.api.CollectSweepService(store, api, eip.aggregation(), clock,
+    tech.kayys.wayang.api.run.CollectSweepService collectSweeper(DefinitionStore store, WayangApi api, EipConfig eip, Clock clock, TenantGateConfig gate) {
+        return new tech.kayys.wayang.api.run.CollectSweepService(store, api, eip.aggregation(), clock,
                 m -> java.util.logging.Logger.getLogger("wayang.collect").warning(m)).withTenantGate(gate.gate());
     }
 }

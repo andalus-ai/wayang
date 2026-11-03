@@ -12,8 +12,8 @@ import java.util.Optional;
 import javax.sql.DataSource;
 
 import tech.kayys.wayang.api.ApiException;
-import tech.kayys.wayang.api.Project;
-import tech.kayys.wayang.api.ProjectStore;
+import tech.kayys.wayang.api.project.Project;
+import tech.kayys.wayang.api.project.ProjectStore;
 
 /** {@link ProjectStore} over plain JDBC ({@code wayang_project}, see {@code schema-definitions.sql}). */
 public final class JdbcProjectStore implements ProjectStore {

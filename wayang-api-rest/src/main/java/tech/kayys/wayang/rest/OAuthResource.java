@@ -18,8 +18,8 @@ import jakarta.ws.rs.core.Response;
 
 import io.smallrye.common.annotation.Blocking;
 import tech.kayys.wayang.api.ApiException;
-import tech.kayys.wayang.api.OAuthConnection;
-import tech.kayys.wayang.api.OAuthService;
+import tech.kayys.wayang.api.oauth.OAuthConnection;
+import tech.kayys.wayang.api.oauth.OAuthService;
 
 /**
  * Connected accounts. Management is authenticated ({@code /api/v1/oauth}); the provider redirect

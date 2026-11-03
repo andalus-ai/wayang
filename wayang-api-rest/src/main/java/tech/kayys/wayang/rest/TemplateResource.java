@@ -13,8 +13,8 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
 import io.smallrye.common.annotation.Blocking;
-import tech.kayys.wayang.api.TemplateService;
-import tech.kayys.wayang.api.WorkspaceService;
+import tech.kayys.wayang.api.project.TemplateService;
+import tech.kayys.wayang.api.project.WorkspaceService;
 
 /** Starter projects: {@code GET /templates}, {@code POST /templates/{id}/instantiate {params, dryRun}} (a dry run unless {@code dryRun} is false). */
 @Path("/api/v1/templates")

@@ -12,7 +12,7 @@ import io.quarkus.websockets.next.OnTextMessage;
 import io.quarkus.websockets.next.WebSocket;
 import io.quarkus.websockets.next.WebSocketConnection;
 import tech.kayys.wayang.api.WayangApi;
-import tech.kayys.wayang.api.WsSession;
+import tech.kayys.wayang.api.run.WsSession;
 
 /**
  * Live run events for the Studio and Management console at {@code /ws/events}.
@@ -34,7 +34,7 @@ public class EventsSocket {
     @Inject
     TenantGateConfig tenantGate;
 
-    private final tech.kayys.wayang.api.Rooms rooms = new tech.kayys.wayang.api.Rooms();
+    private final tech.kayys.wayang.api.run.Rooms rooms = new tech.kayys.wayang.api.run.Rooms();
     private final Map<String, WsSession> sessions = new ConcurrentHashMap<>();
 
     @OnOpen

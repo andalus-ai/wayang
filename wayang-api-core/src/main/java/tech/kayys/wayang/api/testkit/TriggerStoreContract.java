@@ -5,8 +5,8 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 import tech.kayys.wayang.api.ApiException;
-import tech.kayys.wayang.api.Trigger;
-import tech.kayys.wayang.api.TriggerStore;
+import tech.kayys.wayang.api.trigger.Trigger;
+import tech.kayys.wayang.api.trigger.TriggerStore;
 
 /** Behavioural contract for {@link TriggerStore} implementations (pass a factory returning an empty store). */
 public final class TriggerStoreContract {

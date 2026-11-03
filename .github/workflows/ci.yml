@@ -1,0 +1,66 @@
+# Wayang CI. NOTE: written without being able to run Maven or GitHub Actions where it was authored; the first run
+# is the first real check of the Quarkus modules (wayang-api-rest, wayang-gamelan-worker) and of Studio.
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  java:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: pw
+          POSTGRES_DB: wayang
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      # Wayang builds against Gamelan and Andalus (versions in the parent pom); install them from source.
+      - name: Gamelan
+        uses: actions/checkout@v4
+        with:
+          repository: bhangun/gamelan
+          path: deps/gamelan
+      - name: Andalus
+        uses: actions/checkout@v4
+        with:
+          repository: bhangun/andalus
+          path: deps/andalus
+      - name: Install Gamelan and Andalus
+        run: |
+          mvn -B -q -f deps/gamelan/pom.xml install -DskipTests
+          mvn -B -q -f deps/andalus/pom.xml install -DskipTests
+      - name: Build and test Wayang
+        env:
+          WAYANG_TEST_JDBC_URL: jdbc:postgresql://localhost/wayang?user=postgres&password=pw
+        run: mvn -B verify
+
+  studio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: studio
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test

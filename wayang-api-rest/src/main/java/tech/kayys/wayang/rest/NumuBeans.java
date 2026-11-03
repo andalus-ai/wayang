@@ -32,13 +32,13 @@ public class NumuBeans {
     NumuGrpcIdentity identity;
 
     @Inject
-    tech.kayys.wayang.api.ProjectStore projects;
+    tech.kayys.wayang.api.project.ProjectStore projects;
 
     @Produces
     @ApplicationScoped
     public NumuPrincipalResolver numuResolver() {
         return new NumuPrincipalResolver((NumuIdentity) identity, new NumuScheme(product), Clock.systemUTC(),
                 Duration.ofSeconds(cacheSeconds),
-                tenant -> projects.list(tenant).stream().map(tech.kayys.wayang.api.Project::id).toList());
+                tenant -> projects.list(tenant).stream().map(tech.kayys.wayang.api.project.Project::id).toList());
     }
 }

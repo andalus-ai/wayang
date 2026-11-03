@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.function.Supplier;
 
 import tech.kayys.wayang.api.ConfigEntry;
-import tech.kayys.wayang.api.ConfigStore;
+import tech.kayys.wayang.api.config.ConfigStore;
 
 /** Behavioural contract for {@link ConfigStore} implementations (pass a factory returning an empty store). */
 public final class ConfigStoreContract {

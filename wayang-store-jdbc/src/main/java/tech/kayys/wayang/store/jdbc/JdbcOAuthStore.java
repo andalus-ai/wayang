@@ -12,8 +12,8 @@ import java.util.Optional;
 import javax.sql.DataSource;
 
 import tech.kayys.wayang.api.ApiException;
-import tech.kayys.wayang.api.OAuthConnection;
-import tech.kayys.wayang.api.OAuthStore;
+import tech.kayys.wayang.api.oauth.OAuthConnection;
+import tech.kayys.wayang.api.oauth.OAuthStore;
 import tech.kayys.wayang.runtime.json.Json;
 
 /** {@link OAuthStore} over plain JDBC. Holds no tokens: those live (encrypted) in the secret store. */

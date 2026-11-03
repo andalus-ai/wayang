@@ -20,10 +20,10 @@ import jakarta.ws.rs.core.Response;
 
 import io.smallrye.common.annotation.Blocking;
 import tech.kayys.wayang.api.ApiException;
-import tech.kayys.wayang.api.DefinitionKind;
+import tech.kayys.wayang.api.definition.DefinitionKind;
 import tech.kayys.wayang.api.DefinitionSummary;
-import tech.kayys.wayang.api.StoredDefinition;
-import tech.kayys.wayang.api.ValidationReport;
+import tech.kayys.wayang.api.definition.StoredDefinition;
+import tech.kayys.wayang.api.definition.ValidationReport;
 import tech.kayys.wayang.api.WayangApi;
 
 /**

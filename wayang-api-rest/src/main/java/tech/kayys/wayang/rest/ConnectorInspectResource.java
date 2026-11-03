@@ -10,7 +10,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
 import io.smallrye.common.annotation.Blocking;
-import tech.kayys.wayang.api.ConnectorInspector;
+import tech.kayys.wayang.api.connector.ConnectorInspector;
 
 /** Lists the operations of a SOAP service from its WSDL, for the Studio. Needs DEFINITION_WRITE; calls nothing. */
 @Path("/api/v1/connectors")

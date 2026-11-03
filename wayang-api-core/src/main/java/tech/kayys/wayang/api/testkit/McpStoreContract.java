@@ -6,8 +6,8 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 import tech.kayys.wayang.api.ApiException;
-import tech.kayys.wayang.api.McpServerDef;
-import tech.kayys.wayang.api.McpStore;
+import tech.kayys.wayang.api.mcp.McpServerDef;
+import tech.kayys.wayang.api.mcp.McpStore;
 import tech.kayys.wayang.mcp.McpTool;
 
 /** Behavioural contract for {@link McpStore} implementations (pass a factory returning an empty store). */
