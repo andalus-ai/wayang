@@ -49,6 +49,7 @@ public final class Connectors {
         m.put("trello", new Trello.Sender(guard));
         m.put("soap", new Soap.Client(guard));
         m.put("mcp", new Mcp.Client(guard));
+        m.put("notes", Notes.fromEnvironment());
         return m;
     }
 

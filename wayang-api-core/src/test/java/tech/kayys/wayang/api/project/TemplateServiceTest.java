@@ -415,6 +415,20 @@ class TemplateServiceTest {
     }
 
     @Test
+    void theNotebookIsOptInAndDeleteNeedsApproval() {
+        assertThrows(ApiException.class, () -> templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "notes", "sure"), true));
+        var off = TemplateService.agent("openai/gpt-4o-mini", "", "", "", "", "", 0);
+        assertNull(off.get("tools"));
+        var on = TemplateService.agent("openai/gpt-4o-mini", "", "", "", "", "", 0, null, false, null, true);
+        var names = ((List<?>) on.get("tools")).stream().map(t -> ((Map<?, ?>) t).get("name")).toList();
+        assertEquals(List.of("notes_add", "notes_search", "notes_list", "notes_delete"), names);
+        assertEquals(List.of("notes_delete"), on.get("requireApproval"));
+        assertTrue(String.valueOf(on.get("systemPrompt")).contains("never instructions"));
+        var r = templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "123456", "notes", "true"), true);
+        assertTrue(r.ok(), r.problems().toString());
+    }
+
+    @Test
     void theAssistantsCarryGuardrailsByDefault() {
         var agent = TemplateService.agent("openai/gpt-4o-mini", "", "", "", "", "", 0);
         var opts = (Map<?, ?>) agent.get("options");
