@@ -13,7 +13,7 @@ import tech.kayys.wayang.runtime.ServiceHandler;
 /**
  * Telegram Bot API on top of {@link HttpConnector} (so the SSRF guard, size and time limits apply).
  *
- * <p>Connector {@code telegram} (operation {@code sendMessage}): config {@code botToken} (use
+ * <p>Connector {@code telegram} (operations {@code sendMessage} and {@code sendPhoto}, the latter uploading a stored image by {@code mediaId}): config {@code botToken} (use
  * {@code ${secret:TELEGRAM_TOKEN}}), optional {@code baseUrl}; inputs {@code chatId}, {@code text},
  * optional {@code replyTo}. Output {@code messageId}, {@code chatId}.
  *
@@ -33,6 +33,11 @@ public final class Telegram {
 
     private static Map<String, Object> api(HttpConnector http, Map<String, Object> config, String method, String httpMethod,
             Map<String, Object> body, Map<String, Object> query) throws Exception {
+        return api(http, config, method, httpMethod, body, query, null);
+    }
+
+    private static Map<String, Object> api(HttpConnector http, Map<String, Object> config, String method, String httpMethod,
+            Object body, Map<String, Object> query, Map<String, String> headers) throws Exception {
         Object token = config.get("botToken");
         if (!(token instanceof String t) || !TOKEN.matcher(t).matches()) {
             throw new ServiceHandler.ConnectorException("telegram needs a valid 'botToken' (use ${secret:NAME})", false);
@@ -45,6 +50,9 @@ public final class Telegram {
         Map<String, Object> in = new LinkedHashMap<>();
         if (body != null) {
             in.put("body", body);
+        }
+        if (headers != null) {
+            in.put("headers", headers);
         }
         if (query != null) {
             Map<String, String> q = new LinkedHashMap<>();
@@ -63,9 +71,19 @@ public final class Telegram {
     /** Connector {@code telegram}. */
     public static final class Sender implements ServiceHandler.Connector {
         private final HttpConnector http;
+        private final MediaStore media;
 
         public Sender(UrlGuard guard) {
+            this(guard, MediaStore.fromEnvironment());
+        }
+
+        public Sender(UrlGuard guard, MediaStore media) {
             this.http = new HttpConnector(guard);
+            this.media = media;
+        }
+
+        private Map<String, Object> sendPhoto(Map<String, Object> config, Map<String, Object> inputs) throws Exception {
+            return photo(http, media, config, inputs);
         }
 
         @Override
@@ -76,10 +94,13 @@ public final class Telegram {
         @Override
         public Map<String, Object> call(Map<String, Object> config, Map<String, Object> inputs) throws Exception {
             String op = String.valueOf(config.getOrDefault("operation", "sendMessage"));
+            if (op.equals("sendPhoto")) {
+                return sendPhoto(config, inputs);
+            }
             if (!op.equals("sendMessage")) {
                 throw new ServiceHandler.ConnectorException("Unsupported telegram operation '" + op + "'", false);
             }
-            Object chat = inputs.get("chatId");
+            Object chat = config.get("chatId") != null ? config.get("chatId") : inputs.get("chatId");
             Object text = inputs.get("text");
             if (!(chat instanceof Number) && !(chat instanceof String s && !s.isBlank())) {
                 throw new ServiceHandler.ConnectorException("telegram sendMessage needs 'chatId'", false);
@@ -106,6 +127,58 @@ public final class Telegram {
             }
             return out;
         }
+    }
+
+    private static final int MAX_CAPTION = 1024;
+
+    /**
+     * {@code sendPhoto}: uploads a stored image ({@code mediaId} from the {@link MediaStore}) with an optional {@code caption}. The chat is
+     * {@code chatId} from the configuration when set (a tool the model may call should fix it), else from the inputs.
+     */
+    private static Map<String, Object> photo(HttpConnector http, MediaStore media, Map<String, Object> config, Map<String, Object> inputs)
+            throws Exception {
+        Object chat = config.get("chatId") != null ? config.get("chatId") : inputs.get("chatId");
+        if (!(chat instanceof Number) && !(chat instanceof String cs && !cs.isBlank())) {
+            throw new ServiceHandler.ConnectorException("telegram sendPhoto needs 'chatId'", false);
+        }
+        String chatText = String.valueOf(chat);
+        if (!chatText.matches("-?[0-9]{1,20}|@[A-Za-z0-9_]{4,64}")) {
+            throw new ServiceHandler.ConnectorException("telegram chatId is not valid", false);
+        }
+        String id = inputs.get("mediaId") instanceof String m ? m : null;
+        byte[] bytes = id == null ? null : media.read(id);
+        if (bytes == null) {
+            throw new ServiceHandler.ConnectorException("telegram sendPhoto needs a 'mediaId' of a stored image", false);
+        }
+        String caption = inputs.get("caption") instanceof String c ? c : "";
+        if (caption.codePointCount(0, caption.length()) > MAX_CAPTION) {
+            throw new ServiceHandler.ConnectorException("Caption longer than " + MAX_CAPTION + " characters", false);
+        }
+        String mime = MediaStore.sniff(bytes);
+        String boundary = "wayang" + java.util.UUID.randomUUID().toString().replace("-", "");
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        field(out, boundary, "chat_id", chatText);
+        if (!caption.isEmpty()) {
+            field(out, boundary, "caption", caption);
+        }
+        if (inputs.get("replyTo") instanceof Number n) {
+            field(out, boundary, "reply_to_message_id", Long.toString(n.longValue()));
+        }
+        out.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"image." + (mime.equals("image/jpeg") ? "jpg" : mime.substring(6))
+                + "\"\r\nContent-Type: " + mime + "\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        out.write(bytes);
+        out.write(("\r\n--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        Map<String, Object> res = api(http, config, "sendPhoto", "POST", out.toByteArray(), null, Map.of("Content-Type", "multipart/form-data; boundary=" + boundary));
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (res.get("result") instanceof Map<?, ?> r) {
+            result.put("messageId", r.get("message_id"));
+        }
+        return result;
+    }
+
+    private static void field(java.io.ByteArrayOutputStream out, String boundary, String name, String value) throws java.io.IOException {
+        out.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"" + name + "\"\r\n\r\n" + value + "\r\n")
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     /** Poller {@code telegram}. */

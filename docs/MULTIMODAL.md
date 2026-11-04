@@ -26,6 +26,12 @@ Use them from a SERVICE_TASK (`connector: image-generate`, input `prompt`) or as
 
 ## Not done
 
-Serving or sending the image (a Telegram/Slack photo upload and a download endpoint are the next step), audio (speech to text, text to
+Slack image upload (its upload is a three-step flow), a download endpoint, wiring `generate_image`/`send_image` tools into the assistant template, audio (speech to text, text to
 speech), image input and vision, ComfyUI batch/multiple outputs, bundling the module into generated releases (today it is available where it
 is on the classpath: the server and embedded runtime), and a Studio node form.
+
+## Sending an image (Telegram)
+
+The `telegram` connector has operation `sendPhoto`: input `mediaId` (from `image-generate` or `comfyui`) and optional `caption` (at most 1024
+characters) upload the stored file as multipart. `chatId` in the *configuration* fixes the destination: use that when the call is an agent
+tool, so the model cannot redirect the picture to another chat. `MediaStore` now lives in `wayang-connectors` so connectors can read it.

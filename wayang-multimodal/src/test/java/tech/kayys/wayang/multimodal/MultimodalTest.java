@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
+import tech.kayys.wayang.connectors.MediaStore;
 import tech.kayys.wayang.connectors.UrlGuard;
 import tech.kayys.wayang.runtime.Extensions;
 import tech.kayys.wayang.runtime.Profile;

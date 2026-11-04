@@ -3,6 +3,7 @@ package tech.kayys.wayang.multimodal;
 import java.util.Map;
 import java.util.Set;
 
+import tech.kayys.wayang.connectors.MediaStore;
 import tech.kayys.wayang.connectors.UrlGuard;
 import tech.kayys.wayang.runtime.Profile;
 import tech.kayys.wayang.runtime.ServiceHandler;
