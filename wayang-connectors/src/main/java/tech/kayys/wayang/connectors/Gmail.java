@@ -25,7 +25,8 @@ import tech.kayys.wayang.runtime.ServiceHandler;
  * header alone is trivially forged), {@code baseUrl}. First poll records "now" and returns nothing (no backfill of the
  * mailbox). Events: {@code messageId, threadId, from, subject, snippet, date (epoch ms), rfcMessageId, body?}.
  *
- * <p>Connector {@code gmail} (operation {@code send}): config {@code accessToken}, optional {@code allowedRecipients}
+ * <p>Connector {@code gmail} operations {@code search} (inputs {@code q}, {@code max}) and {@code read} (input {@code messageId}) are read-only.
+ * Operation {@code send}: config {@code accessToken}, optional {@code allowedRecipients}
  * (addresses; when set every recipient must be on it), {@code baseUrl}; inputs {@code to}, {@code subject},
  * {@code text}, optional {@code threadId}, {@code inReplyTo}. Header injection (CR/LF) is refused.
  */
@@ -253,9 +254,65 @@ public final class Gmail {
             throw new ServiceHandler.ConnectorException("gmail needs node configuration", false);
         }
 
+        /** Read-only: {@code q} (Gmail search syntax, up to 200 chars) and {@code max} (1..10); returns sender, subject, date and snippet only. */
+        private Map<String, Object> search(Map<String, Object> config, Map<String, Object> inputs) throws Exception {
+            String q = str(inputs.get("q"));
+            if (q != null && (q.length() > 200 || crlf(q))) {
+                throw new ServiceHandler.ConnectorException("gmail search 'q' must be one line of at most 200 characters", false);
+            }
+            long max = inputs.get("max") instanceof Number n ? Math.max(1, Math.min(10, n.longValue())) : 5;
+            Map<String, Object> query = new LinkedHashMap<>();
+            query.put("q", q == null ? "in:inbox" : q);
+            query.put("maxResults", max);
+            Map<String, Object> list = Gmail.call(http, config, "GET", "/gmail/v1/users/me/messages", query, null);
+            List<Map<String, Object>> out = new ArrayList<>();
+            if (list.get("messages") instanceof List<?> ms) {
+                for (Object o : ms) {
+                    if (out.size() >= max || !(o instanceof Map<?, ?> mm) || !(mm.get("id") instanceof String id) || !ID.matcher(id).matches()) {
+                        continue;
+                    }
+                    Map<String, Object> msg = Gmail.call(http, config, "GET", "/gmail/v1/users/me/messages/" + id, Map.<String, Object>of("format", "metadata"), null);
+                    out.add(summary(id, msg, null));
+                }
+            }
+            return Map.of("messages", out);
+        }
+
+        /** Read-only: one message by id, body clipped to 8000 characters. Mail is untrusted content. */
+        private Map<String, Object> read(Map<String, Object> config, Map<String, Object> inputs) throws Exception {
+            String id = str(inputs.get("messageId"));
+            if (id == null || !ID.matcher(id).matches()) {
+                throw new ServiceHandler.ConnectorException("gmail read needs a valid 'messageId'", false);
+            }
+            Map<String, Object> msg = Gmail.call(http, config, "GET", "/gmail/v1/users/me/messages/" + id, Map.<String, Object>of("format", "full"), null);
+            return summary(id, msg, clip(plainText(msg.get("payload")), MAX_BODY_IN));
+        }
+
+        private static Map<String, Object> summary(String id, Map<String, Object> msg, String body) {
+            Map<String, String> h = headers(msg);
+            Map<String, Object> e = new LinkedHashMap<>();
+            e.put("messageId", id);
+            e.put("from", clip(h.getOrDefault("from", ""), 300));
+            e.put("subject", clip(h.getOrDefault("subject", ""), 500));
+            e.put("date", msg.get("internalDate") instanceof String d ? parse(d) : 0);
+            e.put("authenticated", authenticated(h.get("authentication-results")));
+            if (body == null) {
+                e.put("snippet", clip(String.valueOf(msg.getOrDefault("snippet", "")), 500));
+            } else {
+                e.put("body", body);
+            }
+            return e;
+        }
+
         @Override
         public Map<String, Object> call(Map<String, Object> config, Map<String, Object> inputs) throws Exception {
             String op = String.valueOf(config.getOrDefault("operation", "send"));
+            if (op.equals("search")) {
+                return search(config, inputs);
+            }
+            if (op.equals("read")) {
+                return read(config, inputs);
+            }
             if (!op.equals("send")) {
                 throw new ServiceHandler.ConnectorException("Unsupported gmail operation '" + op + "'", false);
             }
