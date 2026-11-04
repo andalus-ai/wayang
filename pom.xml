@@ -19,6 +19,7 @@
         <module>wayang-runtime</module>
         <module>wayang-embed</module>
         <module>wayang-connectors</module>
+        <module>wayang-multimodal</module>
         <module>wayang-publish</module>
         <module>wayang-mcp</module>
         <module>wayang-store-jdbc</module>
