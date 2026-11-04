@@ -19,7 +19,9 @@ public final class Profile {
 
     /** Feature families, each mapped to the executor type that serves it. */
     public enum Feature {
-        SERVICE("wayang-service"), DMN("wayang-dmn"), EIP("wayang-eip"), AGENT("wayang-agent"), HUMAN("wayang-human");
+        SERVICE("wayang-service"), DMN("wayang-dmn"), EIP("wayang-eip"), AGENT("wayang-agent"), HUMAN("wayang-human"),
+        /** Media generation (images today; audio and graph-style nodes later). Served by extensions, so it has no built-in handler. */
+        MEDIA("wayang-media");
 
         private final String executorType;
 
@@ -40,7 +42,7 @@ public final class Profile {
     public static final Profile INTEGRATION = new Profile("integration", EnumSet.of(Feature.SERVICE, Feature.EIP));
     /** Personal assistant / agent builder. */
     public static final Profile AGENTIC = new Profile("agentic",
-            EnumSet.of(Feature.SERVICE, Feature.AGENT, Feature.HUMAN, Feature.EIP));
+            EnumSet.of(Feature.SERVICE, Feature.AGENT, Feature.HUMAN, Feature.EIP, Feature.MEDIA));
 
     private final String name;
     private final Set<Feature> features;
@@ -85,7 +87,7 @@ public final class Profile {
                 f.add(Feature.valueOf(p.toUpperCase(Locale.ROOT)));
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException("Unknown profile or feature '" + p
-                        + "'; use full, automation, integration, agentic or a list of: service, dmn, eip, agent, human");
+                        + "'; use full, automation, integration, agentic or a list of: service, dmn, eip, agent, human, media");
             }
         }
         return new Profile(String.join(",", f.stream().map(x -> x.name().toLowerCase(Locale.ROOT)).toList()), f);
