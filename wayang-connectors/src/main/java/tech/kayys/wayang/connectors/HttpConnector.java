@@ -87,7 +87,12 @@ public final class HttpConnector implements ServiceHandler.Connector {
         Object body = inputs.get("body");
         HttpRequest.BodyPublisher pub = HttpRequest.BodyPublishers.noBody();
         if (body != null && !method.equals("GET")) {
-            if (body instanceof String s) {
+            if (body instanceof byte[] raw) {
+                if (headers.keySet().stream().noneMatch(k -> k.equalsIgnoreCase("content-type"))) {
+                    throw new ServiceHandler.ConnectorException("A binary body needs a Content-Type header", false);
+                }
+                pub = HttpRequest.BodyPublishers.ofByteArray(raw);
+            } else if (body instanceof String s) {
                 pub = HttpRequest.BodyPublishers.ofString(s);
             } else {
                 if (headers.keySet().stream().noneMatch(k -> k.equalsIgnoreCase("content-type"))) {

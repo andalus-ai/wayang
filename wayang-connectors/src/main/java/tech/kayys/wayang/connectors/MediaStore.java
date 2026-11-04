@@ -1,4 +1,4 @@
-package tech.kayys.wayang.multimodal;
+package tech.kayys.wayang.connectors;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -18,7 +18,7 @@ import tech.kayys.wayang.runtime.ServiceHandler;
  */
 public final class MediaStore {
 
-    static final long MAX_BYTES = 20L << 20;
+    public static final long MAX_BYTES = 20L << 20;
     private static final Map<String, String> EXT = Map.of("image/png", "png", "image/jpeg", "jpg", "image/webp", "webp", "image/gif", "gif");
     private static final Set<String> VALID_EXT = Set.copyOf(EXT.values());
 
