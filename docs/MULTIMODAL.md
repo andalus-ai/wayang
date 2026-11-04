@@ -26,12 +26,21 @@ Use them from a SERVICE_TASK (`connector: image-generate`, input `prompt`) or as
 
 ## Not done
 
-Slack image upload (its upload is a three-step flow), a download endpoint, wiring `generate_image`/`send_image` tools into the assistant template, audio (speech to text, text to
-speech), image input and vision, ComfyUI batch/multiple outputs, bundling the module into generated releases (today it is available where it
-is on the classpath: the server and embedded runtime), and a Studio node form.
+Slack image upload (its upload is a three-step flow), a download endpoint, audio (speech to text, text to
+speech), image input and vision, ComfyUI batch/multiple outputs, and a Studio node form.
 
 ## Sending an image (Telegram)
 
 The `telegram` connector has operation `sendPhoto`: input `mediaId` (from `image-generate` or `comfyui`) and optional `caption` (at most 1024
 characters) upload the stored file as multipart. `chatId` in the *configuration* fixes the destination: use that when the call is an agent
 tool, so the model cannot redirect the picture to another chat. `MediaStore` now lives in `wayang-connectors` so connectors can read it.
+
+## In the assistant and in releases
+
+- Telegram assistant template: `images: true` (optional `imageModel`, default `gpt-image-1`) adds `generate_image` and `send_image`. The key is
+  `${secret:IMAGE_API_KEY}`; `send_image` has the chat id fixed in its configuration and takes only `mediaId` and `caption` from the model.
+  Slack is not supported yet.
+- Releases: a bundle whose process or agent tools use `image-generate` or `comfyui` is accepted (the extension is found on the publisher's
+  classpath under a profile with `media`), and the generated project then depends on `wayang-multimodal`; other releases do not. At run
+  time the embedded runtime and the Gamelan worker both load the extension through `ServiceLoader`. Set `WAYANG_MEDIA_DIR` or
+  `WAYANG_STATE_DIR` for the stored images.
