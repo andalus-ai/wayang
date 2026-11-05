@@ -534,4 +534,22 @@ class PublishTest {
         assertThrows(IllegalArgumentException.class, () -> ReleaseOptions.of(Map.of("profile", "agnt\nRUN evil"), "a", "0.0.1"));
         assertEquals("full", OPTS.profile());
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void anExtensionToolIsWiredInAndBringsItsModuleOnlyWhenUsed() {
+        Map<String, Object> m = (Map<String, Object>) Json.read(bundle(false, true, "Pictures"));
+        ((List<Object>) m.get("definitions")).add(Map.of("kind", "AGENT", "id", "painter", "publishedVersion", 1, "document", Map.of("id", "painter", "model", "ollama/x",
+                "tools", List.of(Map.of("name", "draw", "type", "image-generate", "config", Map.of("model", "m", "apiKey", "${secret:IMAGE_API_KEY}"))))));
+        for (ReleaseOptions o : List.of(OPTS, GAM)) {
+            var p = Publisher.generate(Json.write(m), o);
+            assertEquals(List.of("image-generate"), p.connectors());
+            assertTrue(text(p, "pom.xml").contains("wayang-multimodal"), o.target().toString());
+        }
+        var plain = Publisher.generate(bundle(true, false, "Plain"), OPTS);
+        assertFalse(text(plain, "pom.xml").contains("wayang-multimodal"));
+        // under a profile without the media feature the extension is not loaded, so its connector is unknown
+        ReleaseOptions noMedia = ReleaseOptions.of(Map.of("profile", "agentic"), "my-release", "0.0.1");
+        assertEquals(List.of("image-generate"), Publisher.generate(Json.write(m), noMedia).connectors(), "agentic has media");
+    }
 }

@@ -26,9 +26,8 @@ Use them from a SERVICE_TASK (`connector: image-generate`, input `prompt`) or as
 
 ## Not done
 
-Slack image upload (its upload is a three-step flow), a download endpoint, wiring `generate_image`/`send_image` tools into the assistant template, audio (speech to text, text to
-speech), image input and vision, ComfyUI batch/multiple outputs, bundling the module into generated releases (today it is available where it
-is on the classpath: the server and embedded runtime), and a Studio node form.
+Slack image upload (its upload is a three-step flow), a download endpoint, audio (speech to text, text to
+speech), image input and vision, ComfyUI batch/multiple outputs, and a Studio node form.
 
 ## Sending an image (Telegram)
 
@@ -36,6 +35,15 @@ The `telegram` connector has operation `sendPhoto`: input `mediaId` (from `image
 characters) upload the stored file as multipart. `chatId` in the *configuration* fixes the destination: use that when the call is an agent
 tool, so the model cannot redirect the picture to another chat. `MediaStore` now lives in `wayang-connectors` so connectors can read it.
 
+## In the assistant and in releases
+
+- Telegram assistant template: `images: true` (optional `imageModel`, default `gpt-image-1`) adds `generate_image` and `send_image`. The key is
+  `${secret:IMAGE_API_KEY}`; `send_image` has the chat id fixed in its configuration and takes only `mediaId` and `caption` from the model.
+  Slack is not supported yet.
+- Releases: a bundle whose process or agent tools use `image-generate` or `comfyui` is accepted (the extension is found on the publisher's
+  classpath under a profile with `media`), and the generated project then depends on `wayang-multimodal`; other releases do not. At run
+  time the embedded runtime and the Gamelan worker both load the extension through `ServiceLoader`. Set `WAYANG_MEDIA_DIR` or
+  `WAYANG_STATE_DIR` for the stored images.
 ## Voice notes (speech to text)
 
 Telegram voice notes flow through the same claim-check store as images:
@@ -47,3 +55,7 @@ Telegram voice notes flow through the same claim-check store as images:
 The transcript is what someone said, so it is untrusted input like any message. `transcribe` is a MEDIA-profile connector and is added to the multimodal dependency of generated releases.
 
 Verified: unit tests against local fake servers only. Not run against real Telegram or a real transcription provider.
+
+### Template option `voice`
+
+`assistant-telegram` accepts `voice: true` (MEDIA profile required; Telegram only). The process then starts with `kind`: a message with `event.voiceFileId` goes `fetch` (telegram `downloadFile`) → `hear` (`transcribe`, secret `OPENAI_API_KEY`) → `draft`; everything else follows the normal path. The agent reads `{{ event.text }}{{ hear.text }}`, and the approval policy now checks the typed text **and** the transcript for pay / transfer / password / delete (case-insensitive), so a spoken request is held for approval exactly like a typed one. Replies to voice notes are text.

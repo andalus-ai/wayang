@@ -429,6 +429,23 @@ class TemplateServiceTest {
     }
 
     @Test
+    void imagesAreTelegramOnlyAndTheChatIsFixedInTheSendTool() {
+        assertThrows(ApiException.class, () -> templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "images", "maybe"), true));
+        assertThrows(ApiException.class, () -> templates.instantiate(acme, "assistant-slack", Map.of("channelId", "C1", "images", "true"), true));
+        assertThrows(ApiException.class, () -> templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "images", "true", "imageModel", "a b"), true));
+        var agent = TemplateService.agent("openai/gpt-4o-mini", "", "", "", "", "", 0, null, false, null, false, new TemplateService.Images("gpt-image-1", 555L));
+        var tools = (List<?>) agent.get("tools");
+        assertEquals(List.of("generate_image", "send_image"), tools.stream().map(t -> ((Map<?, ?>) t).get("name")).toList());
+        String text = String.valueOf(tools);
+        assertTrue(text.contains("chatId=555") && text.contains("${secret:IMAGE_API_KEY}") && text.contains("${secret:TELEGRAM_TOKEN}"), text);
+        assertFalse(String.valueOf(((Map<?, ?>) tools.get(1)).get("config")).contains("chatId, ") && String.valueOf(((Map<?, ?>) tools.get(1)).get("config")).matches(".*parameters=.*chatId.*"),
+                "the model is not offered a chatId argument");
+        assertNull(agent.get("requireApproval"));
+        var r = templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "123456", "images", "true"), true);
+        assertTrue(r.ok(), r.problems().toString());
+    }
+
+    @Test
     void theAssistantsCarryGuardrailsByDefault() {
         var agent = TemplateService.agent("openai/gpt-4o-mini", "", "", "", "", "", 0);
         var opts = (Map<?, ?>) agent.get("options");
@@ -479,5 +496,31 @@ class TemplateServiceTest {
         assertThrows(ApiException.class, () -> none.instantiate(new Principal("acme", "ann", java.util.Set.of(Role.ADMIN)), "assistant-telegram",
                 Map.of("chatId", "123"), true));
         assertEquals(4, new TemplateService(ws).withProfile(tech.kayys.wayang.runtime.Profile.AGENTIC).list().size());
+    }
+
+    @Test
+    void theVoiceAssistantTranscribesFirstAndTheApprovalPolicyAlsoReadsTheTranscript() {
+        var plan = tech.kayys.wayang.bpmn.ProcessCompiler.compile(TemplateService.process(false, true));
+        assertEquals("personal-assistant", plan.processId());
+        var model = tech.kayys.wayang.dmn.DmnLoader.load(TemplateService.policy());
+        // a voice note has no text: only the transcript can trigger the keyword rules
+        assertEquals("approve", model.evaluate(Map.of("draft", Map.of("output", "ok"), "event", Map.of("text", ""), "hear", Map.of("text", "Please PAY the rent"))).get("policy"));
+        assertEquals("approve", model.evaluate(Map.of("draft", Map.of("output", "ok"), "event", Map.of("text", ""), "hear", Map.of("text", "what is my password"))).get("policy"));
+        // typed text still works without any transcript, and harmless text is sent by itself
+        assertEquals("approve", model.evaluate(Map.of("draft", Map.of("output", "ok"), "event", Map.of("text", "transfer 5"))).get("policy"));
+        assertEquals("auto", model.evaluate(Map.of("draft", Map.of("output", "ok"), "event", Map.of("text", "hello"))).get("policy"));
+        assertEquals("auto", model.evaluate(Map.of("draft", Map.of("output", "ok"), "event", Map.of("text", ""), "hear", Map.of("text", "good morning"))).get("policy"));
+
+        var b = TemplateService.assistantTelegram("n", 1L, "openai/gpt-4o-mini", "", "", "", "", 10, null, false, null, false, true);
+        var agent = (Map<?, ?>) ((Map<?, ?>) ((List<?>) b.get("definitions")).stream().filter(d -> "AGENT".equals(((Map<?, ?>) d).get("kind"))).findFirst().orElseThrow()).get("document");
+        assertEquals("Reply briefly to: {{ event.text }}{{ hear.text }}", agent.get("inputTemplate"));
+        var trig = (Map<?, ?>) ((Map<?, ?>) ((List<?>) b.get("triggers")).get(0)).get("config");
+        assertEquals(Boolean.TRUE, trig.get("voice"));
+
+        var off = TemplateService.assistantTelegram("n", 1L, "openai/gpt-4o-mini", "", "", "", "", 10, null, false, null, false, false);
+        assertFalse(((Map<?, ?>) ((Map<?, ?>) ((List<?>) off.get("triggers")).get(0)).get("config")).containsKey("voice"));
+        var r = templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "voice", "true"), true);
+        assertTrue(r.ok(), r.problems().toString());
+        assertThrows(ApiException.class, () -> templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "voice", "maybe"), false));
     }
 }
