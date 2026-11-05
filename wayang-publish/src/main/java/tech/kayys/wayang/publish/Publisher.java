@@ -68,8 +68,8 @@ public final class Publisher {
                         + String.join("; ", bad));
             }
         }
-        Set<String> known = Connectors.defaults().keySet();
-        addAgentToolConnectors(bundle, used);
+        Set<String> known = Connectors.defaults(new tech.kayys.wayang.connectors.UrlGuard(false, Set.of()), tech.kayys.wayang.runtime.Extensions.load(profile)).keySet();
+        addAgentToolConnectors(bundle, used, known);
         used.remove(tech.kayys.wayang.embed.AgentActions.NAME); // built in: it only needs the other connectors and the secrets
         List<String> unknown = used.stream().filter(c -> !known.contains(c)).toList();
         if (!unknown.isEmpty()) {
@@ -98,6 +98,7 @@ public final class Publisher {
         if (!unknownTriggers.isEmpty()) {
             throw new IllegalArgumentException("These trigger types are not available in a release: " + unknownTriggers);
         }
+        boolean multimodal = used.stream().anyMatch(MULTIMODAL_CONNECTORS::contains);
         boolean needsConnectors = !used.isEmpty() || !pollSources.isEmpty() || !providers.isEmpty();
         List<String> notes = new ArrayList<>();
         List<String> badSecrets = bundle.requiredSecrets().stream().filter(s -> !ReleaseSecrets.supported(s)).toList();
@@ -131,7 +132,7 @@ public final class Publisher {
         List<String> secrets = bundle.requiredSecrets().stream().distinct().sorted().toList();
         Map<String, byte[]> f = new TreeMap<>();
         String pkgPath = o.packageName().replace('.', '/');
-        f.put("pom.xml", (gamelan ? GamelanTemplates.pom(o, bundle, needsConnectors) : pom(o, bundle, needsConnectors)).getBytes(StandardCharsets.UTF_8));
+        f.put("pom.xml", (gamelan ? GamelanTemplates.pom(o, bundle, needsConnectors, multimodal) : pom(o, bundle, needsConnectors, multimodal)).getBytes(StandardCharsets.UTF_8));
         f.put("src/main/resources/wayang/bundle.json", bundleJson.getBytes(StandardCharsets.UTF_8));
         f.put("src/main/java/" + pkgPath + "/Wiring.java", wiring(o, used, pollSources, providers).getBytes(StandardCharsets.UTF_8));
         if (gamelan) {
@@ -207,7 +208,7 @@ public final class Publisher {
 
     // ------------------------------------------------------------------ templates
 
-    private static String pom(ReleaseOptions o, ReleaseBundle b, boolean connectors) {
+    private static String pom(ReleaseOptions o, ReleaseBundle b, boolean connectors, boolean multimodal) {
         return """
                 <?xml version="1.0" encoding="UTF-8"?>
                 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -272,14 +273,25 @@ public final class Publisher {
                     </build>
                 </project>
                 """.formatted(xml(o.groupId()), xml(o.artifactId()), xml(o.version()), xml(safe(b.name())), xml(o.wayangVersion()),
-                connectors ? """
+                (connectors ? CONNECTORS_DEP : "") + (multimodal ? MULTIMODAL_DEP : ""), o.packageName());
+    }
+
+    static final String CONNECTORS_DEP = """
                                 <dependency>
                                     <groupId>tech.kayys.wayang</groupId>
                                     <artifactId>wayang-connectors</artifactId>
                                     <version>${wayang.version}</version>
                                 </dependency>
-                        """ : "", o.packageName());
-    }
+                        """;
+    /** Needed only when a connector of the multimodal extension is used; the runtime finds the extension through ServiceLoader. */
+    static final String MULTIMODAL_DEP = """
+                                <dependency>
+                                    <groupId>tech.kayys.wayang</groupId>
+                                    <artifactId>wayang-multimodal</artifactId>
+                                    <version>${wayang.version}</version>
+                                </dependency>
+                        """;
+    static final Set<String> MULTIMODAL_CONNECTORS = Set.of("image-generate", "comfyui");
 
     /** The connectors, poll sources and webhook providers this release uses, built from the environment. Shared by every target. */
     private static String wiring(ReleaseOptions o, Set<String> used, Set<String> pollSources, Set<String> providers) {
@@ -498,8 +510,7 @@ public final class Publisher {
      * An agent's tools run through the connectors of the release too, so the ones it names must be wired in. A tool type with no
      * connector is not an error here: the agent is told, at call time, that it has no such tool.
      */
-    private static void addAgentToolConnectors(ReleaseBundle b, Set<String> used) {
-        Set<String> known = Connectors.defaults().keySet();
+    private static void addAgentToolConnectors(ReleaseBundle b, Set<String> used, Set<String> known) {
         for (ReleaseBundle.Definition d : b.definitions()) {
             if (d.kind().equals("AGENT") && d.document().get("tools") instanceof List<?> tl) {
                 for (Object t : tl) {
@@ -518,7 +529,8 @@ public final class Publisher {
                 collectConnectors(d.document().get("elements"), used);
             }
         }
-        addAgentToolConnectors(b, used);
+        addAgentToolConnectors(b, used, Connectors.defaults(new tech.kayys.wayang.connectors.UrlGuard(false, Set.of()),
+                tech.kayys.wayang.runtime.Extensions.load(tech.kayys.wayang.runtime.Profile.fromEnvironment())).keySet());
         used.remove(tech.kayys.wayang.embed.AgentActions.NAME);
         StringBuilder sb = new StringBuilder();
         for (String c : used) {
