@@ -552,4 +552,15 @@ class PublishTest {
         ReleaseOptions noMedia = ReleaseOptions.of(Map.of("profile", "agentic"), "my-release", "0.0.1");
         assertEquals(List.of("image-generate"), Publisher.generate(Json.write(m), noMedia).connectors(), "agentic has media");
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aTranscribeToolAlsoBringsTheMultimodalModule() {
+        Map<String, Object> m = (Map<String, Object>) Json.read(bundle(false, true, "Ears"));
+        ((List<Object>) m.get("definitions")).add(Map.of("kind", "AGENT", "id", "listener", "publishedVersion", 1, "document", Map.of("id", "listener", "model", "ollama/x",
+                "tools", List.of(Map.of("name", "hear", "type", "transcribe", "config", Map.of("apiKey", "${secret:OPENAI_API_KEY}"))))));
+        var p = Publisher.generate(Json.write(m), OPTS);
+        assertEquals(List.of("transcribe"), p.connectors());
+        assertTrue(text(p, "pom.xml").contains("wayang-multimodal"));
+    }
 }
