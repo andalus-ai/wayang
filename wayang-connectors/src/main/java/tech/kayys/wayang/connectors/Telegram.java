@@ -20,7 +20,8 @@ import tech.kayys.wayang.runtime.ServiceHandler;
  * <p>Poller {@code telegram} (getUpdates): config {@code botToken}, <b>{@code allowedChatIds} (required, non-empty)</b>,
  * optional {@code baseUrl}, {@code limit}. Anyone can message a bot, so updates from chats not on the list are dropped
  * (the cursor still advances past them) and never start a run. Each event: {@code updateId, chatId, chatType, fromId,
- * fromUsername, messageId, text, date}.
+ * fromUsername, messageId, text, date}; with {@code voice: true} a voice note of at most 5 minutes from an allowed chat is an event with an
+ * empty {@code text} plus {@code voiceFileId} and {@code voiceSeconds} (fetch it with {@code downloadFile}).
  */
 public final class Telegram {
 
@@ -72,6 +73,7 @@ public final class Telegram {
     public static final class Sender implements ServiceHandler.Connector {
         private final HttpConnector http;
         private final MediaStore media;
+        private final MediaHttp raw;
 
         public Sender(UrlGuard guard) {
             this(guard, MediaStore.fromEnvironment());
@@ -79,7 +81,31 @@ public final class Telegram {
 
         public Sender(UrlGuard guard, MediaStore media) {
             this.http = new HttpConnector(guard);
+            this.raw = new MediaHttp(guard);
             this.media = media;
+        }
+
+        /**
+         * {@code downloadFile}: fetches a voice message or audio file by {@code fileId} (Telegram's own limit is 20 MB; here at most
+         * {@link #MAX_AUDIO}) into the media store and returns {@code mediaId}. The chat is not checked here: a poller only emits files from
+         * allowed chats, and a file id is unguessable.
+         */
+        private Map<String, Object> download(Map<String, Object> config, Map<String, Object> inputs) throws Exception {
+            String fileId = inputs.get("fileId") instanceof String f ? f : null;
+            if (fileId == null || !fileId.matches("[A-Za-z0-9_-]{10,200}")) {
+                throw new ServiceHandler.ConnectorException("telegram downloadFile needs a valid 'fileId'", false);
+            }
+            Map<String, Object> info = api(http, config, "getFile", "GET", null, Map.of("file_id", fileId));
+            String path = info.get("result") instanceof Map<?, ?> r && r.get("file_path") instanceof String p ? p : null;
+            if (path == null || !path.matches("[A-Za-z0-9_./-]{1,200}") || path.contains("..") || path.startsWith("/")) {
+                throw new ServiceHandler.ConnectorException("Telegram returned no usable file path", false);
+            }
+            if (info.get("result") instanceof Map<?, ?> r && r.get("file_size") instanceof Number n && n.longValue() > MAX_AUDIO) {
+                throw new ServiceHandler.ConnectorException("The audio is larger than " + (MAX_AUDIO >> 20) + " MiB", false);
+            }
+            String base = config.get("baseUrl") instanceof String b && !b.isBlank() ? b.replaceAll("/+$", "") : DEFAULT_BASE;
+            byte[] bytes = raw.getBytes(raw.uri(base, "/file/bot" + config.get("botToken") + "/" + path), Map.of(), 60_000, MAX_AUDIO);
+            return media.saveAudio(bytes);
         }
 
         private Map<String, Object> sendPhoto(Map<String, Object> config, Map<String, Object> inputs) throws Exception {
@@ -96,6 +122,9 @@ public final class Telegram {
             String op = String.valueOf(config.getOrDefault("operation", "sendMessage"));
             if (op.equals("sendPhoto")) {
                 return sendPhoto(config, inputs);
+            }
+            if (op.equals("downloadFile")) {
+                return download(config, inputs);
             }
             if (!op.equals("sendMessage")) {
                 throw new ServiceHandler.ConnectorException("Unsupported telegram operation '" + op + "'", false);
@@ -130,6 +159,8 @@ public final class Telegram {
     }
 
     private static final int MAX_CAPTION = 1024;
+    static final long MAX_AUDIO = 10L << 20;
+    static final long MAX_VOICE_SECONDS = 300;
 
     /**
      * {@code sendPhoto}: uploads a stored image ({@code mediaId} from the {@link MediaStore}) with an optional {@code caption}. The chat is
@@ -155,6 +186,9 @@ public final class Telegram {
             throw new ServiceHandler.ConnectorException("Caption longer than " + MAX_CAPTION + " characters", false);
         }
         String mime = MediaStore.sniff(bytes);
+        if (mime == null) {
+            throw new ServiceHandler.ConnectorException("telegram sendPhoto: the mediaId is not an image", false);
+        }
         String boundary = "wayang" + java.util.UUID.randomUUID().toString().replace("-", "");
         java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
         field(out, boundary, "chat_id", chatText);
@@ -220,9 +254,21 @@ public final class Telegram {
                         continue;
                     }
                     String chatId = String.valueOf(chat.get("id"));
-                    if (!allowed.contains(chatId) || !(msg.get("text") instanceof String text)) {
-                        continue; // not allowed, or not a text message
+                    if (!allowed.contains(chatId)) {
+                        continue;
                     }
+                    String voiceId = null;
+                    long voiceSeconds = 0;
+                    if (!(msg.get("text") instanceof String) && Boolean.TRUE.equals(config.get("voice"))
+                            && msg.get("voice") instanceof Map<?, ?> v && v.get("file_id") instanceof String fid && fid.matches("[A-Za-z0-9_-]{10,200}")
+                            && v.get("duration") instanceof Number dur && dur.longValue() <= MAX_VOICE_SECONDS) {
+                        voiceId = fid;
+                        voiceSeconds = dur.longValue();
+                    }
+                    if (voiceId == null && !(msg.get("text") instanceof String)) {
+                        continue; // not a text message (and no accepted voice note)
+                    }
+                    String text = msg.get("text") instanceof String tx ? tx : "";
                     Map<String, Object> e = new LinkedHashMap<>();
                     e.put("updateId", id.longValue());
                     e.put("chatId", chat.get("id"));
@@ -233,6 +279,10 @@ public final class Telegram {
                     }
                     e.put("messageId", msg.get("message_id"));
                     e.put("text", text.length() > MAX_TEXT ? text.substring(0, MAX_TEXT) : text);
+                    if (voiceId != null) {
+                        e.put("voiceFileId", voiceId);
+                        e.put("voiceSeconds", voiceSeconds);
+                    }
                     e.put("date", msg.get("date"));
                     events.add(e);
                 }

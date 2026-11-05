@@ -1,4 +1,4 @@
-package tech.kayys.wayang.multimodal;
+package tech.kayys.wayang.connectors;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -10,21 +10,20 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 
-import tech.kayys.wayang.connectors.UrlGuard;
 import tech.kayys.wayang.runtime.ServiceHandler;
 import tech.kayys.wayang.runtime.json.Json;
 
-/** Bounded HTTP for the media connectors: every URL goes through the same {@link UrlGuard} as the other connectors; no redirects are followed. */
-final class MediaHttp {
+/** Bounded HTTP (raw bytes in and out) for the media connectors: every URL goes through the same {@link UrlGuard} as the other connectors; no redirects are followed. */
+public final class MediaHttp {
 
     private final UrlGuard guard;
     private final HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).connectTimeout(Duration.ofSeconds(10)).build();
 
-    MediaHttp(UrlGuard guard) {
+    public MediaHttp(UrlGuard guard) {
         this.guard = guard;
     }
 
-    URI uri(String base, String path) throws ServiceHandler.ConnectorException {
+    public URI uri(String base, String path) throws ServiceHandler.ConnectorException {
         try {
             return guard.check(base.replaceAll("/+$", "") + path);
         } catch (IllegalArgumentException e) {
@@ -32,7 +31,7 @@ final class MediaHttp {
         }
     }
 
-    byte[] send(HttpRequest.Builder rb, long timeoutMs, long maxBytes) throws ServiceHandler.ConnectorException {
+    public byte[] send(HttpRequest.Builder rb, long timeoutMs, long maxBytes) throws ServiceHandler.ConnectorException {
         try {
             HttpResponse<InputStream> r = client.send(rb.timeout(Duration.ofMillis(timeoutMs)).build(), HttpResponse.BodyHandlers.ofInputStream());
             byte[] raw;
@@ -59,20 +58,29 @@ final class MediaHttp {
         }
     }
 
-    Object postJson(URI uri, Map<String, String> headers, Object body, long timeoutMs, long maxBytes) throws ServiceHandler.ConnectorException {
+    public Object postJson(URI uri, Map<String, String> headers, Object body, long timeoutMs, long maxBytes) throws ServiceHandler.ConnectorException {
         HttpRequest.Builder rb = HttpRequest.newBuilder(uri).header("Content-Type", "application/json").header("Accept", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(Json.write(body)));
         headers.forEach(rb::header);
         return parse(send(rb, timeoutMs, maxBytes));
     }
 
-    Object getJson(URI uri, Map<String, String> headers, long timeoutMs) throws ServiceHandler.ConnectorException {
+    /** POST of a raw body (multipart, for example) whose answer is JSON. */
+    public Object postBytes(URI uri, Map<String, String> headers, String contentType, byte[] body, long timeoutMs, long maxBytes)
+            throws ServiceHandler.ConnectorException {
+        HttpRequest.Builder rb = HttpRequest.newBuilder(uri).header("Content-Type", contentType).header("Accept", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(body));
+        headers.forEach(rb::header);
+        return parse(send(rb, timeoutMs, maxBytes));
+    }
+
+    public Object getJson(URI uri, Map<String, String> headers, long timeoutMs) throws ServiceHandler.ConnectorException {
         HttpRequest.Builder rb = HttpRequest.newBuilder(uri).header("Accept", "application/json").GET();
         headers.forEach(rb::header);
         return parse(send(rb, timeoutMs, 1 << 20));
     }
 
-    byte[] getBytes(URI uri, Map<String, String> headers, long timeoutMs, long maxBytes) throws ServiceHandler.ConnectorException {
+    public byte[] getBytes(URI uri, Map<String, String> headers, long timeoutMs, long maxBytes) throws ServiceHandler.ConnectorException {
         HttpRequest.Builder rb = HttpRequest.newBuilder(uri).GET();
         headers.forEach(rb::header);
         return send(rb, timeoutMs, maxBytes);
