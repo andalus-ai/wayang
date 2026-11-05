@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import tech.kayys.wayang.connectors.MediaHttp;
 import tech.kayys.wayang.connectors.MediaStore;
 import tech.kayys.wayang.connectors.UrlGuard;
 import tech.kayys.wayang.runtime.ServiceHandler;

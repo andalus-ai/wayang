@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
+import tech.kayys.wayang.connectors.MediaHttp;
 import tech.kayys.wayang.connectors.MediaStore;
 import tech.kayys.wayang.connectors.UrlGuard;
 import tech.kayys.wayang.runtime.ServiceHandler;

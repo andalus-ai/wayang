@@ -35,3 +35,15 @@ is on the classpath: the server and embedded runtime), and a Studio node form.
 The `telegram` connector has operation `sendPhoto`: input `mediaId` (from `image-generate` or `comfyui`) and optional `caption` (at most 1024
 characters) upload the stored file as multipart. `chatId` in the *configuration* fixes the destination: use that when the call is an agent
 tool, so the model cannot redirect the picture to another chat. `MediaStore` now lives in `wayang-connectors` so connectors can read it.
+
+## Voice notes (speech to text)
+
+Telegram voice notes flow through the same claim-check store as images:
+
+1. Trigger `telegram` with `"voice": true` turns a voice note (at most 5 minutes, from an allowed chat) into an event with empty `text` plus `voiceFileId` and `voiceSeconds`. Without `voice: true` only text messages are events.
+2. Connector `telegram`, operation `downloadFile` (input `fileId`) fetches the file into the media store (at most 10 MiB, content sniffed as ogg/mp3/wav/m4a) and returns `mediaId`.
+3. Connector `transcribe` (input `mediaId`; config `model` default `whisper-1`, `apiKey` as `${secret:NAME}`, `baseUrl` default OpenAI, optional `language`) returns `text` (at most 8000 characters). Any OpenAI-compatible `/audio/transcriptions` server works, including a local Whisper.
+
+The transcript is what someone said, so it is untrusted input like any message. `transcribe` is a MEDIA-profile connector and is added to the multimodal dependency of generated releases.
+
+Verified: unit tests against local fake servers only. Not run against real Telegram or a real transcription provider.

@@ -19,7 +19,8 @@ import tech.kayys.wayang.runtime.ServiceHandler;
 public final class MediaStore {
 
     public static final long MAX_BYTES = 20L << 20;
-    private static final Map<String, String> EXT = Map.of("image/png", "png", "image/jpeg", "jpg", "image/webp", "webp", "image/gif", "gif");
+    private static final Map<String, String> EXT = Map.of("image/png", "png", "image/jpeg", "jpg", "image/webp", "webp", "image/gif", "gif",
+            "audio/ogg", "ogg", "audio/mpeg", "mp3", "audio/wav", "wav", "audio/mp4", "m4a");
     private static final Set<String> VALID_EXT = Set.copyOf(EXT.values());
 
     private final Path dir;
@@ -53,6 +54,33 @@ public final class MediaStore {
         return null;
     }
 
+    /** The audio type of the bytes by signature (Ogg/Opus, MP3, WAV, MP4/M4A), or null. */
+    public static String sniffAudio(byte[] b) {
+        if (b.length >= 4 && b[0] == 'O' && b[1] == 'g' && b[2] == 'g' && b[3] == 'S') {
+            return "audio/ogg";
+        }
+        if (b.length >= 3 && b[0] == 'I' && b[1] == 'D' && b[2] == '3' || b.length >= 2 && (b[0] & 0xff) == 0xff && (b[1] & 0xe0) == 0xe0) {
+            return "audio/mpeg";
+        }
+        if (b.length >= 12 && b[0] == 'R' && b[1] == 'I' && b[2] == 'F' && b[3] == 'F' && b[8] == 'W' && b[9] == 'A' && b[10] == 'V' && b[11] == 'E') {
+            return "audio/wav";
+        }
+        if (b.length >= 12 && b[4] == 'f' && b[5] == 't' && b[6] == 'y' && b[7] == 'p') {
+            return "audio/mp4";
+        }
+        return null;
+    }
+
+    /** Stores audio (Ogg/Opus, MP3, WAV, M4A); anything else is refused. */
+    public Map<String, Object> saveAudio(byte[] bytes) throws ServiceHandler.ConnectorException {
+        String mime = sniffAudio(bytes);
+        if (mime == null) {
+            throw new ServiceHandler.ConnectorException("The file is not Ogg, MP3, WAV or M4A audio", false);
+        }
+        return store(bytes, mime);
+    }
+
+    /** Stores an image (PNG, JPEG, WebP, GIF); anything else is refused. */
     public Map<String, Object> save(byte[] bytes) throws ServiceHandler.ConnectorException {
         if (dir == null) {
             throw new ServiceHandler.ConnectorException("No media directory: set WAYANG_MEDIA_DIR or WAYANG_STATE_DIR", false);
@@ -61,8 +89,15 @@ public final class MediaStore {
         if (mime == null) {
             throw new ServiceHandler.ConnectorException("The provider did not return a PNG, JPEG, WebP or GIF image", false);
         }
+        return store(bytes, mime);
+    }
+
+    private Map<String, Object> store(byte[] bytes, String mime) throws ServiceHandler.ConnectorException {
+        if (dir == null) {
+            throw new ServiceHandler.ConnectorException("No media directory: set WAYANG_MEDIA_DIR or WAYANG_STATE_DIR", false);
+        }
         if (bytes.length > MAX_BYTES) {
-            throw new ServiceHandler.ConnectorException("The image is larger than " + (MAX_BYTES >> 20) + " MiB", false);
+            throw new ServiceHandler.ConnectorException("The file is larger than " + (MAX_BYTES >> 20) + " MiB", false);
         }
         try {
             String id = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes), 0, 16) + "." + EXT.get(mime);
