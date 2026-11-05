@@ -242,32 +242,19 @@ class GamelanReleaseEngineTest {
                 return registry;
             }
         };
-        Instance<WayangComponents> inst = new Instance<>() {
-            @Override
-            public boolean isResolvable() {
-                return true;
-            }
-
-            @Override
-            public WayangComponents get() {
-                return c;
-            }
-
-            @Override
-            public java.util.Iterator<WayangComponents> iterator() {
-                return List.of(c).iterator();
-            }
-
-            @Override
-            public Handle<WayangComponents> getHandle() {
-                throw new UnsupportedOperationException("not used by these tests");
-            }
-
-            @Override
-            public Iterable<? extends Handle<WayangComponents>> handles() {
-                return List.of(); // CDI 4.1 made this abstract; nothing here uses handles
-            }
-        };
+        // A dynamic proxy rather than an anonymous class: the abstract methods of Instance differ between CDI versions (4.1 added several).
+        @SuppressWarnings("unchecked")
+        Instance<WayangComponents> inst = (Instance<WayangComponents>) java.lang.reflect.Proxy.newProxyInstance(
+                Instance.class.getClassLoader(), new Class<?>[] {Instance.class}, (proxy, method, args) -> switch (method.getName()) {
+                    case "isResolvable" -> true;
+                    case "isUnsatisfied", "isAmbiguous" -> false;
+                    case "get" -> c;
+                    case "iterator" -> List.of(c).iterator();
+                    case "toString" -> "test Instance";
+                    case "hashCode" -> System.identityHashCode(proxy);
+                    case "equals" -> proxy == args[0];
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
         var f = WayangRuntime.class.getDeclaredField("components");
         f.setAccessible(true);
         f.set(runtime, inst);
