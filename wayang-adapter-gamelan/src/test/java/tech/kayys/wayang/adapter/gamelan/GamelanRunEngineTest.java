@@ -217,6 +217,11 @@ class GamelanRunEngineTest {
             public java.util.Iterator<WayangComponents> iterator() {
                 return List.of(c).iterator();
             }
+
+            @Override
+            public Iterable<? extends Handle<WayangComponents>> handles() {
+                return List.of(); // CDI 4.1 made this abstract; nothing here uses handles
+            }
         };
         var f = WayangRuntime.class.getDeclaredField("components");
         f.setAccessible(true);
