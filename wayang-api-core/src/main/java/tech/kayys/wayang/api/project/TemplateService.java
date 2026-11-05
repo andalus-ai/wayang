@@ -214,6 +214,8 @@ public final class TemplateService {
                     throw ApiException.badRequest("imageModel is not a valid model name");
                 }
                 images = new Images(im, 0);
+            }
+        }
         boolean voice = false;
         if (in.get("voice") != null) {
             String vv = String.valueOf(in.get("voice")).strip();
@@ -249,7 +251,7 @@ public final class TemplateService {
             email = new Email(conn, List.copyOf(addrs));
         }
         Map<String, Object> bundle = slack ? assistantSlack(name, chat, model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes)
-                : assistantTelegram(name, Long.parseLong(chat), model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes, voice);
+                : assistantTelegram(name, Long.parseLong(chat), model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes, images, voice);
         Map<String, Object> o = new LinkedHashMap<>();
         o.put("dryRun", dryRun);
         o.put("publish", true);
@@ -395,18 +397,28 @@ public final class TemplateService {
 
     /** @param notes adds a private notebook (the notes connector): add, list and search freely, delete only after approval */
     static Map<String, Object> assistantTelegram(String projectName, long chatId, String model, String persona, String lookupUrl, String lookupDesc, String lookupSecret, int memoryTurns, String calendar, boolean webSearch, Email email, boolean notes) {
-        return assistantTelegram(projectName, chatId, model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes, false);
+        return assistantTelegram(projectName, chatId, model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes, (Images) null);
+    }
+
+    /** @param images adds image generation and sending (Telegram only), or null */
+    static Map<String, Object> assistantTelegram(String projectName, long chatId, String model, String persona, String lookupUrl, String lookupDesc, String lookupSecret, int memoryTurns, String calendar, boolean webSearch, Email email, boolean notes, Images images) {
+        return assistantTelegram(projectName, chatId, model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes, images, false);
     }
 
     /** @param voice answers voice notes too: they are transcribed (connector transcribe, secret OPENAI_API_KEY) and then handled like typed text */
-    static Map<String, Object> assistantTelegram(String projectName, long chatId, String model, String persona, String lookupUrl, String lookupDesc, String lookupSecret, int memoryTurns, String calendar, boolean webSearch, Email email, boolean notes, boolean voice) {
+    static Map<String, Object> assistantTelegram(String projectName, long chatId, String model, String persona, String lookupUrl, String lookupDesc, String lookupSecret, int memoryTurns, String calendar, boolean webSearch, Email email, boolean notes, Images images, boolean voice) {
         Map<String, Object> trigger = new LinkedHashMap<>();
         trigger.put("id", "assistant-inbox");
         trigger.put("kind", "POLL");
         trigger.put("processId", "personal-assistant");
         trigger.put("enabled", false);
-        trigger.put("config", Map.of("source", "telegram", "botToken", "${secret:TELEGRAM_TOKEN}", "allowedChatIds", List.of(chatId), "everySeconds", 10, "approvals", true, "rateLimit", Map.of("perHour", 60)));
-        return bundle(projectName, "Telegram assistant with an approval policy (from a template)", model, persona, lookupUrl, lookupDesc, lookupSecret, "{{ event.chatId }}", memoryTurns, calendar, webSearch, email, notes, images == null ? null : new Images(images.model(), chatId), process(false), trigger);
+        Map<String, Object> tc = new LinkedHashMap<>(Map.of("source", "telegram", "botToken", "${secret:TELEGRAM_TOKEN}", "allowedChatIds", List.of(chatId), "everySeconds", 10, "approvals", true, "rateLimit", Map.of("perHour", 60)));
+        if (voice) {
+            tc.put("voice", true);
+        }
+        trigger.put("config", tc);
+        Map<String, Object> b = bundle(projectName, "Telegram assistant with an approval policy (from a template)", model, persona, lookupUrl, lookupDesc, lookupSecret, "{{ event.chatId }}", memoryTurns, calendar, webSearch, email, notes, images == null ? null : new Images(images.model(), chatId), process(false, voice), trigger);
+        return voice ? withVoicePrompt(b) : b;
     }
 
     static Map<String, Object> assistantSlack(String projectName, String channelId, String model, String persona) {

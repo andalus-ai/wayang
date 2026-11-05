@@ -511,16 +511,27 @@ class TemplateServiceTest {
         assertEquals("auto", model.evaluate(Map.of("draft", Map.of("output", "ok"), "event", Map.of("text", "hello"))).get("policy"));
         assertEquals("auto", model.evaluate(Map.of("draft", Map.of("output", "ok"), "event", Map.of("text", ""), "hear", Map.of("text", "good morning"))).get("policy"));
 
-        var b = TemplateService.assistantTelegram("n", 1L, "openai/gpt-4o-mini", "", "", "", "", 10, null, false, null, false, true);
+        var b = TemplateService.assistantTelegram("n", 1L, "openai/gpt-4o-mini", "", "", "", "", 10, null, false, null, false, null, true);
         var agent = (Map<?, ?>) ((Map<?, ?>) ((List<?>) b.get("definitions")).stream().filter(d -> "AGENT".equals(((Map<?, ?>) d).get("kind"))).findFirst().orElseThrow()).get("document");
         assertEquals("Reply briefly to: {{ event.text }}{{ hear.text }}", agent.get("inputTemplate"));
         var trig = (Map<?, ?>) ((Map<?, ?>) ((List<?>) b.get("triggers")).get(0)).get("config");
         assertEquals(Boolean.TRUE, trig.get("voice"));
 
-        var off = TemplateService.assistantTelegram("n", 1L, "openai/gpt-4o-mini", "", "", "", "", 10, null, false, null, false, false);
+        var off = TemplateService.assistantTelegram("n", 1L, "openai/gpt-4o-mini", "", "", "", "", 10, null, false, null, false, null, false);
         assertFalse(((Map<?, ?>) ((Map<?, ?>) ((List<?>) off.get("triggers")).get(0)).get("config")).containsKey("voice"));
         var r = templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "voice", "true"), true);
         assertTrue(r.ok(), r.problems().toString());
         assertThrows(ApiException.class, () -> templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "voice", "maybe"), false));
+    }
+
+    @Test
+    void imagesAndVoiceCanBeCombinedAndBothSurvive() {
+        var b = TemplateService.assistantTelegram("n", 1L, "openai/gpt-4o-mini", "", "", "", "", 10, null, false, null, false,
+                new TemplateService.Images("gpt-image-1", 0), true);
+        String all = b.toString();
+        assertTrue(all.contains("generate_image") && all.contains("send_image"), "image tools present");
+        assertTrue(all.contains("transcribe") && all.contains("{{ hear.text }}"), "voice path present");
+        assertTrue(all.contains("voice=true"), "trigger listens for voice notes");
+        assertTrue(all.contains("chatId=1"), "send_image is pinned to the configured chat");
     }
 }

@@ -49,6 +49,10 @@ public final class Connectors {
         m.put("trello", new Trello.Sender(guard));
         m.put("soap", new Soap.Client(guard));
         m.put("mcp", new Mcp.Client(guard));
+        m.put("graphql", new GraphQl.Client(guard));
+        m.put("a2a", new A2a.Client(guard));
+        m.put("grpc", new Grpc.Client(guard));
+        m.put("websocket", new WebSocketClient(guard));
         m.put("notes", Notes.fromEnvironment());
         return m;
     }
