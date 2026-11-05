@@ -429,6 +429,23 @@ class TemplateServiceTest {
     }
 
     @Test
+    void imagesAreTelegramOnlyAndTheChatIsFixedInTheSendTool() {
+        assertThrows(ApiException.class, () -> templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "images", "maybe"), true));
+        assertThrows(ApiException.class, () -> templates.instantiate(acme, "assistant-slack", Map.of("channelId", "C1", "images", "true"), true));
+        assertThrows(ApiException.class, () -> templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "images", "true", "imageModel", "a b"), true));
+        var agent = TemplateService.agent("openai/gpt-4o-mini", "", "", "", "", "", 0, null, false, null, false, new TemplateService.Images("gpt-image-1", 555L));
+        var tools = (List<?>) agent.get("tools");
+        assertEquals(List.of("generate_image", "send_image"), tools.stream().map(t -> ((Map<?, ?>) t).get("name")).toList());
+        String text = String.valueOf(tools);
+        assertTrue(text.contains("chatId=555") && text.contains("${secret:IMAGE_API_KEY}") && text.contains("${secret:TELEGRAM_TOKEN}"), text);
+        assertFalse(String.valueOf(((Map<?, ?>) tools.get(1)).get("config")).contains("chatId, ") && String.valueOf(((Map<?, ?>) tools.get(1)).get("config")).matches(".*parameters=.*chatId.*"),
+                "the model is not offered a chatId argument");
+        assertNull(agent.get("requireApproval"));
+        var r = templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "123456", "images", "true"), true);
+        assertTrue(r.ok(), r.problems().toString());
+    }
+
+    @Test
     void theAssistantsCarryGuardrailsByDefault() {
         var agent = TemplateService.agent("openai/gpt-4o-mini", "", "", "", "", "", 0);
         var opts = (Map<?, ?>) agent.get("options");

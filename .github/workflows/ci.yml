@@ -29,21 +29,15 @@ jobs:
           distribution: temurin
           java-version: "25" # Gamelan and Andalus compile with release 25; Wayang itself targets 21
           cache: maven
-      # Wayang builds against Gamelan and Andalus (versions in the parent pom); install them from source.
+      # Wayang builds against Gamelan (version in the parent pom); install it from source. The Andalus adapter is the -Pandalus profile:
+      # the andalus-ai/andalus repository does not define the classes it needs, so CI does not build it.
       - name: Gamelan
         uses: actions/checkout@v4
         with:
           repository: andalus-ai/gamelan
           path: deps/gamelan
-      - name: Andalus
-        uses: actions/checkout@v4
-        with:
-          repository: andalus-ai/andalus
-          path: deps/andalus
-      - name: Install Gamelan and Andalus
-        run: |
-          mvn -B -q -f deps/gamelan/pom.xml install -DskipTests
-          mvn -B -q -f deps/andalus/pom.xml install -DskipTests
+      - name: Install Gamelan
+        run: mvn -B -q -f deps/gamelan/pom.xml install -DskipTests
       - name: Build and test Wayang
         env:
           WAYANG_TEST_JDBC_URL: jdbc:postgresql://localhost/wayang?user=postgres&password=pw

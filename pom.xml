@@ -28,9 +28,22 @@
         <module>wayang-adapter-numu</module>
         <module>wayang-gamelan-worker</module>
         <module>wayang-adapter-gamelan</module>
-        <module>wayang-adapter-andalus</module>
         <module>wayang-examples</module>
     </modules>
+
+    <profiles>
+        <!--
+          The Andalus adapter is written against Andalus classes (tech.kayys.andalus.execution.*, plugin.spi.node.*, service.ExecutionService)
+          and artifacts (andalus-engine, andalus-plugin-spi) that the andalus-ai/andalus repository does not define, so it cannot be built
+          from that source. It stays out of the default build until it is aligned with a published Andalus release: -Pandalus builds it.
+        -->
+        <profile>
+            <id>andalus</id>
+            <modules>
+                <module>wayang-adapter-andalus</module>
+            </modules>
+        </profile>
+    </profiles>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

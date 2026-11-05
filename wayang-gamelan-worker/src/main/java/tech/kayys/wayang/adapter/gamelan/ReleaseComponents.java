@@ -38,7 +38,8 @@ public final class ReleaseComponents implements WayangComponents {
             SecretResolver secrets, ConfigResolver config, tech.kayys.wayang.agent.ConversationMemory memory) {
         this.memory = memory != null ? memory : new tech.kayys.wayang.agent.ConversationMemory.InMemory(10_000);
         this.defs = defs;
-        this.connectors = Map.copyOf(tech.kayys.wayang.embed.AgentActions.with(connectors == null ? Map.of() : connectors, secrets, config));
+        this.connectors = Map.copyOf(tech.kayys.wayang.embed.AgentActions.with(tech.kayys.wayang.runtime.Extensions.load(tech.kayys.wayang.runtime.Profile.fromEnvironment())
+                .mergeConnectors(connectors == null ? Map.of() : connectors), secrets, config));
         this.invoker = invoker;
         this.secrets = secrets;
         this.config = config;

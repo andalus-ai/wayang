@@ -42,6 +42,8 @@ void main() {
     test('$name survives document -> table -> document', () {
       final doc = fixture(name);
       final back = dmnToDocument(dmnFromDocument(doc));
+      // The Studio adds its own layout metadata (studio.*) to a document that had none; the server ignores it. Everything else must match.
+      if (!doc.containsKey('studio')) back.remove('studio');
       expect(same(back, doc), isTrue, reason: 'got ${jsonEncode(back)}');
     });
   }
