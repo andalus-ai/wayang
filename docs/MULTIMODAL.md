@@ -44,3 +44,18 @@ tool, so the model cannot redirect the picture to another chat. `MediaStore` now
   classpath under a profile with `media`), and the generated project then depends on `wayang-multimodal`; other releases do not. At run
   time the embedded runtime and the Gamelan worker both load the extension through `ServiceLoader`. Set `WAYANG_MEDIA_DIR` or
   `WAYANG_STATE_DIR` for the stored images.
+## Voice notes (speech to text)
+
+Telegram voice notes flow through the same claim-check store as images:
+
+1. Trigger `telegram` with `"voice": true` turns a voice note (at most 5 minutes, from an allowed chat) into an event with empty `text` plus `voiceFileId` and `voiceSeconds`. Without `voice: true` only text messages are events.
+2. Connector `telegram`, operation `downloadFile` (input `fileId`) fetches the file into the media store (at most 10 MiB, content sniffed as ogg/mp3/wav/m4a) and returns `mediaId`.
+3. Connector `transcribe` (input `mediaId`; config `model` default `whisper-1`, `apiKey` as `${secret:NAME}`, `baseUrl` default OpenAI, optional `language`) returns `text` (at most 8000 characters). Any OpenAI-compatible `/audio/transcriptions` server works, including a local Whisper.
+
+The transcript is what someone said, so it is untrusted input like any message. `transcribe` is a MEDIA-profile connector and is added to the multimodal dependency of generated releases.
+
+Verified: unit tests against local fake servers only. Not run against real Telegram or a real transcription provider.
+
+### Template option `voice`
+
+`assistant-telegram` accepts `voice: true` (MEDIA profile required; Telegram only). The process then starts with `kind`: a message with `event.voiceFileId` goes `fetch` (telegram `downloadFile`) → `hear` (`transcribe`, secret `OPENAI_API_KEY`) → `draft`; everything else follows the normal path. The agent reads `{{ event.text }}{{ hear.text }}`, and the approval policy now checks the typed text **and** the transcript for pay / transfer / password / delete (case-insensitive), so a spoken request is held for approval exactly like a typed one. Replies to voice notes are text.

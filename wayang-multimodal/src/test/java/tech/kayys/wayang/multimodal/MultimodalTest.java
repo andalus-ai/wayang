@@ -74,6 +74,11 @@ class MultimodalTest {
             seen.add(ex.getRequestMethod() + " " + ex.getRequestURI());
             reply(ex, 200, "image/png", imageToServe);
         });
+        server.createContext("/v1/audio/transcriptions", ex -> {
+            seen.add(ex.getRequestMethod() + " " + ex.getRequestURI() + " auth=" + ex.getRequestHeaders().getFirst("Authorization"));
+            bodies.add(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.ISO_8859_1));
+            reply(ex, 200, "application/json", "{\"text\":\"  remind me to call Budi \"}".getBytes(StandardCharsets.UTF_8));
+        });
         server.start();
     }
 
@@ -177,6 +182,45 @@ class MultimodalTest {
         assertEquals(List.of("multimodal"), Extensions.of(List.of(new MultimodalExtension()), Profile.AGENTIC).ids());
         assertTrue(Extensions.of(List.of(new MultimodalExtension()), Profile.AUTOMATION).ids().isEmpty());
         assertTrue(Extensions.of(List.of(new MultimodalExtension()), Profile.INTEGRATION).ids().isEmpty());
-        assertEquals(Set.of("image-generate", "comfyui"), new MultimodalExtension().connectors().keySet());
+        assertEquals(Set.of("image-generate", "comfyui", "transcribe"), new MultimodalExtension().connectors().keySet());
+    }
+
+    private static final byte[] OGG = {'O', 'g', 'g', 'S', 0, 2, 0, 0, 0, 0, 0, 0, 1, 2, 3};
+
+    @Test
+    void speechIsSentAsMultipartAndTheTranscriptIsTrimmed() throws Exception {
+        String id = (String) store.saveAudio(OGG).get("mediaId");
+        Transcribe t = new Transcribe(local(), store);
+        Map<String, Object> out = t.call(Map.of("baseUrl", base() + "/v1", "apiKey", "sk-test", "language", "en"), Map.of("mediaId", id));
+        assertEquals("remind me to call Budi", out.get("text"));
+        assertTrue(seen.get(0).contains("auth=Bearer sk-test"), seen.toString());
+        String body = bodies.get(0);
+        assertTrue(body.contains("name=\"model\"\r\n\r\nwhisper-1") && body.contains("name=\"language\"\r\n\r\nen"), body);
+        assertTrue(body.contains("filename=\"audio.ogg\"") && body.contains("Content-Type: audio/ogg") && body.contains("OggS"), body);
+    }
+
+    @Test
+    void transcribeRefusesWhatIsNotStoredAudioBeforeAnyRequest() throws Exception {
+        String img = (String) store.save(PNG).get("mediaId");
+        Transcribe t = new Transcribe(local(), store);
+        Map<String, Object> cfg = Map.of("baseUrl", base() + "/v1");
+        for (Map<String, Object> in : List.<Map<String, Object>>of(Map.of(), Map.of("mediaId", "../../etc/passwd"), Map.of("mediaId", img),
+                Map.of("mediaId", "0".repeat(32) + ".ogg"))) {
+            assertThrows(ServiceHandler.ConnectorException.class, () -> t.call(cfg, in));
+        }
+        String id = (String) store.saveAudio(OGG).get("mediaId");
+        assertThrows(ServiceHandler.ConnectorException.class, () -> t.call(Map.of("baseUrl", base() + "/v1", "language", "x;y"), Map.of("mediaId", id)));
+        assertThrows(ServiceHandler.ConnectorException.class, () -> t.call(Map.of("baseUrl", base() + "/v1", "apiKey", "a b"), Map.of("mediaId", id)));
+        assertTrue(seen.isEmpty(), seen.toString());
+    }
+
+    @Test
+    void audioSniffingRecognisesCommonContainersOnly() {
+        assertEquals("audio/ogg", MediaStore.sniffAudio(OGG));
+        assertEquals("audio/mpeg", MediaStore.sniffAudio(new byte[] {'I', 'D', '3', 3, 0, 0, 0, 0, 0, 0}));
+        assertEquals("audio/wav", MediaStore.sniffAudio("RIFF\0\0\0\0WAVEfmt ".getBytes(StandardCharsets.ISO_8859_1)));
+        assertEquals("audio/mp4", MediaStore.sniffAudio(new byte[] {0, 0, 0, 0x20, 'f', 't', 'y', 'p', 'M', '4', 'A', ' '}));
+        assertNull(MediaStore.sniffAudio(PNG));
+        assertNull(MediaStore.sniffAudio("hello world, not audio".getBytes(StandardCharsets.UTF_8)));
     }
 }
