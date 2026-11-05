@@ -70,6 +70,7 @@ public final class TemplateService {
                         new Param("emailConnection", "The OAuth connection id for Gmail, used when emailRecipients is set", false, "google"),
                         new Param("notes", "true gives the assistant a private notebook (save, list, search; delete only after you approve). Notes are kept under WAYANG_NOTES_DIR or WAYANG_STATE_DIR/notes", false, "false"),
                         new Param("webSearch", "true lets the assistant search the web (Brave Search API, needs the secret BRAVE_API_KEY); results are treated as untrusted data", false, "false"),
+                        new Param("voice", "true makes the assistant understand voice notes (up to 5 minutes): they are transcribed with an OpenAI-compatible speech-to-text API (secret OPENAI_API_KEY) and then handled like typed text, including the approval policy. Needs the MEDIA feature", false, "false"),
                         new Param("name", "Project name", false, "Personal assistant")),
                 List.of("TELEGRAM_TOKEN")),
                 new Info("assistant-slack", "Personal assistant on Slack",
@@ -194,6 +195,20 @@ public final class TemplateService {
             }
             notes = nv.equalsIgnoreCase("true");
         }
+        boolean voice = false;
+        if (in.get("voice") != null) {
+            String vv = String.valueOf(in.get("voice")).strip();
+            if (!vv.equalsIgnoreCase("true") && !vv.equalsIgnoreCase("false")) {
+                throw ApiException.badRequest("voice must be true or false");
+            }
+            voice = vv.equalsIgnoreCase("true");
+            if (voice && slack) {
+                throw ApiException.badRequest("voice is only available for the Telegram assistant");
+            }
+            if (voice && !profile.has(tech.kayys.wayang.runtime.Profile.Feature.MEDIA)) {
+                throw ApiException.badRequest("voice needs the MEDIA feature, which this deployment profile does not include");
+            }
+        }
         Email email = null;
         String emailTo = text(in, "emailRecipients", "");
         if (!emailTo.isEmpty()) {
@@ -215,7 +230,7 @@ public final class TemplateService {
             email = new Email(conn, List.copyOf(addrs));
         }
         Map<String, Object> bundle = slack ? assistantSlack(name, chat, model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes)
-                : assistantTelegram(name, Long.parseLong(chat), model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes);
+                : assistantTelegram(name, Long.parseLong(chat), model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes, voice);
         Map<String, Object> o = new LinkedHashMap<>();
         o.put("dryRun", dryRun);
         o.put("publish", true);
@@ -361,13 +376,23 @@ public final class TemplateService {
 
     /** @param notes adds a private notebook (the notes connector): add, list and search freely, delete only after approval */
     static Map<String, Object> assistantTelegram(String projectName, long chatId, String model, String persona, String lookupUrl, String lookupDesc, String lookupSecret, int memoryTurns, String calendar, boolean webSearch, Email email, boolean notes) {
+        return assistantTelegram(projectName, chatId, model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes, false);
+    }
+
+    /** @param voice answers voice notes too: they are transcribed (connector transcribe, secret OPENAI_API_KEY) and then handled like typed text */
+    static Map<String, Object> assistantTelegram(String projectName, long chatId, String model, String persona, String lookupUrl, String lookupDesc, String lookupSecret, int memoryTurns, String calendar, boolean webSearch, Email email, boolean notes, boolean voice) {
         Map<String, Object> trigger = new LinkedHashMap<>();
         trigger.put("id", "assistant-inbox");
         trigger.put("kind", "POLL");
         trigger.put("processId", "personal-assistant");
         trigger.put("enabled", false);
-        trigger.put("config", Map.of("source", "telegram", "botToken", "${secret:TELEGRAM_TOKEN}", "allowedChatIds", List.of(chatId), "everySeconds", 10, "approvals", true, "rateLimit", Map.of("perHour", 60)));
-        return bundle(projectName, "Telegram assistant with an approval policy (from a template)", model, persona, lookupUrl, lookupDesc, lookupSecret, "{{ event.chatId }}", memoryTurns, calendar, webSearch, email, notes, process(false), trigger);
+        Map<String, Object> tc = new LinkedHashMap<>(Map.of("source", "telegram", "botToken", "${secret:TELEGRAM_TOKEN}", "allowedChatIds", List.of(chatId), "everySeconds", 10, "approvals", true, "rateLimit", Map.of("perHour", 60)));
+        if (voice) {
+            tc.put("voice", true);
+        }
+        trigger.put("config", tc);
+        Map<String, Object> b = bundle(projectName, "Telegram assistant with an approval policy (from a template)", model, persona, lookupUrl, lookupDesc, lookupSecret, "{{ event.chatId }}", memoryTurns, calendar, webSearch, email, notes, process(false, voice), trigger);
+        return voice ? withVoicePrompt(b) : b;
     }
 
     static Map<String, Object> assistantSlack(String projectName, String channelId, String model, String persona) {
@@ -419,6 +444,25 @@ public final class TemplateService {
         return b;
     }
 
+    /** The agent reads the typed text, or the transcript when the message was a voice note. */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> withVoicePrompt(Map<String, Object> bundle) {
+        for (Object d : (List<Object>) bundle.get("definitions")) {
+            Map<String, Object> def = (Map<String, Object>) d;
+            if ("AGENT".equals(def.get("kind"))) {
+                ((Map<String, Object>) def.get("document")).put("inputTemplate", "Reply briefly to: {{ event.text }}{{ hear.text }}");
+            }
+        }
+        bundle.put("integrity", Map.of("sha256", WorkspaceBundle.sha256(withoutIntegrity(bundle))));
+        return bundle;
+    }
+
+    private static Map<String, Object> withoutIntegrity(Map<String, Object> b) {
+        Map<String, Object> c = new LinkedHashMap<>(b);
+        c.remove("integrity");
+        return c;
+    }
+
     private static Map<String, Object> def(String kind, String id, Map<String, Object> doc) {
         Map<String, Object> d = new LinkedHashMap<>();
         d.put("kind", kind);
@@ -431,13 +475,16 @@ public final class TemplateService {
      * What may go out unasked: nothing about money, passwords or deleting in the message, no link in the draft, and no action the agent only
      * proposed (it is recorded, and happens only after a yes).
      */
+    private static final String SAID = "lower case(coalesce(event.text, \"\") + \" \" + coalesce(hear.text, \"\"))";
+
     static Map<String, Object> policy() {
         return Map.of("id", "assistant", "decisions", List.of(
                 Map.of("name", "policy", "type", "table", "hitPolicy", "FIRST",
                         "inputs", List.of(
                                 "contains(draft.output, \"http\")",
-                                "contains(event.text, \"pay\") or contains(event.text, \"Pay\") or contains(event.text, \"transfer\")"
-                                        + " or contains(event.text, \"password\") or contains(event.text, \"delete\")",
+                                // what the person said: the typed text and, for a voice note, its transcript (a voice note has no text)
+                                "contains(" + SAID + ", \"pay\") or contains(" + SAID + ", \"transfer\")"
+                                        + " or contains(" + SAID + ", \"password\") or contains(" + SAID + ", \"delete\")",
                                 "draft.pendingCalls != null"),
                         "outputs", List.of("result"),
                         "rules", List.of(
@@ -606,7 +653,23 @@ public final class TemplateService {
 
     /** message, agent drafts, policy, then send by itself or after a person approves; a rejected draft is dropped. */
     static ProcessModel process(boolean slack) {
-        return ProcessModel.builder("personal-assistant").name("Personal assistant").start("received")
+        return process(slack, false);
+    }
+
+    /**
+     * @param voice Telegram only: a voice note (event.voiceFileId) is downloaded and transcribed first ({@code hear.text}), then follows the
+     *              same draft, policy and approval path as typed text
+     */
+    static ProcessModel process(boolean slack, boolean voice) {
+        ProcessModel.Builder b = ProcessModel.builder("personal-assistant").name("Personal assistant").start("received");
+        if (voice) {
+            b.exclusive("kind")
+                    .task("fetch", ElementType.SERVICE_TASK, Map.of("connector", "telegram", "operation", "downloadFile", "botToken", "${secret:TELEGRAM_TOKEN}",
+                            "inputs", Map.of("fileId", "event.voiceFileId")))
+                    .task("hear", ElementType.SERVICE_TASK, Map.of("connector", "transcribe", "apiKey", "${secret:OPENAI_API_KEY}",
+                            "inputs", Map.of("mediaId", "fetch.mediaId")));
+        }
+        b
                 .exclusive("command")
                 .task("forget", ElementType.AGENT_TASK, Map.of("agent", "replier", "forget", true))
                 .task("confirm", ElementType.SERVICE_TASK, slack
@@ -633,13 +696,16 @@ public final class TemplateService {
                         : Map.of("connector", "telegram", "botToken", "${secret:TELEGRAM_TOKEN}",
                                 "inputs", Map.of("chatId", "event.chatId", "text", "draft.output")))
                 .end("sent").end("dropped")
-                .flow("received", "command").flow("command", "forget", "event.text = \"/forget\" or event.text = \"forget me\"").defaultFlow("command", "draft")
+                .flow("received", voice ? "kind" : "command").flow("command", "forget", "event.text = \"/forget\" or event.text = \"forget me\"").defaultFlow("command", "draft")
                 .flow("forget", "confirm").flow("confirm", "forgotten")
                 .flow("draft", "policy").flow("policy", "route")
                 .flow("route", "ask", "policy.result = \"approve\"").flow("ask", "approve").defaultFlow("route", "join")
                 .flow("approve", "decision")
                 .flow("decision", "join", "approve.approved = true").defaultFlow("decision", "dropped")
-                .flow("join", "actions").flow("actions", "send").flow("send", "sent")
-                .build();
+                .flow("join", "actions").flow("actions", "send").flow("send", "sent");
+        if (voice) {
+            b.flow("kind", "fetch", "event.voiceFileId != null").defaultFlow("kind", "command").flow("fetch", "hear").flow("hear", "draft");
+        }
+        return b.build();
     }
 }
