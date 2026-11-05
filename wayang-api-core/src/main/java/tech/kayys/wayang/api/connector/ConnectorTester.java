@@ -60,6 +60,7 @@ public final class ConnectorTester {
             case "linear" -> op.equals("listIssues");
             case "airtable" -> op.equals("listRecords");
             case "mcp" -> op.equals("listTools");
+            case "a2a" -> op.equals("agentCard");
             case "soap" -> "describe".equals(config.get("mode"));
             default -> false;
         };
