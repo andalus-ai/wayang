@@ -219,6 +219,11 @@ class GamelanRunEngineTest {
             }
 
             @Override
+            public Handle<WayangComponents> getHandle() {
+                throw new UnsupportedOperationException("not used by these tests");
+            }
+
+            @Override
             public Iterable<? extends Handle<WayangComponents>> handles() {
                 return List.of(); // CDI 4.1 made this abstract; nothing here uses handles
             }
