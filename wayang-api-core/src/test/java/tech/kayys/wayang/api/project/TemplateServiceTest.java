@@ -480,4 +480,30 @@ class TemplateServiceTest {
                 Map.of("chatId", "123"), true));
         assertEquals(4, new TemplateService(ws).withProfile(tech.kayys.wayang.runtime.Profile.AGENTIC).list().size());
     }
+
+    @Test
+    void theVoiceAssistantTranscribesFirstAndTheApprovalPolicyAlsoReadsTheTranscript() {
+        var plan = tech.kayys.wayang.bpmn.ProcessCompiler.compile(TemplateService.process(false, true));
+        assertEquals("personal-assistant", plan.processId());
+        var model = tech.kayys.wayang.dmn.DmnLoader.load(TemplateService.policy());
+        // a voice note has no text: only the transcript can trigger the keyword rules
+        assertEquals("approve", model.evaluate(Map.of("draft", Map.of("output", "ok"), "event", Map.of("text", ""), "hear", Map.of("text", "Please PAY the rent"))).get("policy"));
+        assertEquals("approve", model.evaluate(Map.of("draft", Map.of("output", "ok"), "event", Map.of("text", ""), "hear", Map.of("text", "what is my password"))).get("policy"));
+        // typed text still works without any transcript, and harmless text is sent by itself
+        assertEquals("approve", model.evaluate(Map.of("draft", Map.of("output", "ok"), "event", Map.of("text", "transfer 5"))).get("policy"));
+        assertEquals("auto", model.evaluate(Map.of("draft", Map.of("output", "ok"), "event", Map.of("text", "hello"))).get("policy"));
+        assertEquals("auto", model.evaluate(Map.of("draft", Map.of("output", "ok"), "event", Map.of("text", ""), "hear", Map.of("text", "good morning"))).get("policy"));
+
+        var b = TemplateService.assistantTelegram("n", 1L, "openai/gpt-4o-mini", "", "", "", "", 10, null, false, null, false, true);
+        var agent = (Map<?, ?>) ((Map<?, ?>) ((List<?>) b.get("definitions")).stream().filter(d -> "AGENT".equals(((Map<?, ?>) d).get("kind"))).findFirst().orElseThrow()).get("document");
+        assertEquals("Reply briefly to: {{ event.text }}{{ hear.text }}", agent.get("inputTemplate"));
+        var trig = (Map<?, ?>) ((Map<?, ?>) ((List<?>) b.get("triggers")).get(0)).get("config");
+        assertEquals(Boolean.TRUE, trig.get("voice"));
+
+        var off = TemplateService.assistantTelegram("n", 1L, "openai/gpt-4o-mini", "", "", "", "", 10, null, false, null, false, false);
+        assertFalse(((Map<?, ?>) ((Map<?, ?>) ((List<?>) off.get("triggers")).get(0)).get("config")).containsKey("voice"));
+        var r = templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "voice", "true"), true);
+        assertTrue(r.ok(), r.problems().toString());
+        assertThrows(ApiException.class, () -> templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "voice", "maybe"), false));
+    }
 }

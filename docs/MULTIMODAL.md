@@ -47,3 +47,7 @@ Telegram voice notes flow through the same claim-check store as images:
 The transcript is what someone said, so it is untrusted input like any message. `transcribe` is a MEDIA-profile connector and is added to the multimodal dependency of generated releases.
 
 Verified: unit tests against local fake servers only. Not run against real Telegram or a real transcription provider.
+
+### Template option `voice`
+
+`assistant-telegram` accepts `voice: true` (MEDIA profile required; Telegram only). The process then starts with `kind`: a message with `event.voiceFileId` goes `fetch` (telegram `downloadFile`) → `hear` (`transcribe`, secret `OPENAI_API_KEY`) → `draft`; everything else follows the normal path. The agent reads `{{ event.text }}{{ hear.text }}`, and the approval policy now checks the typed text **and** the transcript for pay / transfer / password / delete (case-insensitive), so a spoken request is held for approval exactly like a typed one. Replies to voice notes are text.
