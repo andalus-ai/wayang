@@ -5,7 +5,8 @@ import '../../core/theme.dart';
 import '../../plugins/plugin.dart';
 import '../../plugins/registry.dart';
 import '../../providers/app_providers.dart';
-import '../dashboard/dashboard_screen.dart';\nimport '../components/component_catalog_screen.dart';
+import '../dashboard/dashboard_screen.dart';
+import '../components/component_catalog_screen.dart';
 import '../projects/projects_screen.dart';
 import '../runs/runs_screen.dart';
 import '../channels/channels_screen.dart';
@@ -28,7 +29,8 @@ class _NavItem {
   final WidgetBuilder builder;
 }
 
-const _platformScreenBuilders = <String, WidgetBuilder>{\n  'components': _componentsBuilder,
+const _platformScreenBuilders = <String, WidgetBuilder>{
+  'components': _componentsBuilder,
   'runs': _runsBuilder,
   'tasks': _tasksBuilder,
   'projects': _projectsBuilder,
@@ -41,7 +43,8 @@ const _platformScreenBuilders = <String, WidgetBuilder>{\n  'components': _compo
   'settings': _settingsBuilder,
 };
 
-Widget _componentsBuilder(BuildContext context) => const ComponentCatalogScreen();\nWidget _runsBuilder(BuildContext context) => const RunsScreen();
+Widget _componentsBuilder(BuildContext context) => const ComponentCatalogScreen();
+Widget _runsBuilder(BuildContext context) => const RunsScreen();
 Widget _tasksBuilder(BuildContext context) => const TasksScreen();
 Widget _projectsBuilder(BuildContext context) => const ProjectsScreen();
 Widget _mapperBuilder(BuildContext context) => const MapperScreen();
