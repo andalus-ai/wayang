@@ -38,6 +38,9 @@ import tech.kayys.wayang.eip.EipLoader;
 import tech.kayys.wayang.eip.IdempotencyStore;
 import tech.kayys.wayang.expression.Expressions;
 import tech.kayys.wayang.runtime.WaitRegistry;
+import tech.kayys.wayang.runtime.ComponentRegistry;
+import tech.kayys.wayang.runtime.ComponentRequirements;
+import tech.kayys.wayang.runtime.Extensions;
 import tech.kayys.wayang.runtime.json.Json;
 
 /**
@@ -60,15 +63,31 @@ public final class WayangApi {
     private final Clock clock;
 
     private volatile tech.kayys.wayang.runtime.Profile profile = tech.kayys.wayang.runtime.Profile.fromEnvironment();
+    private volatile ComponentRegistry componentRegistry;
 
     /** Which features this deployment serves: hides the rest from the palette and refuses to save them. */
     public WayangApi withProfile(tech.kayys.wayang.runtime.Profile profile) {
         this.profile = profile;
+        this.componentRegistry = null;
         return this;
     }
 
     public tech.kayys.wayang.runtime.Profile profile() {
         return profile;
+    }
+
+    private ComponentRegistry componentRegistry() {
+        ComponentRegistry current = componentRegistry;
+        if (current == null) {
+            synchronized (this) {
+                current = componentRegistry;
+                if (current == null) {
+                    current = ComponentRegistry.standard(profile, Extensions.load(profile));
+                    componentRegistry = current;
+                }
+            }
+        }
+        return current;
     }
 
     public WayangApi(DefinitionStore store, RunEngine engine, WaitRegistry waits, EventBus bus, Clock clock) {
@@ -191,6 +210,13 @@ public final class WayangApi {
             switch (kind) {
                 case PROCESS -> {
                     ProcessModel m = ProcessMaps.fromMap(doc);
+                    try {
+                        ComponentRequirements.resolve(
+                                m.elements().values().stream().map(ProcessModel.Element::type).toList(),
+                                componentRegistry());
+                    } catch (ComponentRegistry.ComponentResolutionException e) {
+                        items.add(new ValidationReport.Item("ERROR", null, "component requirements: " + e.getMessage()));
+                    }
                     for (Issue i : m.validate()) {
                         items.add(new ValidationReport.Item(i.severity().name(), i.elementId(), i.message()));
                     }
