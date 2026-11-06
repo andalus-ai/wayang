@@ -212,7 +212,7 @@ public final class WayangApi {
                     ProcessModel m = ProcessMaps.fromMap(doc);
                     try {
                         ComponentRequirements.resolve(
-                                m.elements().values().stream().map(ProcessModel.Element::type).toList(),
+                                m.elements().values().stream().map(e -> e.type()).toList(),
                                 componentRegistry());
                     } catch (ComponentRegistry.ComponentResolutionException e) {
                         items.add(new ValidationReport.Item("ERROR", null, "component requirements: " + e.getMessage()));
