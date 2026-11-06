@@ -72,8 +72,8 @@ final class ComponentLockfile {
             item.put("capabilities", descriptor.capabilities().stream().sorted().toList());
             item.put("configSchema", descriptor.configSchema());
             item.put("dependencies", descriptor.dependencies().stream()
+                    .sorted(java.util.Comparator.comparing(ComponentDescriptor.Dependency::componentId))
                     .map(d -> Map.of("componentId", d.componentId(), "version", d.version()))
-                    .sorted(java.util.Comparator.comparing(d -> String.valueOf(d.get("componentId"))))
                     .toList());
             locked.add(item);
         }
@@ -83,9 +83,22 @@ final class ComponentLockfile {
         document.put("profile", profile.name());
         document.put("roots", List.copyOf(roots));
         document.put("components", locked);
-        String digest = sha256(Json.write(document));
+        String digest = sha256(Json.write(canonical(document)));
         document.put("sha256", digest);
-        return new Result(Json.write(document), digest, resolved.stream().map(ComponentDescriptor::id).toList());
+        return new Result(Json.write(canonical(document)), digest, resolved.stream().map(ComponentDescriptor::id).toList());
+    }
+
+    /** Sort object keys recursively; Map.of iteration order is intentionally unspecified by the JDK. */
+    private static Object canonical(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> sorted = new java.util.TreeMap<>();
+            map.forEach((key, nested) -> sorted.put(String.valueOf(key), canonical(nested)));
+            return sorted;
+        }
+        if (value instanceof List<?> list) {
+            return list.stream().map(ComponentLockfile::canonical).toList();
+        }
+        return value;
     }
 
     private static String sha256(String value) {
