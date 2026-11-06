@@ -101,6 +101,68 @@ Important limitations from the same upstream documentation and review:
 
 **Decision: do not select yet.** This is a promising JVM adapter candidate, but mandatory resource-governance evidence is missing. A separate qualification capability contract has now been added to the Wayang SPI: compiler/evaluator providers default to unqualified, and production resolution can fail closed unless required gates are declared. These declarations must be backed by tests, not treated as proof. The next step remains a time-boxed adapter spike and adversarial tests. If hard limits and cancellation cannot be enforced, the candidate must remain non-production or be rejected.
 
+
+## Source-level API inspection: Project Nessie cel-java 0.8.0
+
+Reviewed upstream Java source at commit
+`2ccdd819a874fa9248a4b188f04f7417e8876357` on 2026-11-06. This is a
+source inspection, not a build or runtime spike.
+
+### Confirmed extension points
+
+- `Env.newCustomEnv(...)` creates an environment without automatically
+  installing the standard CEL library. Its overload accepts an explicit
+  `TypeRegistry` and list of `EnvOption` values.
+- `EnvOption.declarations(...)` adds the declared variables/functions used
+  for checking; `EnvOption.clearMacros()` clears parser macros. This gives
+  the adapter a route to a deliberately small language surface.
+- `Env.compile(String)` combines parsing and static checking and returns an
+  AST/issues tuple. The adapter must inspect issues and reject an invalid AST.
+- `Env.program(Ast, ProgramOption...)` builds the evaluator program.
+- `ProgramOption.customDecorator(...)` is an interpreter-plan extension
+  point; `ProgramOption.functions(...)` installs runtime overloads.
+- `Program.eval(Object vars)` is the public evaluation entry point.
+
+### What this does and does not prove
+
+| Requirement | Source-level finding | Qualification status |
+|---|---|---|
+| No implicit standard library | `newCustomEnv` explicitly omits standard CEL declarations/macros | Feasible; adapter tests still required |
+| Static checking | `Env.compile` parses and checks | Feasible; diagnostic mapping tests still required |
+| Explicit functions | Compile declarations and runtime overloads are separate options | Feasible; declaration/runtime parity tests required |
+| Macro reduction | `clearMacros` is available; custom environment starts with no macros | Feasible; exact allowlist still needs tests |
+| Hard evaluation-cost cap | No public per-evaluation budget parameter was found in the inspected `Program` contract | Unverified |
+| Cooperative cancellation | No cancellation token or cancellation contract was found on `Program.eval` | Unverified |
+| Bounded result size | No host-enforced result-size limit is established by these APIs | Unverified |
+| Durable artifact recovery | AST/program reuse is not evidence of a stable cross-process serialized format | Unverified |
+
+A custom interpreter decorator is an extension point, not evidence that an
+evaluation can be safely interrupted after a hard budget. Before considering
+it, inspect the complete interpreter contract and prove that every evaluation
+step is interceptable, including comprehensions, attribute resolution,
+overload calls, and allocations. A wall-clock timeout around a worker thread
+does not qualify as hard cancellation if the evaluator can continue consuming
+CPU or memory after the caller times out.
+
+### Engineering decision
+
+Do not add `cel-tools`, `cel-core`, generated protobuf artifacts, or a
+Nessie-specific provider module to the production build yet. Keep the
+engine-neutral module dependency-free. The next implementation experiment
+must be isolated from the normal reactor and should first prove:
+
+1. a custom environment with only explicitly declared symbols;
+2. parse/check diagnostics and expected-type enforcement;
+3. a finite, deterministic function library with compile/runtime parity;
+4. a genuinely enforceable resource/cancellation boundary;
+5. result-size bounds and artifact reconstitution across process restart.
+
+If items 4 or 5 cannot be proven, Nessie may still be usable for trusted,
+strictly bounded authoring-time expressions, but it must not be marked as a
+production evaluator for untrusted workflow inputs. That restricted mode
+would need a distinct capability profile and explicit deployment policy; it
+must not weaken the current production qualification gates.
+
 ## Candidate scorecard
 
 The scorecard must be completed with primary evidence before selecting a
