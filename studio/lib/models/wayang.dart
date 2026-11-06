@@ -429,3 +429,54 @@ class McpServerInfo {
         ],
       );
 }
+
+/// One reusable runtime component from GET /api/v1/catalog/components.
+class ComponentCatalogEntry {
+  const ComponentCatalogEntry({
+    required this.id,
+    required this.version,
+    required this.kind,
+    required this.executorType,
+    required this.description,
+    required this.displayName,
+    required this.category,
+    required this.requiredFeatures,
+    required this.dependencies,
+    required this.isolationLevel,
+    required this.capabilities,
+    required this.configSchema,
+    required this.uiHints,
+    this.icon,
+  });
+  final String id;
+  final String version;
+  final String kind;
+  final String executorType;
+  final String description;
+  final String displayName;
+  final String category;
+  final List<String> requiredFeatures;
+  final List<Map<String, dynamic>> dependencies;
+  final String isolationLevel;
+  final List<String> capabilities;
+  final Map<String, dynamic> configSchema;
+  final Map<String, dynamic> uiHints;
+  final String? icon;
+
+  factory ComponentCatalogEntry.fromJson(Map<String, dynamic> j) => ComponentCatalogEntry(
+        id: j['id'] as String,
+        version: (j['version'] as String?) ?? '',
+        kind: (j['kind'] as String?) ?? 'NODE',
+        executorType: (j['executorType'] as String?) ?? '',
+        description: (j['description'] as String?) ?? '',
+        displayName: (j['displayName'] as String?) ?? (j['id'] as String),
+        category: (j['category'] as String?) ?? 'Other',
+        requiredFeatures: [for (final x in asList(j['requiredFeatures'])) '$x'],
+        dependencies: [for (final x in asList(j['dependencies'])) asMap(x)],
+        isolationLevel: (j['isolationLevel'] as String?) ?? 'IN_PROCESS',
+        capabilities: [for (final x in asList(j['capabilities'])) '$x'],
+        configSchema: asMap(j['configSchema']),
+        uiHints: asMap(j['uiHints']),
+        icon: j['icon'] as String?,
+      );
+}
