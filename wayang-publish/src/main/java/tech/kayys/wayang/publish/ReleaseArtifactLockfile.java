@@ -16,8 +16,8 @@ final class ReleaseArtifactLockfile {
 
     private ReleaseArtifactLockfile() {}
 
-    static Result create(List<String> componentIds, String version) {
-        List<ReleaseArtifactCatalog.Artifact> artifacts = ReleaseArtifactCatalog.resolve(componentIds, version);
+    static Result create(List<String> componentIds, String version, boolean gamelan) {
+        List<ReleaseArtifactCatalog.Artifact> artifacts = ReleaseArtifactCatalog.resolve(componentIds, version, gamelan);
         List<Map<String, Object>> entries = artifacts.stream().map(artifact -> {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("groupId", ReleaseArtifactCatalog.GROUP_ID);
