@@ -79,6 +79,11 @@ class MultimodalTest {
             bodies.add(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.ISO_8859_1));
             reply(ex, 200, "application/json", "{\"text\":\"  remind me to call Budi \"}".getBytes(StandardCharsets.UTF_8));
         });
+        server.createContext("/v1/audio/speech", ex -> {
+            seen.add(ex.getRequestMethod() + " " + ex.getRequestURI() + " auth=" + ex.getRequestHeaders().getFirst("Authorization"));
+            bodies.add(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            reply(ex, 200, "audio/ogg", OGG);
+        });
         server.start();
     }
 
@@ -182,7 +187,7 @@ class MultimodalTest {
         assertEquals(List.of("multimodal"), Extensions.of(List.of(new MultimodalExtension()), Profile.AGENTIC).ids());
         assertTrue(Extensions.of(List.of(new MultimodalExtension()), Profile.AUTOMATION).ids().isEmpty());
         assertTrue(Extensions.of(List.of(new MultimodalExtension()), Profile.INTEGRATION).ids().isEmpty());
-        assertEquals(Set.of("image-generate", "comfyui", "transcribe"), new MultimodalExtension().connectors().keySet());
+        assertEquals(Set.of("image-generate", "comfyui", "transcribe", "speak"), new MultimodalExtension().connectors().keySet());
     }
 
     private static final byte[] OGG = {'O', 'g', 'g', 'S', 0, 2, 0, 0, 0, 0, 0, 0, 1, 2, 3};
@@ -222,5 +227,38 @@ class MultimodalTest {
         assertEquals("audio/mp4", MediaStore.sniffAudio(new byte[] {0, 0, 0, 0x20, 'f', 't', 'y', 'p', 'M', '4', 'A', ' '}));
         assertNull(MediaStore.sniffAudio(PNG));
         assertNull(MediaStore.sniffAudio("hello world, not audio".getBytes(StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    void speechIsStoredAsAudioAndTheRequestCarriesTheChosenVoice() throws Exception {
+        Speak s = new Speak(local(), store);
+        Map<String, Object> out = s.call(Map.of("baseUrl", base() + "/v1", "apiKey", "sk-test", "voice", "nova"), Map.of("text", "Hello Budi"));
+        assertEquals("audio/ogg", out.get("mimeType"));
+        String id = (String) out.get("mediaId");
+        assertTrue(id.matches("[0-9a-f]{32}\\.ogg"), id);
+        assertTrue(java.util.Arrays.equals(OGG, store.read(id)));
+        assertTrue(seen.get(0).contains("auth=Bearer sk-test"), seen.toString());
+        String b = bodies.get(0);
+        assertTrue(b.contains("\"voice\":\"nova\"") && b.contains("\"response_format\":\"opus\"") && b.contains("\"input\":\"Hello Budi\""), b);
+    }
+
+    @Test
+    void speakRefusesBadInputBeforeAnyRequest() throws Exception {
+        Speak s = new Speak(local(), store);
+        Map<String, Object> cfg = Map.of("baseUrl", base() + "/v1");
+        assertThrows(ServiceHandler.ConnectorException.class, () -> s.call(cfg, Map.of()));
+        assertThrows(ServiceHandler.ConnectorException.class, () -> s.call(cfg, Map.of("text", "  ")));
+        assertThrows(ServiceHandler.ConnectorException.class, () -> s.call(cfg, Map.of("text", "x".repeat(4001))));
+        assertThrows(ServiceHandler.ConnectorException.class, () -> s.call(Map.of("baseUrl", base() + "/v1", "format", "flac"), Map.of("text", "hi")));
+        assertThrows(ServiceHandler.ConnectorException.class, () -> s.call(Map.of("baseUrl", base() + "/v1", "voice", "a\"b"), Map.of("text", "hi")));
+        assertThrows(ServiceHandler.ConnectorException.class, () -> s.call(Map.of("baseUrl", base() + "/v1", "apiKey", "a b"), Map.of("text", "hi")));
+        assertTrue(seen.isEmpty(), seen.toString());
+    }
+
+    @Test
+    void speakRefusesAnAnswerThatIsNotAudio() throws Exception {
+        server.removeContext("/v1/audio/speech");
+        server.createContext("/v1/audio/speech", ex -> reply(ex, 200, "text/plain", "oops".getBytes(StandardCharsets.UTF_8)));
+        assertThrows(ServiceHandler.ConnectorException.class, () -> new Speak(local(), store).call(Map.of("baseUrl", base() + "/v1"), Map.of("text", "hi")));
     }
 }

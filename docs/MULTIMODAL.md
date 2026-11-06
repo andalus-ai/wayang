@@ -65,3 +65,10 @@ Verified: unit tests against local fake servers only. Not run against real Teleg
 Connector `slack`, operation `uploadFile` shares a stored image in a channel using Slack's external upload flow (`files.getUploadURLExternal`, the bytes to the returned URL, `files.completeUploadExternal`). The Slack app needs the `files:write` scope; `channel` must be a channel **id** (C…, G…, D…). The bot token goes only to `slack.com`, never to the upload host. Inputs: `mediaId`, optional `text` (shown with the image), `threadTs`, `title`; output `fileId`, `channel`. Template `assistant-slack` accepts `images: true` like the Telegram one: the `send_image` tool has the channel fixed in its configuration, so the model cannot post elsewhere.
 
 Verified against a local fake Slack only, not the real Slack API.
+
+## Spoken replies (text to speech)
+Connector `speak` (MEDIA feature, agentic profile): `{"type": "speak", "config": {"voice": "alloy", "apiKey": "${secret:OPENAI_API_KEY}"}}`, input `text` (at most 4000 characters).
+It calls an OpenAI-compatible `/audio/speech` endpoint (OpenAI or a local server through `baseUrl`), stores the audio in the media store and returns `mediaId`.
+`format` is `opus` (default, Ogg/Opus: Telegram shows it as a voice note), `mp3` or `wav`. Send it with `telegram` operation `sendVoice` (`mediaId`, fixed `chatId` in the
+configuration): Ogg goes out as a voice note, other audio as an audio file. Flow: `speak` node, then `telegram sendVoice` node. Template option for the assistant: not wired yet.
+Tested against a fake provider and a fake Telegram server only.

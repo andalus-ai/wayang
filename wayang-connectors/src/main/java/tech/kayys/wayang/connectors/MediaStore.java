@@ -113,7 +113,7 @@ public final class MediaStore {
 
     /** The stored bytes, or null when the id is malformed or unknown. */
     public byte[] read(String mediaId) throws IOException {
-        if (dir == null || mediaId == null || !mediaId.matches("[0-9a-f]{32}\\.[a-z]{3,4}") || !VALID_EXT.contains(mediaId.substring(33))) {
+        if (dir == null || mediaId == null || !mediaId.matches("[0-9a-f]{32}\\.[a-z0-9]{3,4}") || !VALID_EXT.contains(mediaId.substring(33))) {
             return null;
         }
         Path f = dir.resolve(mediaId);
