@@ -17,6 +17,7 @@ import tech.kayys.wayang.connectors.Connectors;
 import tech.kayys.wayang.embed.ReleaseBundle;
 import tech.kayys.wayang.embed.ReleaseSecrets;
 import tech.kayys.wayang.runtime.json.Json;
+import tech.kayys.wayang.runtime.Extensions;
 
 /**
  * Turns a published workspace bundle into the source of a release: a Maven project that depends only on what the workflows use
@@ -30,7 +31,7 @@ import tech.kayys.wayang.runtime.json.Json;
 public final class Publisher {
 
     /** The generated project: path to bytes, and what was found while analysing the bundle. */
-    public record Project(Map<String, byte[]> files, List<String> processes, List<String> connectors, boolean usesAgents, List<String> requiredSecrets,
+    public record Project(Map<String, byte[]> files, List<String> processes, List<String> components, List<String> connectors, boolean usesAgents, List<String> requiredSecrets,
             List<String> notes) {
     }
 
@@ -68,7 +69,9 @@ public final class Publisher {
                         + String.join("; ", bad));
             }
         }
-        Set<String> known = Connectors.defaults(new tech.kayys.wayang.connectors.UrlGuard(false, Set.of()), tech.kayys.wayang.runtime.Extensions.load(profile)).keySet();
+        Extensions extensions = Extensions.load(profile);
+        Set<String> known = Connectors.defaults(new tech.kayys.wayang.connectors.UrlGuard(false, Set.of()), extensions).keySet();
+        ComponentLockfile.Result componentLock = ComponentLockfile.create(bundle, profile, extensions);
         addAgentToolConnectors(bundle, used, known);
         used.remove(tech.kayys.wayang.embed.AgentActions.NAME); // built in: it only needs the other connectors and the secrets
         List<String> unknown = used.stream().filter(c -> !known.contains(c)).toList();
@@ -134,6 +137,7 @@ public final class Publisher {
         String pkgPath = o.packageName().replace('.', '/');
         f.put("pom.xml", (gamelan ? GamelanTemplates.pom(o, bundle, needsConnectors, multimodal) : pom(o, bundle, needsConnectors, multimodal)).getBytes(StandardCharsets.UTF_8));
         f.put("src/main/resources/wayang/bundle.json", bundleJson.getBytes(StandardCharsets.UTF_8));
+        f.put("src/main/resources/wayang/component-lock.json", componentLock.json().getBytes(StandardCharsets.UTF_8));
         f.put("src/main/java/" + pkgPath + "/Wiring.java", wiring(o, used, pollSources, providers).getBytes(StandardCharsets.UTF_8));
         if (gamelan) {
             f.put("src/main/java/" + pkgPath + "/ReleaseWiring.java", GamelanTemplates.wiringBean(o, agents).getBytes(StandardCharsets.UTF_8));
@@ -162,6 +166,8 @@ public final class Publisher {
             meta.put("quarkusVersion", o.quarkusVersion());
         }
         meta.put("processes", processes);
+        meta.put("components", componentLock.componentIds());
+        meta.put("componentLockSha256", componentLock.sha256());
         meta.put("connectors", new ArrayList<>(used));
         meta.put("triggers", bundle.triggers().stream().map(ReleaseBundle.Trigger::id).toList());
         f.put("src/main/resources/wayang/release.json", Json.write(meta).getBytes(StandardCharsets.UTF_8));
@@ -170,7 +176,7 @@ public final class Publisher {
         } else if (gamelan) {
             f.put("deploy/kubernetes.yaml", GamelanTemplates.kubernetes(o, secrets).getBytes(StandardCharsets.UTF_8));
         }
-        return new Project(f, List.copyOf(processes), List.copyOf(used), agents, secrets, List.copyOf(notes));
+        return new Project(f, List.copyOf(processes), componentLock.componentIds(), List.copyOf(used), agents, secrets, List.copyOf(notes));
     }
 
     /** A deterministic zip (sorted, fixed timestamps) of the project. */
