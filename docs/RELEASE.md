@@ -14,7 +14,7 @@ Wayang still does not grow a second workflow engine: a release embeds the same n
 
 `POST /api/v1/projects/{id}/release/plan` says what a release would contain; `POST /api/v1/projects/{id}/release` downloads it as a
 zip (a Maven project). Body (all optional): `target` (`SERVICE` default | `STANDALONE` | `GAMELAN`), `gamelanVersion`/`quarkusVersion` (GAMELAN only), `groupId`, `artifactId` (default from the
-project name), `version`, `package`, `port`. All are validated: they end up in a pom and in Java source. Needs the same permission as
+project name), `version`, `package`, `port`, `profile`. The plan also returns the exact component IDs selected by the profile. All options are validated. Needs the same permission as
 exporting the project. The Studio's Workspace screen has a *Release* card that shows the plan and the download command (it never
 puts your token in the text).
 
@@ -25,7 +25,7 @@ The input is the project's workspace bundle (see `docs/WORKSPACE.md`) built in *
 * **enabled triggers only** (switched-off ones are dropped, no design-time secret hashes), **no secret values** (only `${secret:NAME}` references), **only the settings the definitions refer to**
   (tenant-wide settings nothing uses are left out), nothing that ties it to this server (no project id).
 
-The output is deterministic: the same bundle and options give a byte-identical zip (sorted entries, fixed timestamps), so a release
+The publisher resolves each process element to a stable component ID and expands the exact dependency closure from the profile-filtered registry. The component lock is dependency-first, sorted and SHA-256 digested; the digest and component IDs are repeated in release metadata. This is a component contract lock, not yet a full Maven artifact/JAR closure.\n\nThe output is deterministic: the same bundle and options give a byte-identical zip (sorted entries, fixed timestamps), so a release
 can be compared and reproduced.
 
 ```
@@ -34,7 +34,7 @@ src/main/java/<pkg>/App.java         generated: builds the runtime, wires only t
 src/main/java/<pkg>/Processes.java   generated: process ids as constants, published versions, connectors used
 src/main/java/<pkg>/Agents.java      only when a workflow has agent tasks: an explicit stub to implement
 src/main/resources/wayang/bundle.json   the workflows; do not edit, release again instead
-src/main/resources/wayang/release.json  target, bundle hash, processes, connectors
+src/main/resources/wayang/component-lock.json  exact component IDs, versions, dependency closure and profile\nsrc/main/resources/wayang/release.json  target, bundle hash, processes, components, connectors and component-lock digest
 Dockerfile, .dockerignore, .gitignore, .env.example, README.md
 deploy/kubernetes.yaml               SERVICE only: Secret, Deployment (probes, non-root, read-only fs), Service
 ```
