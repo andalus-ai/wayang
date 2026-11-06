@@ -101,8 +101,7 @@ class PublishTest {
         Map<?, ?> lock = (Map<?, ?>) Json.read(text(p, "src/main/resources/wayang/component-lock.json"));
         assertEquals("wayang.component-lock", lock.get("format"));
         assertEquals(1, ((Number) lock.get("formatVersion")).intValue());
-        String artifactLockDigest = String.valueOf(lock.get("sha256"));
-        assertTrue(artifactLockDigest.matches("[0-9a-f]{64}"));
+        assertTrue(lock.get("sha256") instanceof String sha && sha.matches("[0-9a-f]{64}"));
         assertEquals(p.components(), ((List<?>) lock.get("components")).stream()
                 .map(x -> ((Map<?, ?>) x).get("id").toString()).toList());
         Map<?, ?> releaseMeta = (Map<?, ?>) Json.read(text(p, "src/main/resources/wayang/release.json"));
@@ -586,7 +585,8 @@ class PublishTest {
         Map<?, ?> lock = (Map<?, ?>) Json.read(text(p, "src/main/resources/wayang/artifact-lock.json"));
         assertEquals("wayang.artifact-lock", lock.get("format"));
         assertEquals(1, ((Number) lock.get("formatVersion")).intValue());
-        assertTrue(lock.get("sha256") instanceof String sha && sha.matches("[0-9a-f]{64}"));
+        String artifactLockDigest = String.valueOf(lock.get("sha256"));
+        assertTrue(artifactLockDigest.matches("[0-9a-f]{64}"));
         List<String> artifacts = ((List<?>) lock.get("artifacts")).stream()
                 .map(item -> ((Map<?, ?>) item).get("artifactId").toString()).toList();
         assertTrue(artifacts.containsAll(List.of("wayang-embed", "wayang-runtime", "wayang-business-process",
