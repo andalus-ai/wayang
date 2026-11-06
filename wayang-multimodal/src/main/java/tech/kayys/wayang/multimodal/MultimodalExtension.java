@@ -9,7 +9,7 @@ import tech.kayys.wayang.runtime.Profile;
 import tech.kayys.wayang.runtime.ServiceHandler;
 import tech.kayys.wayang.runtime.WayangExtension;
 
-/** Adds the {@code image-generate}, {@code comfyui} and {@code transcribe} connectors; loaded only when the profile enables the MEDIA feature. */
+/** Adds the {@code image-generate}, {@code comfyui}, {@code transcribe} and {@code speak} connectors; loaded only when the profile enables the MEDIA feature. */
 public final class MultimodalExtension implements WayangExtension {
 
     @Override
@@ -26,7 +26,8 @@ public final class MultimodalExtension implements WayangExtension {
     public Map<String, ServiceHandler.Connector> connectors() {
         UrlGuard guard = new UrlGuard("true".equalsIgnoreCase(System.getenv("WAYANG_CONNECTORS_ALLOW_PRIVATE")), hosts());
         MediaStore store = MediaStore.fromEnvironment();
-        return Map.of("image-generate", new ImageGenerate(guard, store), "comfyui", new ComfyUi(guard, store), "transcribe", new Transcribe(guard, store));
+        return Map.of("image-generate", new ImageGenerate(guard, store), "comfyui", new ComfyUi(guard, store), "transcribe", new Transcribe(guard, store),
+                "speak", new Speak(guard, store));
     }
 
     private static Set<String> hosts() {

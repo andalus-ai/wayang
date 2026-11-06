@@ -212,8 +212,16 @@ public final class Json {
             if (st == i) {
                 throw error("unexpected character '" + s.charAt(i) + "'");
             }
+            // Hostile numbers: a million digits takes seconds to parse, and 1e999999999 would need a gigabyte to print.
+            if (i - st > 64) {
+                throw error("number is too long");
+            }
             try {
-                return new BigDecimal(s.substring(st, i));
+                BigDecimal n = new BigDecimal(s.substring(st, i));
+                if (n.scale() > 400 || n.scale() < -400) {
+                    throw error("number is out of range");
+                }
+                return n;
             } catch (NumberFormatException e) {
                 throw error("bad number");
             }
