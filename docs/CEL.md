@@ -70,6 +70,25 @@ capability to true only after provider-specific tests demonstrate it. Ordinary
 qualification and test harnesses; production deployment wiring should use
 qualified resolution.
 
+
+## Project Nessie Java source inspection
+
+The upstream Java source review confirms that a strict custom environment is
+possible without inheriting the standard CEL library: `Env.newCustomEnv`
+starts with an empty declaration/macro set, `EnvOption.declarations`
+registers the approved compile-time surface, and `Env.compile` performs
+parse plus static checking. Runtime overloads are supplied separately through
+program options, so Wayang must test declaration/runtime parity.
+
+The public `Program.eval(Object vars)` contract inspected does not expose a
+per-evaluation cost budget or cancellation token. A custom interpreter
+decorator exists, but an extension point is not proof of hard pre-emption.
+Likewise, reusable in-memory AST/program objects do not establish a durable,
+cross-process artifact format. Therefore no Nessie provider is implemented or
+production-qualified in this increment. See
+[the engine qualification ADR](CEL-ENGINE-ADR.md) for the source commit,
+capability matrix, and required experiments.
+
 ## Module map
 
 | Area | Responsibility | Initial status |
