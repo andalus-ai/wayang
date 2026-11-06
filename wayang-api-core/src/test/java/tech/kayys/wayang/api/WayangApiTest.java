@@ -154,6 +154,23 @@ class WayangApiTest {
     }
 
     @Test
+    void validationResolvesComponentsAgainstTheSelectedRuntimeProfile() {
+        api.withProfile(tech.kayys.wayang.runtime.Profile.AUTOMATION);
+        Map<String, Object> agentProcess = Map.of(
+                "id", "assistant",
+                "elements", List.of(
+                        Map.of("id", "s", "type", "START_EVENT"),
+                        Map.of("id", "agent", "type", "AGENT_TASK", "config", Map.of("agent", "helper")),
+                        Map.of("id", "e", "type", "END_EVENT")),
+                "flows", List.of(Map.of("id", "f1", "source", "s", "target", "agent"),
+                        Map.of("id", "f2", "source", "agent", "target", "e")));
+        var report = api.validate(acme, DefinitionKind.PROCESS, agentProcess);
+        assertFalse(report.valid());
+        assertTrue(report.items().stream().anyMatch(i -> i.message().contains("component requirements")
+                && i.message().contains("wayang.agent.invoke")), report.items().toString());
+    }
+
+    @Test
     void idMismatchAndBadIdsAreRejected() {
         assertThrows(ApiException.class, () -> api.saveDraft(acme, DefinitionKind.DECISION, "other", decision(), null));
         assertThrows(ApiException.class, () -> api.saveDraft(acme, DefinitionKind.DECISION, "../x", Map.of(), null));
