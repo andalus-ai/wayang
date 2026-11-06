@@ -71,13 +71,13 @@ public final class Publisher {
         }
         Extensions extensions = Extensions.load(profile);
         Set<String> known = Connectors.defaults(new tech.kayys.wayang.connectors.UrlGuard(false, Set.of()), extensions).keySet();
-        ComponentLockfile.Result componentLock = ComponentLockfile.create(bundle, profile, extensions);
         addAgentToolConnectors(bundle, used, known);
         used.remove(tech.kayys.wayang.embed.AgentActions.NAME); // built in: it only needs the other connectors and the secrets
         List<String> unknown = used.stream().filter(c -> !known.contains(c)).toList();
         if (!unknown.isEmpty()) {
             throw new IllegalArgumentException("These connectors are not available in a release: " + unknown);
         }
+        ComponentLockfile.Result componentLock = ComponentLockfile.create(bundle, profile, extensions, used);
         Set<String> pollSources = new TreeSet<>();
         Set<String> providers = new TreeSet<>();
         for (ReleaseBundle.Trigger t : bundle.triggers()) {
