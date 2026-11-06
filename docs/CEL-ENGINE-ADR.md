@@ -76,11 +76,11 @@ Initial upstream review on 2026-11-06 identified [Project Nessie cel-java](https
 
 Primary evidence: [upstream README](https://github.com/projectnessie/cel-java), [upstream repository/license](https://github.com/projectnessie/cel-java).
 
-Important limitations from the same upstream documentation:
+Important limitations from the same upstream documentation and review:
 - `ScriptHost` enables the standard library by default; stricter environments require lower-level environment construction.
 - Arbitrary Java classes are documented as unsupported, but Wayang must still test its exact environment and function surface.
 - Native-image/package compatibility must be tested in the consuming application.
-- The reviewed README does not establish a Wayang-usable hard evaluation cost budget, hard result-size enforcement or cancellation contract. Those mandatory gates remain unverified.
+- CEL's non-Turing-complete design is useful but is not equivalent to a host-enforced hard instruction/cost budget. The reviewed Java README does not establish a Wayang-usable hard evaluation cost budget, hard result-size enforcement or cancellation contract. Those mandatory gates remain unverified.
 - A reusable in-memory `Script` is documented; a stable serialized artifact format and cross-process/version compatibility are not established by the reviewed README.
 
 ### Preliminary gate assessment
@@ -99,7 +99,7 @@ Important limitations from the same upstream documentation:
 | Apache-2.0 | Evidence found | Upstream repository identifies Apache-2.0 |
 | Quarkus native-image | Unverified | Consumer-side verification required |
 
-**Decision: do not select yet.** This is a promising JVM adapter candidate, but mandatory resource-governance evidence is missing. The next step is a time-boxed technical spike against lower-level APIs and adversarial tests. If hard limits and cancellation cannot be enforced, the candidate must remain non-production or be rejected.
+**Decision: do not select yet.** This is a promising JVM adapter candidate, but mandatory resource-governance evidence is missing. A separate qualification capability contract has now been added to the Wayang SPI: compiler/evaluator providers default to unqualified, and production resolution can fail closed unless required gates are declared. These declarations must be backed by tests, not treated as proof. The next step remains a time-boxed adapter spike and adversarial tests. If hard limits and cancellation cannot be enforced, the candidate must remain non-production or be rejected.
 
 ## Candidate scorecard
 
@@ -142,11 +142,7 @@ The provider qualification job must include:
   in operational telemetry.
 - Repeated evaluation determinism for the deterministic function profile.
 
-The shared runner added to `wayang-cel` currently covers evaluator result
-matching, provider pinning, artifact fingerprint and fixture scope checks.
-It is a foundation, not the complete qualification suite. Compiler conformance,
-resource enforcement and cancellation cases remain to be implemented with a
-real adapter.
+The shared runners cover evaluator result matching, provider pinning, artifact fingerprint and fixture scope checks, plus compiler outcome and artifact-provenance checks. The registry now exposes fail-closed qualified resolution based on explicit provider capability declarations. These are qualification controls, not a substitute for provider-specific proof. Resource enforcement and cancellation remain to be demonstrated by a real adapter.
 
 ## Consequences
 
@@ -161,9 +157,8 @@ real adapter.
 
 ## Follow-up
 
-1. Gather current upstream documentation, license and compatibility evidence
-   for candidate Java CEL engines.
-2. Complete the scorecard with links and reproducible tests.
-3. Select one candidate only after all mandatory gates pass.
-4. Implement a dedicated provider module and compiler/evaluator adapter.
-5. Run the shared suite plus engine-specific adversarial/resource tests in CI.
+1. Build an isolated spike against Project Nessie cel-java 0.8.0 using lower-level custom environment APIs.
+2. Prove enforceable evaluation budgets, cancellation, bounded results and deterministic function allowlisting; do not infer these from CEL's non-Turing-complete property.
+3. Verify artifact persistence/version compatibility and dependency/native-image behavior in the actual Wayang/Quarkus build.
+4. Only after the gates pass, implement a dedicated provider module with no vendor types in public Wayang APIs and declare only tested capabilities.
+5. Run the shared compiler/evaluator suites plus engine-specific adversarial/resource tests in CI.
