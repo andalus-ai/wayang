@@ -78,6 +78,7 @@ public final class Publisher {
             throw new IllegalArgumentException("These connectors are not available in a release: " + unknown);
         }
         ComponentLockfile.Result componentLock = ComponentLockfile.create(bundle, profile, extensions, used);
+        ReleaseArtifactLockfile.Result artifactLock = ReleaseArtifactLockfile.create(componentLock.componentIds(), o.wayangVersion(), o.target() == ReleaseOptions.Target.GAMELAN);
         Set<String> pollSources = new TreeSet<>();
         Set<String> providers = new TreeSet<>();
         for (ReleaseBundle.Trigger t : bundle.triggers()) {
@@ -138,6 +139,7 @@ public final class Publisher {
         f.put("pom.xml", (gamelan ? GamelanTemplates.pom(o, bundle, needsConnectors, multimodal) : pom(o, bundle, needsConnectors, multimodal)).getBytes(StandardCharsets.UTF_8));
         f.put("src/main/resources/wayang/bundle.json", bundleJson.getBytes(StandardCharsets.UTF_8));
         f.put("src/main/resources/wayang/component-lock.json", componentLock.json().getBytes(StandardCharsets.UTF_8));
+        f.put("src/main/resources/wayang/artifact-lock.json", artifactLock.json().getBytes(StandardCharsets.UTF_8));
         f.put("src/main/java/" + pkgPath + "/Wiring.java", wiring(o, used, pollSources, providers).getBytes(StandardCharsets.UTF_8));
         if (gamelan) {
             f.put("src/main/java/" + pkgPath + "/ReleaseWiring.java", GamelanTemplates.wiringBean(o, agents).getBytes(StandardCharsets.UTF_8));
@@ -154,7 +156,7 @@ public final class Publisher {
         f.put(".dockerignore", "target\n.git\n.env\n".getBytes(StandardCharsets.UTF_8));
         f.put(".gitignore", "target/\n.env\n".getBytes(StandardCharsets.UTF_8));
         f.put(".env.example", envExample(o, bundle, secrets).getBytes(StandardCharsets.UTF_8));
-        f.put("README.md", readme(o, bundle, processes, componentLock.componentIds(), used, agents, secrets, notes).getBytes(StandardCharsets.UTF_8));
+        f.put("README.md", readme(o, bundle, processes, componentLock.componentIds(), artifactLock.artifacts(), used, agents, secrets, notes).getBytes(StandardCharsets.UTF_8));
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("format", "wayang.release");
         meta.put("target", o.target().name());
@@ -168,6 +170,8 @@ public final class Publisher {
         meta.put("processes", processes);
         meta.put("components", componentLock.componentIds());
         meta.put("componentLockSha256", componentLock.sha256());
+        meta.put("artifacts", artifactLock.artifacts().stream().map(ReleaseArtifactCatalog.Artifact::artifactId).toList());
+        meta.put("artifactLockSha256", artifactLock.sha256());
         meta.put("connectors", new ArrayList<>(used));
         meta.put("triggers", bundle.triggers().stream().map(ReleaseBundle.Trigger::id).toList());
         f.put("src/main/resources/wayang/release.json", Json.write(meta).getBytes(StandardCharsets.UTF_8));
@@ -628,7 +632,7 @@ public final class Publisher {
         return sb.toString();
     }
 
-    private static String readme(ReleaseOptions o, ReleaseBundle b, List<String> processes, List<String> components, Set<String> connectors, boolean agents, List<String> secrets,
+    private static String readme(ReleaseOptions o, ReleaseBundle b, List<String> processes, List<String> components, List<ReleaseArtifactCatalog.Artifact> artifacts, Set<String> connectors, boolean agents, List<String> secrets,
             List<String> notes) {
         StringBuilder sb = new StringBuilder();
         sb.append("# ").append(safe(b.name())).append(" (Wayang release)\n\n");
