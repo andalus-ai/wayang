@@ -5,4 +5,9 @@ public interface CelCompilerProvider {
     String providerId();
     String providerVersion();
     CelCompileResult compile(CelCompileRequest request);
+
+    /** Capability claims must be backed by provider-specific qualification tests. */
+    default CelProviderCapabilities capabilities() {
+        return CelProviderCapabilities.unqualified();
+    }
 }

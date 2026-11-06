@@ -54,6 +54,22 @@ The testing package now also provides `CelCompilationConformanceRunner`:
 
 A passing compile case verifies the declared compile expectation and artifact provenance contract. It does not prove full CEL language conformance, semantic correctness, cost enforcement, cancellation or production readiness.
 
+## Provider qualification capabilities
+
+Compiler and evaluator SPIs expose a conservative `capabilities()` declaration.
+The default is fully unqualified. The registry adds explicit
+`requireQualifiedCompiler` and `requireQualifiedEvaluator` resolution paths
+that fail closed when mandatory gates are not declared:
+
+- Compiler: static type checking, function allowlisting, durable artifact persistence and exact-version recovery.
+- Evaluator: function allowlisting, hard evaluation-cost limit, bounded result size, cooperative cancellation, deterministic function profile and exact-version recovery.
+
+These declarations are not self-certifying evidence. A provider must set a
+capability to true only after provider-specific tests demonstrate it. Ordinary
+`requireCompiler` / `requireEvaluator` remain available for development,
+qualification and test harnesses; production deployment wiring should use
+qualified resolution.
+
 ## Module map
 
 | Area | Responsibility | Initial status |
