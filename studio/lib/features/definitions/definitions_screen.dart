@@ -11,8 +11,8 @@ import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
 import '../mapper/pipeline_builder.dart';
 
-/// A JSON editor for definition kinds that have no visual designer yet (agents, pipelines). It uses the same
-/// API as the designers: optimistic-concurrency draft save, server-side validation, publish.
+/// Definition editor for agents and pipelines. Pipelines expose a visual EIP graph
+/// projection alongside JSON editing; both use the same canonical document and API.
 class DefinitionsScreen extends ConsumerStatefulWidget {
   const DefinitionsScreen({super.key, required this.kind});
   final DefinitionKind kind;
@@ -187,7 +187,7 @@ class _DefinitionsScreenState extends ConsumerState<DefinitionsScreen> {
                                     SegmentedButton<bool>(
                                       showSelectedIcon: false,
                                       segments: const [
-                                        ButtonSegment(value: true, icon: Icon(Icons.view_list_rounded, size: 15), label: Text('Builder')),
+                                        ButtonSegment(value: true, icon: Icon(Icons.account_tree_outlined, size: 15), label: Text('Graph')),
                                         ButtonSegment(value: false, icon: Icon(Icons.code_rounded, size: 15), label: Text('JSON')),
                                       ],
                                       selected: {_visualBuilder},
