@@ -317,6 +317,7 @@ class ReleasePlan {
     required this.artifactId,
     required this.version,
     required this.processes,
+    required this.components,
     required this.connectors,
     required this.usesAgents,
     required this.requiredSecrets,
