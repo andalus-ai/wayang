@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
+import java.util.Set;
 
 import tech.kayys.wayang.bpmn.ElementType;
 import tech.kayys.wayang.embed.ReleaseBundle;
@@ -28,7 +29,7 @@ final class ComponentLockfile {
 
     private ComponentLockfile() {}
 
-    static Result create(ReleaseBundle bundle, Profile profile, Extensions extensions) {
+    static Result create(ReleaseBundle bundle, Profile profile, Extensions extensions, Set<String> connectorNames) {
         ComponentRegistry registry = ComponentRegistry.standard(profile, extensions);
         TreeSet<String> roots = new TreeSet<>();
         for (ReleaseBundle.Definition definition : bundle.definitions()) {
@@ -49,6 +50,19 @@ final class ComponentLockfile {
                 }
             }
             roots.addAll(ComponentRequirements.componentIds(types));
+        }
+        if (connectorNames != null && !connectorNames.isEmpty()) {
+            roots.add("wayang.service.connector");
+            for (String connector : new TreeSet<>(connectorNames)) {
+                List<ComponentDescriptor> matches = registry.all().stream()
+                        .filter(d -> d.kind() == ComponentDescriptor.Kind.CONNECTOR && d.id().endsWith("." + connector))
+                        .toList();
+                if (matches.size() > 1) {
+                    throw new IllegalArgumentException("Connector '" + connector + "' maps to multiple component contracts: "
+                            + matches.stream().map(ComponentDescriptor::id).toList());
+                }
+                if (!matches.isEmpty()) roots.add(matches.get(0).id());
+            }
         }
         if (roots.isEmpty()) {
             throw new IllegalArgumentException("The release has no process component requirements");
