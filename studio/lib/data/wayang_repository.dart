@@ -31,6 +31,10 @@ class WayangRepository {
   Future<Map<String, dynamic>> validateComponentConfig(String id, Map<String, dynamic> config) async =>
       asMap(await _api.sendJson('POST', '/api/v1/catalog/components/$id/validate', body: config));
 
+  /// Validates a component config; invalid input is returned by the API as HTTP 422.
+  Future<Map<String, dynamic>> validateComponentConfig(String id, Map<String, dynamic> config) async =>
+      asMap(await _api.sendJson('POST', '/api/v1/catalog/components/$id/validate', body: config));
+
   // ----------------------------------------------------------------- projects
 
   Future<List<Project>> listProjects() async =>
