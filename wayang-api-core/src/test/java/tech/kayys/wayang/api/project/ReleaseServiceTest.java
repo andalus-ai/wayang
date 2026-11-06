@@ -117,6 +117,7 @@ class ReleaseServiceTest {
         assertEquals("shop-orders-1.0.0.zip", r.filename());
         var plan = r.plan();
         assertEquals(List.of("orders"), plan.processes());
+        assertEquals(List.of("wayang.bpmn.control-flow", "wayang.dmn.decision", "wayang.service.connector"), plan.components());
         assertEquals(List.of("slack"), plan.connectors());
         assertEquals(List.of("SLACK", "trigger.hook1"), plan.requiredSecrets(), "the webhook's shared secret is supplied by the environment");
         assertEquals(List.of("CHANNEL"), plan.requiredConfig());
@@ -171,6 +172,7 @@ class ReleaseServiceTest {
         assertEquals("STANDALONE", plan.target());
         assertEquals("my-app", plan.artifactId());
         assertTrue(plan.files().contains("pom.xml") && !plan.files().contains("deploy/kubernetes.yaml"));
+        assertTrue(plan.files().contains("src/main/resources/wayang/component-lock.json"));
         assertThrows(ApiException.class, () -> releases.plan(acme, pid, Map.of("groupId", "Not Valid")));
         assertThrows(ApiException.class, () -> releases.plan(acme, pid, Map.of("target", "LAMBDA")));
         assertThrows(ApiException.class, () -> releases.plan(acme, pid, Map.of("package", "com.class")));

@@ -417,6 +417,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               items: [for (final t in ReleaseForm.targets) DropdownMenuItem(value: t, child: Text(switch (t) { 'SERVICE' => 'HTTP service', 'GAMELAN' => 'Durable service (Gamelan)', _ => 'Standalone program' }))],
               onChanged: (v) => setState(() => _release = _release.copyWith(target: v)),
             ),
+            DropdownButton<String>(
+              value: _release.profile,
+              items: [for (final p in ReleaseForm.profiles) DropdownMenuItem(value: p, child: Text('Profile: $p'))],
+              onChanged: (v) => setState(() => _release = _release.copyWith(profile: v)),
+            ),
             field('groupId', _release.groupId, (v) => _release = _release.copyWith(groupId: v)),
             field('artifactId (optional)', _release.artifactId, (v) => _release = _release.copyWith(artifactId: v)),
             field('version', _release.version, (v) => _release = _release.copyWith(version: v), width: 110),
@@ -434,6 +439,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           if (plan != null) ...[
             const SizedBox(height: 10),
             Text(plan.summary, style: const TextStyle(fontWeight: FontWeight.w600)),
+            lines('Resolved runtime components', plan.components),
             lines('Secrets to provide at run time (WAYANG_SECRET_<NAME>)', plan.requiredSecrets),
             lines('Settings (WAYANG_CONFIG_<NAME>, bundled value is the default)', plan.requiredConfig),
             lines('Know before you deploy', plan.notes),

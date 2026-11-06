@@ -86,6 +86,9 @@ class PublishTest {
         assertFalse(text(p, "src/main/java/com/acme/release/App.java").contains("Connectors."));
         assertFalse(p.files().containsKey("src/main/java/com/acme/release/Agents.java"));
         assertEquals(List.of("report"), p.processes());
+        assertEquals(List.of("wayang.bpmn.control-flow", "wayang.human.task"), p.components());
+        assertTrue(p.files().containsKey("src/main/resources/wayang/component-lock.json"));
+        assertTrue(text(p, "README.md").contains("Resolved components:"));
         assertTrue(p.files().containsKey("deploy/kubernetes.yaml"));
     }
 
@@ -94,6 +97,16 @@ class PublishTest {
         var p = Publisher.generate(bundle(true, false, "Fetcher"), OPTS);
         assertTrue(text(p, "pom.xml").contains("<artifactId>wayang-connectors</artifactId>"));
         assertEquals(List.of("http"), p.connectors());
+        assertEquals(List.of("wayang.bpmn.control-flow", "wayang.human.task", "wayang.service.connector"), p.components());
+        Map<?, ?> lock = (Map<?, ?>) Json.read(text(p, "src/main/resources/wayang/component-lock.json"));
+        assertEquals("wayang.component-lock", lock.get("format"));
+        assertEquals(1, lock.get("formatVersion"));
+        assertTrue(lock.get("sha256") instanceof String sha && sha.matches("[0-9a-f]{64}"));
+        assertEquals(p.components(), ((List<?>) lock.get("components")).stream()
+                .map(x -> ((Map<?, ?>) x).get("id").toString()).toList());
+        Map<?, ?> releaseMeta = (Map<?, ?>) Json.read(text(p, "src/main/resources/wayang/release.json"));
+        assertEquals(p.components(), releaseMeta.get("components"));
+        assertEquals(lock.get("sha256"), releaseMeta.get("componentLockSha256"));
         assertEquals(List.of("API_TOKEN"), p.requiredSecrets());
         assertTrue(text(p, "src/main/java/com/acme/release/Processes.java").contains("Set.of(\"http\")"));
         assertTrue(text(p, ".env.example").contains("WAYANG_SECRET_API_TOKEN="));
@@ -544,6 +557,8 @@ class PublishTest {
         for (ReleaseOptions o : List.of(OPTS, GAM)) {
             var p = Publisher.generate(Json.write(m), o);
             assertEquals(List.of("image-generate"), p.connectors());
+            assertTrue(p.components().contains("wayang.multimodal.image-generate"), p.components().toString());
+            assertTrue(p.components().contains("wayang.agent.invoke"), p.components().toString());
             assertTrue(text(p, "pom.xml").contains("wayang-multimodal"), o.target().toString());
         }
         var plain = Publisher.generate(bundle(true, false, "Plain"), OPTS);

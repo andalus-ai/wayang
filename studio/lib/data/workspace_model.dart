@@ -241,6 +241,7 @@ class ReleaseForm {
     this.version = '1.0.0',
     this.packageName = '',
     this.port = 8080,
+    this.profile = 'full',
   });
 
   final String target; // SERVICE | STANDALONE | GAMELAN
@@ -249,16 +250,19 @@ class ReleaseForm {
   final String version;
   final String packageName; // empty: derived
   final int port;
+  final String profile; // full | automation | integration | agentic
 
+  static const profiles = ['full', 'automation', 'integration', 'agentic'];
   static const targets = ['SERVICE', 'STANDALONE', 'GAMELAN'];
 
-  ReleaseForm copyWith({String? target, String? groupId, String? artifactId, String? version, String? packageName, int? port}) => ReleaseForm(
+  ReleaseForm copyWith({String? target, String? groupId, String? artifactId, String? version, String? packageName, int? port, String? profile}) => ReleaseForm(
         target: target ?? this.target,
         groupId: groupId ?? this.groupId,
         artifactId: artifactId ?? this.artifactId,
         version: version ?? this.version,
         packageName: packageName ?? this.packageName,
         port: port ?? this.port,
+        profile: profile ?? this.profile,
       );
 
   Map<String, dynamic> toJson() => {
@@ -266,6 +270,7 @@ class ReleaseForm {
         'groupId': groupId,
         'version': version,
         'port': port,
+        'profile': profile,
         if (artifactId.isNotEmpty) 'artifactId': artifactId,
         if (packageName.isNotEmpty) 'package': packageName,
       };
@@ -312,6 +317,7 @@ class ReleasePlan {
     required this.artifactId,
     required this.version,
     required this.processes,
+    required this.components,
     required this.connectors,
     required this.usesAgents,
     required this.requiredSecrets,
@@ -325,6 +331,7 @@ class ReleasePlan {
   final String artifactId;
   final String version;
   final List<String> processes;
+  final List<String> components;
   final List<String> connectors;
   final bool usesAgents;
   final List<String> requiredSecrets;
@@ -340,6 +347,7 @@ class ReleasePlan {
         artifactId: '${j['artifactId'] ?? ''}',
         version: '${j['version'] ?? ''}',
         processes: _strings(j['processes']),
+        components: _strings(j['components']),
         connectors: _strings(j['connectors']),
         usesAgents: j['usesAgents'] == true,
         requiredSecrets: _strings(j['requiredSecrets']),
@@ -351,7 +359,7 @@ class ReleasePlan {
 
   /// One line for the card.
   String get summary =>
-      '${processes.length} process(es), ${connectors.isEmpty ? 'no connectors' : 'connectors: ${connectors.join(', ')}'}, '
+      '${processes.length} process(es), ${components.length} component(s), ${connectors.isEmpty ? 'no connectors' : 'connectors: ${connectors.join(', ')}'}, '
       '${requiredSecrets.length} secret(s), ${requiredConfig.length} setting(s)';
 
   String get zipName => '$artifactId-$version.zip';

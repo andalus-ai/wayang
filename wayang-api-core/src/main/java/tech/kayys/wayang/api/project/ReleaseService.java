@@ -21,7 +21,7 @@ import tech.kayys.wayang.runtime.json.Json;
 public final class ReleaseService {
 
     /** What a release would contain, without building it. */
-    public record Plan(String bundleSha256, List<String> processes, List<String> connectors, boolean usesAgents, List<String> requiredSecrets,
+    public record Plan(String bundleSha256, List<String> processes, List<String> components, List<String> connectors, boolean usesAgents, List<String> requiredSecrets,
             List<String> requiredConfig, List<String> files, List<String> notes, String target, String artifactId, String version) {
     }
 
@@ -65,7 +65,7 @@ public final class ReleaseService {
         Map<String, Object> req = bundle.get("requires") instanceof Map<?, ?> r ? (Map<String, Object>) r : Map.of();
         List<String> cfg = req.get("config") instanceof List<?> l ? l.stream().map(String::valueOf).toList() : List.of();
         Object integrity = bundle.get("integrity") instanceof Map<?, ?> i ? i.get("sha256") : null;
-        Plan plan = new Plan(integrity == null ? "" : String.valueOf(integrity), gen.processes(), gen.connectors(), gen.usesAgents(),
+        Plan plan = new Plan(integrity == null ? "" : String.valueOf(integrity), gen.processes(), gen.components(), gen.connectors(), gen.usesAgents(),
                 gen.requiredSecrets(), cfg, gen.files().keySet().stream().sorted().toList(), gen.notes(), o.target().name(), o.artifactId(), o.version());
         return new Release(plan, Publisher.zip(gen), o.artifactId() + "-" + o.version() + ".zip");
     }
