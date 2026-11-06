@@ -154,7 +154,7 @@ public final class Publisher {
         f.put(".dockerignore", "target\n.git\n.env\n".getBytes(StandardCharsets.UTF_8));
         f.put(".gitignore", "target/\n.env\n".getBytes(StandardCharsets.UTF_8));
         f.put(".env.example", envExample(o, bundle, secrets).getBytes(StandardCharsets.UTF_8));
-        f.put("README.md", readme(o, bundle, processes, used, agents, secrets, notes).getBytes(StandardCharsets.UTF_8));
+        f.put("README.md", readme(o, bundle, processes, componentLock.componentIds(), used, agents, secrets, notes).getBytes(StandardCharsets.UTF_8));
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("format", "wayang.release");
         meta.put("target", o.target().name());
@@ -628,13 +628,14 @@ public final class Publisher {
         return sb.toString();
     }
 
-    private static String readme(ReleaseOptions o, ReleaseBundle b, List<String> processes, Set<String> connectors, boolean agents, List<String> secrets,
+    private static String readme(ReleaseOptions o, ReleaseBundle b, List<String> processes, List<String> components, Set<String> connectors, boolean agents, List<String> secrets,
             List<String> notes) {
         StringBuilder sb = new StringBuilder();
         sb.append("# ").append(safe(b.name())).append(" (Wayang release)\n\n");
         sb.append("Generated from a published Wayang bundle (sha256 `").append(b.sha256().isEmpty() ? "n/a" : b.sha256()).append("`). ");
         sb.append("Change the workflows in Wayang and release again; do not edit `src/main/resources/wayang/bundle.json`.\n\n");
         sb.append("Target: **").append(o.target()).append("**. Processes: ").append(String.join(", ", processes.stream().map(p -> "`" + p + "`").toList())).append(".\n\n");
+        sb.append("Resolved components: ").append(String.join(", ", components.stream().map(p -> "`" + p + "`").toList())).append(". See `src/main/resources/wayang/component-lock.json` for exact versions and dependency closure.\\n\\n");
         if (o.target() == ReleaseOptions.Target.GAMELAN) {
             sb.append("## Build and run\n\n```\nmvn -q package\njava -jar target/quarkus-app/quarkus-run.jar   # needs WAYANG_GAMELAN_ENDPOINT; see .env.example\n```\n\n");
             sb.append("Start runs with `POST /v1/processes/{id}/runs` (below). `GET /readyz` tells whether the workflows are deployed and the secrets present.\n\n");
