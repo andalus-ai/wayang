@@ -11,8 +11,8 @@ import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
 import '../mapper/pipeline_builder.dart';
 
-/// A JSON editor for definition kinds that have no visual designer yet (agents, pipelines). It uses the same
-/// API as the designers: optimistic-concurrency draft save, server-side validation, publish.
+/// Definition editor for agents and pipelines. Pipelines expose a visual EIP graph
+/// projection alongside JSON editing; both use the same canonical document and API.
 class DefinitionsScreen extends ConsumerStatefulWidget {
   const DefinitionsScreen({super.key, required this.kind});
   final DefinitionKind kind;
