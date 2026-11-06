@@ -22,6 +22,39 @@ A descriptor does not load a class, instantiate a handler, fetch an artifact, or
 untrusted code. The registry is therefore safe to use for catalog inspection and
 preflight validation, but it is not a plugin sandbox.
 
+## Built-in runtime catalog
+
+`BuiltInComponents` publishes metadata for the executor capabilities already
+implemented by the runtime:
+
+| Component ID | Executor type | Required profile feature | Kind |
+|---|---|---|---|
+| `wayang.bpmn.control-flow` | `wayang-bpmn` | Always enabled | Node |
+| `wayang.service.connector` | `wayang-service` | SERVICE | Connector |
+| `wayang.eip.pipeline` | `wayang-eip` | EIP | Node |
+| `wayang.dmn.decision` | `wayang-dmn` | DMN | Decision |
+| `wayang.agent.invoke` | `wayang-agent` | AGENT | Agent |
+| `wayang.human.task` | `wayang-human` | HUMAN | Human task |
+
+The catalog is assembled with:
+
+```java
+ComponentRegistry registry = ComponentRegistry.standard(profile, extensions);
+```
+
+or `ComponentRegistry.standard(profile)` when no extensions are installed.
+The registry filters components by the target profile and rejects duplicate
+component IDs, including attempts by extensions to override built-ins.
+
+The built-in component version currently tracks the root Wayang distribution
+version (`0.0.1`). It must be updated with the distribution release. It is not
+a substitute for artifact-coordinate or dependency-lock resolution.
+
+These descriptors describe existing handler boundaries; they do not imply that
+every BPMN element has full BPMN 2.0 semantics. Likewise, the service connector
+component describes the generic configured connector invocation seam, not a
+claim that every possible connector implementation ships in the core runtime.
+
 ## Component descriptor
 
 Each component has a stable namespaced ID, an exact version, a kind, an executor type,

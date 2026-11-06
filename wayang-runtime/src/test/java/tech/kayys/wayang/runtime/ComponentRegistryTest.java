@@ -100,6 +100,88 @@ class ComponentRegistryTest {
     }
 
     @Test
+    void standardCatalogContainsBuiltInRuntimeCapabilities() {
+        ComponentRegistry registry = ComponentRegistry.standard(Profile.FULL);
+
+        assertEquals(Set.of(
+                "wayang.bpmn.control-flow",
+                "wayang.service.connector",
+                "wayang.eip.pipeline",
+                "wayang.dmn.decision",
+                "wayang.agent.invoke",
+                "wayang.human.task"), registry.ids());
+        assertEquals(BuiltInComponents.VERSION,
+                registry.find("wayang.agent.invoke").version());
+        assertEquals("wayang-agent",
+                registry.find("wayang.agent.invoke").executorType());
+    }
+
+    @Test
+    void standardCatalogRespectsFeatureProfiles() {
+        ComponentRegistry automation = ComponentRegistry.standard(Profile.AUTOMATION);
+        assertTrue(automation.ids().contains("wayang.bpmn.control-flow"));
+        assertTrue(automation.ids().contains("wayang.service.connector"));
+        assertTrue(automation.ids().contains("wayang.dmn.decision"));
+        assertTrue(automation.ids().contains("wayang.human.task"));
+        assertFalse(automation.ids().contains("wayang.eip.pipeline"));
+        assertFalse(automation.ids().contains("wayang.agent.invoke"));
+
+        ComponentRegistry integration = ComponentRegistry.standard(Profile.INTEGRATION);
+        assertTrue(integration.ids().contains("wayang.eip.pipeline"));
+        assertTrue(integration.ids().contains("wayang.service.connector"));
+        assertFalse(integration.ids().contains("wayang.dmn.decision"));
+        assertFalse(integration.ids().contains("wayang.agent.invoke"));
+
+        ComponentRegistry agentic = ComponentRegistry.standard(Profile.AGENTIC);
+        assertTrue(agentic.ids().contains("wayang.agent.invoke"));
+        assertTrue(agentic.ids().contains("wayang.eip.pipeline"));
+        assertFalse(agentic.ids().contains("wayang.dmn.decision"));
+    }
+
+    @Test
+    void standardCatalogCombinesBuiltInsAndProfileEnabledExtensions() {
+        ComponentDescriptor custom = component("wayang.acme.customer-lookup", "1.2.0",
+                Set.of(Profile.Feature.SERVICE), List.of());
+        WayangExtension extension = new WayangExtension() {
+            @Override
+            public String id() {
+                return "acme";
+            }
+
+            @Override
+            public List<ComponentDescriptor> components() {
+                return List.of(custom);
+            }
+        };
+        ComponentRegistry registry = ComponentRegistry.standard(
+                Profile.AUTOMATION, Extensions.of(List.of(extension), Profile.AUTOMATION));
+
+        assertNotNull(registry.find("wayang.service.connector"));
+        assertEquals("1.2.0", registry.find("wayang.acme.customer-lookup").version());
+    }
+
+    @Test
+    void extensionCannotOverrideBuiltInComponentId() {
+        ComponentDescriptor override = component("wayang.agent.invoke", "9.9.9",
+                Set.of(Profile.Feature.AGENT), List.of());
+        WayangExtension extension = new WayangExtension() {
+            @Override
+            public String id() {
+                return "untrusted-override";
+            }
+
+            @Override
+            public List<ComponentDescriptor> components() {
+                return List.of(override);
+            }
+        };
+        Extensions extensions = Extensions.of(List.of(extension), Profile.FULL);
+
+        assertThrows(IllegalStateException.class,
+                () -> ComponentRegistry.standard(Profile.FULL, extensions));
+    }
+
+    @Test
     void descriptorDefensivelyCopiesCollections() {
         var features = new java.util.HashSet<Profile.Feature>();
         features.add(Profile.Feature.EIP);

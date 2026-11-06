@@ -52,6 +52,26 @@ public final class ComponentRegistry {
         return new ComponentRegistry(extensions.components(), profile);
     }
 
+    /**
+     * Build the deployment catalog from Wayang's built-in components and the
+     * metadata contributed by profile-enabled extensions.
+     *
+     * <p>Duplicate IDs fail closed so an extension cannot silently replace a
+     * built-in component descriptor.</p>
+     */
+    public static ComponentRegistry standard(Profile profile, Extensions extensions) {
+        Objects.requireNonNull(profile, "profile");
+        Objects.requireNonNull(extensions, "extensions");
+        List<ComponentDescriptor> descriptors = new ArrayList<>(BuiltInComponents.all());
+        descriptors.addAll(extensions.components());
+        return new ComponentRegistry(descriptors, profile);
+    }
+
+    /** Standard catalog without third-party extensions. */
+    public static ComponentRegistry standard(Profile profile) {
+        return standard(profile, Extensions.none());
+    }
+
     public Profile profile() {
         return profile;
     }
