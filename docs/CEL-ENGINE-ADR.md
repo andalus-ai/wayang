@@ -1,0 +1,131 @@
+# ADR: CEL engine selection and provider qualification
+
+- Status: Proposed; engine selection intentionally deferred
+- Date: 2026-11-06
+- Scope: `wayang-cel` provider implementation
+- Decision owner: Wayang maintainers
+
+## Context
+
+Wayang needs a Java CEL implementation behind `CelCompilerProvider` and
+`CelEvaluatorProvider`. The engine must not leak vendor parser, AST, type,
+activation, or runtime classes into Wayang's public contracts.
+
+The repository targets Java 21. Existing `wayang-expression` is a separate
+FEEL-flavoured language and remains the default for existing definitions.
+Selecting a dependency based only on API convenience would be premature:
+the engine must satisfy language semantics, deterministic compilation,
+bounded evaluation, function isolation, operational cancellation and the
+repository's distribution constraints.
+
+## Decision
+
+Do not select or add a concrete CEL engine in this increment.
+
+Instead, require every candidate to pass the qualification gates below and
+run the same Wayang-owned conformance suite. A candidate's advertised CEL
+support or passing its own upstream tests is not sufficient evidence of
+Wayang compatibility.
+
+## Mandatory qualification gates
+
+A candidate is ineligible if any mandatory gate fails.
+
+1. **Java/runtime fit**
+   - Supports Java 21 and the repository's supported Maven toolchain.
+   - Does not require an incompatible runtime, agent, or classloader model.
+   - Native-image support is documented as a separate compatibility dimension;
+     it is not assumed from ordinary JVM compatibility.
+2. **CEL semantics**
+   - Provides parse and static type-check phases, not evaluation-only parsing.
+   - Supports the required CEL language version and conformance behavior.
+   - Distinguishes compile diagnostics, missing variables, explicit null,
+     unknown values (if enabled), type errors and evaluation errors.
+   - Does not coerce non-Boolean condition results or errors into false.
+3. **Function isolation**
+   - Supports explicit function registration and overload control.
+   - Does not expose arbitrary Java reflection, class lookup or ambient host APIs.
+   - Allows Wayang to make deterministic/pure functions the default and keep
+     external effects in workflow nodes.
+4. **Resource governance**
+   - Provides enforceable evaluation cost/instruction limits or a defensible
+     equivalent.
+   - Supports bounded input/result sizes and interruption/cancellation.
+   - Does not rely only on an HTTP/request timeout around unbounded execution.
+5. **Determinism and artifact lifecycle**
+   - Compilation can produce a stable, serializable or reproducibly rebuildable
+     artifact with explicit engine/version metadata.
+   - Runtime can evaluate the exact provider version pinned by the artifact.
+   - Engine upgrades cannot silently reinterpret or recompile deployed artifacts.
+6. **Security and maintenance**
+   - License is compatible with Wayang's intended distribution.
+   - Dependency tree, vulnerability response, release cadence and maintenance
+     ownership are acceptable.
+   - No unsupported claims about sandboxing are accepted without tests.
+
+## Candidate scorecard
+
+The scorecard must be completed with primary evidence before selecting a
+provider. Use 0 (fails), 1 (partial/workaround), or 2 (verified), and attach
+links to upstream documentation, source, license and reproducible tests.
+
+| Dimension | Weight | Evidence required |
+|---|---:|---|
+| CEL language/conformance | Mandatory | Version, conformance suite results, edge-case behavior |
+| Static type checking | Mandatory | Type environment and diagnostic tests |
+| Function allowlisting | Mandatory | Custom functions, overloads, no ambient Java access |
+| Cost and resource limits | Mandatory | Runtime-enforced budget tests |
+| Java 21 compatibility | Mandatory | Build and runtime CI on Java 21 |
+| Artifact/version pinning | High | Serialization, version metadata, compatibility behavior |
+| Cancellation | High | Interrupt/cancel tests under expensive expressions |
+| Native-image compatibility | Medium | Separate native build and execution proof |
+| License/distribution | Mandatory | Exact license and transitive dependency review |
+| Maintenance/security | High | Release history, advisories, active maintenance |
+
+No score is assigned in this ADR because candidate-specific evidence has not
+been collected and verified in this repository change. This avoids presenting
+an unsupported ranking as an engineering decision.
+
+## Wayang-owned conformance requirements
+
+The provider qualification job must include:
+
+- Boolean true and false as distinct successful values.
+- Explicit null as a successful `NullValue`; missing variables as a distinct
+  failure status.
+- Type mismatch and unknown behavior according to the selected semantic
+  profile.
+- Nested list/map values, decimal numeric equality and byte-array equality.
+- Exact provider id/version matching for the artifact.
+- Exact fixture scope and artifact fingerprint matching.
+- Function allowlist and overload resolution.
+- Budget exhaustion, cancellation and result-size limits.
+- Stable diagnostic codes; no source snippets, credentials or fixture secrets
+  in operational telemetry.
+- Repeated evaluation determinism for the deterministic function profile.
+
+The shared runner added to `wayang-cel` currently covers evaluator result
+matching, provider pinning, artifact fingerprint and fixture scope checks.
+It is a foundation, not the complete qualification suite. Compiler conformance,
+resource enforcement and cancellation cases remain to be implemented with a
+real adapter.
+
+## Consequences
+
+- `wayang-cel` remains free of a mandatory third-party CEL runtime dependency.
+- Engine-specific dependencies belong in a dedicated provider module, not in
+  the engine-neutral API module.
+- Provider module metadata and deployment manifests must pin exact engine
+  versions.
+- A provider is not production-qualified until all mandatory gates and
+  Wayang-owned conformance tests pass.
+- Existing FEEL definitions and runtime behavior are unaffected.
+
+## Follow-up
+
+1. Gather current upstream documentation, license and compatibility evidence
+   for candidate Java CEL engines.
+2. Complete the scorecard with links and reproducible tests.
+3. Select one candidate only after all mandatory gates pass.
+4. Implement a dedicated provider module and compiler/evaluator adapter.
+5. Run the shared suite plus engine-specific adversarial/resource tests in CI.
