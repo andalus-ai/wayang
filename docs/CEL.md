@@ -54,6 +54,41 @@ The testing package now also provides `CelCompilationConformanceRunner`:
 
 A passing compile case verifies the declared compile expectation and artifact provenance contract. It does not prove full CEL language conformance, semantic correctness, cost enforcement, cancellation or production readiness.
 
+## Provider qualification capabilities
+
+Compiler and evaluator SPIs expose a conservative `capabilities()` declaration.
+The default is fully unqualified. The registry adds explicit
+`requireQualifiedCompiler` and `requireQualifiedEvaluator` resolution paths
+that fail closed when mandatory gates are not declared:
+
+- Compiler: static type checking, function allowlisting, durable artifact persistence and exact-version recovery.
+- Evaluator: function allowlisting, hard evaluation-cost limit, bounded result size, cooperative cancellation, deterministic function profile and exact-version recovery.
+
+These declarations are not self-certifying evidence. A provider must set a
+capability to true only after provider-specific tests demonstrate it. Ordinary
+`requireCompiler` / `requireEvaluator` remain available for development,
+qualification and test harnesses; production deployment wiring should use
+qualified resolution.
+
+
+## Project Nessie Java source inspection
+
+The upstream Java source review confirms that a strict custom environment is
+possible without inheriting the standard CEL library: `Env.newCustomEnv`
+starts with an empty declaration/macro set, `EnvOption.declarations`
+registers the approved compile-time surface, and `Env.compile` performs
+parse plus static checking. Runtime overloads are supplied separately through
+program options, so Wayang must test declaration/runtime parity.
+
+The public `Program.eval(Object vars)` contract inspected does not expose a
+per-evaluation cost budget or cancellation token. A custom interpreter
+decorator exists, but an extension point is not proof of hard pre-emption.
+Likewise, reusable in-memory AST/program objects do not establish a durable,
+cross-process artifact format. Therefore no Nessie provider is implemented or
+production-qualified in this increment. See
+[the engine qualification ADR](CEL-ENGINE-ADR.md) for the source commit,
+capability matrix, and required experiments.
+
 ## Module map
 
 | Area | Responsibility | Initial status |
