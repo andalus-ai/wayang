@@ -70,5 +70,9 @@ Verified against a local fake Slack only, not the real Slack API.
 Connector `speak` (MEDIA feature, agentic profile): `{"type": "speak", "config": {"voice": "alloy", "apiKey": "${secret:OPENAI_API_KEY}"}}`, input `text` (at most 4000 characters).
 It calls an OpenAI-compatible `/audio/speech` endpoint (OpenAI or a local server through `baseUrl`), stores the audio in the media store and returns `mediaId`.
 `format` is `opus` (default, Ogg/Opus: Telegram shows it as a voice note), `mp3` or `wav`. Send it with `telegram` operation `sendVoice` (`mediaId`, fixed `chatId` in the
-configuration): Ogg goes out as a voice note, other audio as an audio file. Flow: `speak` node, then `telegram sendVoice` node. Template option for the assistant: not wired yet.
+configuration): Ogg goes out as a voice note, other audio as an audio file. Flow: `speak` node, then `telegram sendVoice` node.
 Tested against a fake provider and a fake Telegram server only.
+
+Template option (Telegram assistant): `voice=true` and `speak=true`. A voice note is then also answered by voice: the agent gets `say` (connector `speak`, secret
+`OPENAI_API_KEY`) and `send_voice` (telegram `sendVoice`, the chat fixed in the configuration), and the prompt tells it when the message was a voice note.
+Typed messages get typed answers only. Whether the model follows that instruction is up to the model; nothing forces it.
