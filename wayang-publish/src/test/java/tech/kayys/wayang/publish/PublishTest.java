@@ -626,7 +626,10 @@ class PublishTest {
     void gamelanArtifactLockUsesWorkerAsItsDeploymentRoot() {
         var p = Publisher.generate(bundle(false, false, "Gamelan artifact"), GAM);
         Map<?, ?> lock = (Map<?, ?>) Json.read(text(p, "src/main/resources/wayang/artifact-lock.json"));
-        assertEquals(List.of("wayang-gamelan-worker"), lock.get("roots"));
+        List<String> roots = ((List<?>) lock.get("roots")).stream().map(Object::toString).toList();
+        assertTrue(roots.contains("wayang-gamelan-worker"), "the Gamelan worker is the deployment entry point");
+        assertTrue(roots.containsAll(List.of("wayang-business-process", "wayang-embed")),
+                "the workflow component roots remain explicit alongside the deployment entry point");
         List<String> artifacts = ((List<?>) lock.get("artifacts")).stream()
                 .map(item -> ((Map<?, ?>) item).get("artifactId").toString()).toList();
         assertTrue(artifacts.containsAll(List.of("wayang-gamelan-worker", "wayang-embed", "wayang-runtime")));
