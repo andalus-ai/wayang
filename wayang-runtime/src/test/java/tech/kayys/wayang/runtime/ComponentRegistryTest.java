@@ -79,6 +79,27 @@ class ComponentRegistryTest {
     }
 
     @Test
+    void extensionsContributeMetadataWithoutChangingExecutionHandlers() {
+        ComponentDescriptor descriptor = component("wayang.extension.sample", "1.0.0", Set.of(), List.of());
+        WayangExtension extension = new WayangExtension() {
+            @Override
+            public String id() {
+                return "sample";
+            }
+
+            @Override
+            public List<ComponentDescriptor> components() {
+                return List.of(descriptor);
+            }
+        };
+        Extensions extensions = Extensions.of(List.of(extension), Profile.FULL);
+        ComponentRegistry registry = ComponentRegistry.from(extensions, Profile.FULL);
+
+        assertEquals(List.of("wayang.extension.sample"), registry.resolve(List.of("wayang.extension.sample"))
+                .stream().map(ComponentDescriptor::id).toList());
+    }
+
+    @Test
     void descriptorDefensivelyCopiesCollections() {
         var features = new java.util.HashSet<Profile.Feature>();
         features.add(Profile.Feature.EIP);
