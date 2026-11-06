@@ -130,7 +130,7 @@ public final class TriggerService {
             random.nextBytes(raw);
             secret = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
             hash = sha256(secret);
-            cfg = Map.of();
+            cfg = cfg.get("rateLimit") == null ? Map.of() : Map.of("rateLimit", cfg.get("rateLimit")); // the only setting a secret webhook keeps
         }
         Trigger t = new Trigger(p.tenantId(), id, kind, processId, true, cfg, null, hash, null, null, 0, p.userId(), clock.instant());
         store.create(t);
@@ -177,6 +177,10 @@ public final class TriggerService {
         Map<String, Object> event = payload == null ? Map.of() : payload;
         if (Json.write(event).length() > MAX_PAYLOAD_CHARS) {
             throw ApiException.badRequest("Payload larger than " + MAX_PAYLOAD_CHARS + " characters");
+        }
+        // A caller with the right secret is still held to the trigger's rateLimit (one allowance for the whole trigger).
+        if (!withinRateLimit(t, Map.of())) {
+            throw new ApiException(ApiException.Code.TOO_MANY_REQUESTS, "Too many calls to this webhook: try again later");
         }
         return api.startRun(runner(t), t.processId(), null, Map.of("event", event, "trigger", t.id()));
     }

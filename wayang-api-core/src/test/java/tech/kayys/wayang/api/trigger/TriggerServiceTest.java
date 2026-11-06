@@ -115,6 +115,25 @@ class TriggerServiceTest {
     // ------------------------------------------------------------- webhook
 
     @Test
+    void aWebhookWithTheRightSecretIsStillHeldToItsRateLimit() {
+        publishProcess(admin);
+        var created = svc.create(admin, "limited", Trigger.Kind.WEBHOOK, "inbox", Map.of("rateLimit", Map.of("perHour", 2)));
+        String secret = created.webhookSecret();
+        svc.fire("acme", "limited", secret, Map.of("n", 1));
+        svc.fire("acme", "limited", secret, Map.of("n", 2));
+        ApiException over = assertThrows(ApiException.class, () -> svc.fire("acme", "limited", secret, Map.of("n", 3)));
+        assertEquals(ApiException.Code.TOO_MANY_REQUESTS, over.code());
+        assertEquals(2, runCount());
+        assertEquals(ApiException.Code.UNAUTHORIZED, assertThrows(ApiException.class, () -> svc.fire("acme", "limited", "wrong", Map.of())).code(),
+                "a wrong secret is still just refused");
+        var open = svc.create(admin, "unlimited", Trigger.Kind.WEBHOOK, "inbox", null);
+        for (int i = 0; i < 5; i++) {
+            svc.fire("acme", "unlimited", open.webhookSecret(), Map.of("n", i));
+        }
+        assertEquals(7, runCount(), "a trigger without a rateLimit behaves as before");
+    }
+
+    @Test
     void webhookStartsARunWithTheRightSecretOnly() {
         publishProcess(admin);
         var created = svc.create(admin, "hook1", Trigger.Kind.WEBHOOK, "inbox", null);
