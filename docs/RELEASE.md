@@ -25,7 +25,9 @@ The input is the project's workspace bundle (see `docs/WORKSPACE.md`) built in *
 * **enabled triggers only** (switched-off ones are dropped, no design-time secret hashes), **no secret values** (only `${secret:NAME}` references), **only the settings the definitions refer to**
   (tenant-wide settings nothing uses are left out), nothing that ties it to this server (no project id).
 
-The publisher resolves each process element to a stable component ID and expands the exact dependency closure from the profile-filtered registry. The component lock is dependency-first, sorted and SHA-256 digested; the digest and component IDs are repeated in release metadata. This is a component contract lock, not yet a full Maven artifact/JAR closure.\n\nThe output is deterministic: the same bundle and options give a byte-identical zip (sorted entries, fixed timestamps), so a release
+The publisher resolves each process element to a stable component ID and expands the exact dependency closure from the profile-filtered registry. The component lock is dependency-first, sorted and SHA-256 digested; the digest and component IDs are repeated in release metadata. This is a component contract lock, not yet a full Maven artifact/JAR closure.
+
+The output is deterministic: the same bundle and options give a byte-identical zip (sorted entries, fixed timestamps), so a release
 can be compared and reproduced.
 
 ```
