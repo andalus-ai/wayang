@@ -47,7 +47,7 @@ const platformSectionDashboard = PlatformSection(key: 'dashboard', label: 'Overv
 
 /// Sections shown *after* the plugin entries, in order.
 const platformSectionsAfterPlugins = [
-  PlatformSection(key: 'runs', label: 'Runs', icon: Icons.play_circle_outline_rounded),
+  PlatformSection(key: 'components', label: 'Component Catalog', icon: Icons.widgets_outlined),\n  PlatformSection(key: 'runs', label: 'Runs', icon: Icons.play_circle_outline_rounded),
   PlatformSection(key: 'tasks', label: 'Task inbox', icon: Icons.inbox_rounded),
   PlatformSection(key: 'projects', label: 'Projects', icon: Icons.folder_copy_rounded),
   PlatformSection(key: 'channels', label: 'Channels', icon: Icons.forum_rounded),
@@ -63,3 +63,9 @@ const platformSectionsAfterPlugins = [
 final selectedNavKeyProvider = StateProvider<String>((ref) => platformSectionDashboard.key);
 
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.dark);
+
+
+/// Reusable runtime component contracts exposed by the active Wayang profile.
+final componentCatalogProvider = FutureProvider<List<ComponentCatalogEntry>>((ref) {
+  return ref.watch(repositoryProvider).componentCatalog();
+});
