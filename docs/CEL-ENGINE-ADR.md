@@ -63,6 +63,44 @@ A candidate is ineligible if any mandatory gate fails.
      ownership are acceptable.
    - No unsupported claims about sandboxing are accepted without tests.
 
+## Candidate evidence: Project Nessie cel-java
+
+Initial upstream review on 2026-11-06 identified [Project Nessie cel-java](https://github.com/projectnessie/cel-java) as the strongest candidate found so far. The upstream README documents Maven coordinates through the `org.projectnessie.cel` BOM, currently showing version `0.8.0`, and recommends `cel-tools` with exactly one generated protobuf runtime. It describes:
+
+- Script construction with declarations and a build/check phase.
+- Custom function libraries and overload declarations.
+- A lower-level custom environment API for hosts requiring a narrower function/macro set.
+- A CEL-Spec conformance test suite.
+- Java 21+ to build and Java 17+ to run.
+- Apache-2.0 licensing.
+
+Primary evidence: [upstream README](https://github.com/projectnessie/cel-java), [upstream repository/license](https://github.com/projectnessie/cel-java).
+
+Important limitations from the same upstream documentation:
+- `ScriptHost` enables the standard library by default; stricter environments require lower-level environment construction.
+- Arbitrary Java classes are documented as unsupported, but Wayang must still test its exact environment and function surface.
+- Native-image/package compatibility must be tested in the consuming application.
+- The reviewed README does not establish a Wayang-usable hard evaluation cost budget, hard result-size enforcement or cancellation contract. Those mandatory gates remain unverified.
+- A reusable in-memory `Script` is documented; a stable serialized artifact format and cross-process/version compatibility are not established by the reviewed README.
+
+### Preliminary gate assessment
+
+| Gate | Preliminary status | Reason |
+|---|---|---|
+| Java 21 build / Java 17+ runtime | Evidence found | Upstream build/runtime requirements documented |
+| Parse and static checking | Evidence found | Script builder uses declarations and a build/check phase |
+| Custom function registration | Evidence found | Library and overload APIs documented |
+| Restricting standard functions | Partial | Lower-level custom environment exists; default ScriptHost includes standard library |
+| No arbitrary Java class access | Evidence found | Explicitly documented upstream |
+| CEL-Spec conformance | Evidence found, needs Wayang rerun | Upstream maintains conformance suite; Wayang must run its required profile |
+| Hard cost / instruction budget | Unverified | No adequate enforcement evidence in reviewed README |
+| Cancellation / interruption | Unverified | No supported cancellation contract established |
+| Stable serialized artifact compatibility | Unverified | Reusable Script documented; durable artifact format not established |
+| Apache-2.0 | Evidence found | Upstream repository identifies Apache-2.0 |
+| Quarkus native-image | Unverified | Consumer-side verification required |
+
+**Decision: do not select yet.** This is a promising JVM adapter candidate, but mandatory resource-governance evidence is missing. The next step is a time-boxed technical spike against lower-level APIs and adversarial tests. If hard limits and cancellation cannot be enforced, the candidate must remain non-production or be rejected.
+
 ## Candidate scorecard
 
 The scorecard must be completed with primary evidence before selecting a
