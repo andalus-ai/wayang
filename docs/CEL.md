@@ -28,6 +28,20 @@ The provider boundary now includes a deterministic registry:
 
 The registry validates provider wiring, not provider correctness. Each concrete engine adapter still needs a shared semantic conformance suite covering type checking, evaluation semantics, missing/null/unknown handling, diagnostics, resource limits, cancellation, and deterministic behavior. No concrete engine is selected by this increment.
 
+## Evaluator conformance runner (implementation increment 3)
+
+The testing package now provides an evaluator conformance runner and immutable report:
+
+- Each test case is bound to an exact compiled artifact fingerprint.
+- Each fixture must use the scope fingerprint pinned by that artifact.
+- The evaluator must match the exact provider id/version pinned by the artifact.
+- The runner constructs evaluation context from the fixture and artifact metadata; fixtures cannot override environment identity.
+- Expected successful values and expected failure statuses remain distinct. A successful Boolean false is not an error and is never conflated with a failed evaluation.
+- Provider exceptions and null result objects fail the conformance job instead of being converted into ordinary CEL evaluation failures.
+- Reports expose case IDs, pass/fail, stable status names and diagnostic codes.
+
+This is evaluator-side infrastructure only. It does not yet test compilation, parser/type-check conformance, actual cost enforcement, cancellation, custom function isolation or an actual third-party engine. See [CEL engine qualification ADR](CEL-ENGINE-ADR.md); engine selection is deliberately deferred until candidate evidence is collected.
+
 ## Module map
 
 | Area | Responsibility | Initial status |
