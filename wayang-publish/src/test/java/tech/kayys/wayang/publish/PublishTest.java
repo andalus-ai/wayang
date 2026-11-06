@@ -100,7 +100,7 @@ class PublishTest {
         assertEquals(List.of("wayang.bpmn.control-flow", "wayang.human.task", "wayang.service.connector"), p.components());
         Map<?, ?> lock = (Map<?, ?>) Json.read(text(p, "src/main/resources/wayang/component-lock.json"));
         assertEquals("wayang.component-lock", lock.get("format"));
-        assertEquals(1, lock.get("formatVersion"));
+        assertEquals(1, ((Number) lock.get("formatVersion")).intValue());
         assertTrue(lock.get("sha256") instanceof String sha && sha.matches("[0-9a-f]{64}"));
         assertEquals(p.components(), ((List<?>) lock.get("components")).stream()
                 .map(x -> ((Map<?, ?>) x).get("id").toString()).toList());
