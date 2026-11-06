@@ -67,6 +67,70 @@ void main() {
     expect(describeStep({'type': 'x'}), '');
   });
 
+  test('nestedStepGroups projects choice and switch lanes without changing JSON', () {
+    final choice = {
+      'type': 'choice',
+      'branches': [
+        {'when': 'body.vip', 'steps': [{'type': 'label', 'name': 'vip'}]},
+        {'when': 'body.region == "eu"', 'steps': [{'type': 'label', 'name': 'eu'}]},
+      ],
+      'otherwise': [{'type': 'label', 'name': 'standard'}],
+    };
+    final groups = nestedStepGroups(choice);
+    expect(groups.map((g) => g.label), ['Branch 1', 'Branch 2', 'Otherwise']);
+    expect(groups.first.condition, 'body.vip');
+    expect(groups.first.steps.single['name'], 'vip');
+    expect(choice['branches'], hasLength(2));
+
+    final switchStep = {
+      'type': 'switch',
+      'cases': {
+        'paid': [{'type': 'label', 'name': 'paid'}],
+        'trial': [{'type': 'label', 'name': 'trial'}],
+      },
+      'default': [{'type': 'label', 'name': 'other'}],
+    };
+    expect(nestedStepGroups(switchStep).map((g) => g.label),
+        ['Case · paid', 'Case · trial', 'Default']);
+  });
+
+  test('nestedStepGroups supports multicast, load balance, stages and wrappers', () {
+    expect(nestedStepGroups({
+      'type': 'multicast',
+      'branches': {
+        'left': [{'type': 'label', 'name': 'left'}],
+        'right': [{'type': 'label', 'name': 'right'}],
+      },
+    }).map((g) => g.label), ['Branch · left', 'Branch · right']);
+
+    expect(nestedStepGroups({
+      'type': 'loadBalance',
+      'targets': {'one': [{'type': 'label'}], 'two': [{'type': 'label'}]},
+    }).map((g) => g.label), ['Target · one', 'Target · two']);
+
+    expect(nestedStepGroups({
+      'type': 'circuitBreaker',
+      'steps': [{'type': 'call'}],
+      'fallback': [{'type': 'label'}],
+    }).map((g) => g.label), ['Main steps', 'Fallback']);
+  });
+
+  test('routeSummaries projects router destinations and conditions', () {
+    expect(routeSummaries({
+      'type': 'router',
+      'routes': [
+        {'when': 'body.vip', 'to': 'fast'},
+        {'to': 'standard'},
+      ],
+      'otherwise': 'slow',
+    }), [
+      'fast  when body.vip',
+      'standard',
+      'otherwise → slow',
+    ]);
+    expect(routeSummaries({'type': 'parse'}), isEmpty);
+  });
+
   test('parseStep explains what is wrong', () {
     expect(parseStep('{"type":"label","name":"a"}')['name'], 'a');
     expect(() => parseStep('{'), throwsA(isA<FormatException>()));
