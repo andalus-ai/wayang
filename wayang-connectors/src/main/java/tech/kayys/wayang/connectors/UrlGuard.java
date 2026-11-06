@@ -99,14 +99,67 @@ public final class UrlGuard {
             return true;
         }
         byte[] b = a.getAddress();
-        if (b.length == 16) { // IPv6: unique local fc00::/7; IPv4-mapped handled by the JDK (becomes Inet4Address)
-            return (b[0] & 0xFE) == 0xFC;
+        if (b.length == 16) {
+            return internalV6(b);
         }
-        int b0 = b[0] & 0xFF, b1 = b[1] & 0xFF;
-        return b0 == 0                                  // 0.0.0.0/8
-                || (b0 == 100 && b1 >= 64 && b1 <= 127) // 100.64.0.0/10 carrier-grade NAT
-                || (b0 == 192 && b1 == 0 && (b[2] & 0xFF) == 0) // 192.0.0.0/24
-                || (b0 == 198 && (b1 == 18 || b1 == 19)) // 198.18.0.0/15 benchmarking
-                || b0 >= 240;                           // reserved + broadcast
+        return internalV4(b[0] & 0xFF, b[1] & 0xFF, b[2] & 0xFF);
+    }
+
+    private static boolean internalV4(int b0, int b1, int b2) {
+        return b0 == 0                                       // 0.0.0.0/8
+                || b0 == 10 || b0 == 127                     // private, loopback (the JDK flags these too; kept for embedded addresses)
+                || (b0 == 172 && b1 >= 16 && b1 <= 31) || (b0 == 192 && b1 == 168)
+                || (b0 == 169 && b1 == 254)                  // link local, cloud metadata
+                || (b0 == 100 && b1 >= 64 && b1 <= 127)      // 100.64.0.0/10 carrier-grade NAT
+                || (b0 == 192 && b1 == 0 && b2 == 0)         // 192.0.0.0/24
+                || (b0 == 192 && b1 == 0 && b2 == 2)         // documentation
+                || (b0 == 192 && b1 == 88 && b2 == 99)       // 6to4 relay
+                || (b0 == 198 && (b1 == 18 || b1 == 19))     // 198.18.0.0/15 benchmarking
+                || (b0 == 198 && b1 == 51 && b2 == 100)      // documentation
+                || (b0 == 203 && b1 == 0 && b2 == 113)       // documentation
+                || b0 >= 224;                                // multicast, reserved, broadcast
+    }
+
+    /**
+     * IPv6: besides loopback / link local / unique local, every form that carries an IPv4 address inside it is judged by that
+     * address, because a network with NAT64 or a 6to4 relay would deliver such a packet to the embedded (possibly internal) target.
+     */
+    private static boolean internalV6(byte[] b) {
+        int w0 = ((b[0] & 0xFF) << 8) | (b[1] & 0xFF);
+        int w1 = ((b[2] & 0xFF) << 8) | (b[3] & 0xFF);
+        boolean zeros80 = true;
+        for (int i = 0; i < 10; i++) {
+            zeros80 &= b[i] == 0;
+        }
+        if ((b[0] & 0xFE) == 0xFC) {                      // fc00::/7 unique local (also AWS IPv6 metadata fd00:ec2::254)
+            return true;
+        }
+        if (w0 == 0x2001 && w1 == 0x0000) {               // Teredo tunnels
+            return true;
+        }
+        if (w0 == 0x2001 && w1 == 0x0DB8) {               // documentation
+            return true;
+        }
+        if (w0 == 0x0100 && w1 == 0 && b[4] == 0 && b[5] == 0 && b[6] == 0 && b[7] == 0) { // 100::/64 discard-only
+            return true;
+        }
+        boolean zeros96 = zeros80 && b[10] == 0 && b[11] == 0;
+        if (zeros96) {                                    // ::a.b.c.d IPv4-compatible (deprecated) and ::
+            return internalV4(b[12] & 0xFF, b[13] & 0xFF, b[14] & 0xFF);
+        }
+        if (zeros80 && (b[10] & 0xFF) == 0xFF && (b[11] & 0xFF) == 0xFF) { // ::ffff:a.b.c.d (the JDK normally converts it to IPv4)
+            return internalV4(b[12] & 0xFF, b[13] & 0xFF, b[14] & 0xFF);
+        }
+        if (w0 == 0x0064 && w1 == 0xFF9B) {               // NAT64
+            boolean wellKnown = true;                     // 64:ff9b::/96 embeds the IPv4 address in its last 32 bits
+            for (int i = 4; i < 12; i++) {
+                wellKnown &= b[i] == 0;
+            }
+            return !wellKnown || internalV4(b[12] & 0xFF, b[13] & 0xFF, b[14] & 0xFF); // 64:ff9b:1::/48 (local use) is never public
+        }
+        if (w0 == 0x2002) {                               // 6to4: 2002:AABB:CCDD::/48 embeds the IPv4 address
+            return internalV4(b[2] & 0xFF, b[3] & 0xFF, b[4] & 0xFF);
+        }
+        return false;
     }
 }
