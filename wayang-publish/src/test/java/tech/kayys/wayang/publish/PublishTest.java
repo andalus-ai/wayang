@@ -578,4 +578,57 @@ class PublishTest {
         assertEquals(List.of("transcribe"), p.connectors());
         assertTrue(text(p, "pom.xml").contains("wayang-multimodal"));
     }
+
+    @Test
+    void releaseContainsDeterministicInternalArtifactLockAndReportsCurrentRuntimeClosure() {
+        var p = Publisher.generate(bundle(false, false, "Artifact lock"), OPTS);
+        Map<?, ?> lock = (Map<?, ?>) Json.read(text(p, "src/main/resources/wayang/artifact-lock.json"));
+        assertEquals("wayang.artifact-lock", lock.get("format"));
+        assertEquals(1, ((Number) lock.get("formatVersion")).intValue());
+        assertTrue(lock.get("sha256") instanceof String sha && sha.matches("[0-9a-f]{64}"));
+        List<String> artifacts = ((List<?>) lock.get("artifacts")).stream()
+                .map(item -> ((Map<?, ?>) item).get("artifactId").toString()).toList();
+        assertTrue(artifacts.containsAll(List.of("wayang-embed", "wayang-runtime", "wayang-business-process",
+                "wayang-dmn", "wayang-integration", "wayang-agent", "wayang-expression")));
+        assertFalse(artifacts.contains("wayang-connectors"));
+        assertTrue(text(p, "README.md").contains("artifact-lock.json"));
+        Map<?, ?> release = (Map<?, ?>) Json.read(text(p, "src/main/resources/wayang/release.json"));
+        assertEquals(artifacts, release.get("artifacts"));
+        assertEquals(sha, release.get("artifactLockSha256"));
+
+        var again = Publisher.generate(bundle(false, false, "Artifact lock"), OPTS);
+        assertEquals(text(p, "src/main/resources/wayang/artifact-lock.json"),
+                text(again, "src/main/resources/wayang/artifact-lock.json"));
+    }
+
+    @Test
+    void connectorAndMultimodalComponentsExpandToTheirInternalArtifactDependencies() {
+        var connector = Publisher.generate(bundle(true, false, "Connector artifact"), OPTS);
+        Map<?, ?> connectorLock = (Map<?, ?>) Json.read(text(connector, "src/main/resources/wayang/artifact-lock.json"));
+        List<String> connectorArtifacts = ((List<?>) connectorLock.get("artifacts")).stream()
+                .map(item -> ((Map<?, ?>) item).get("artifactId").toString()).toList();
+        assertTrue(connectorArtifacts.contains("wayang-connectors"));
+
+        Map<String, Object> m = (Map<String, Object>) Json.read(bundle(false, true, "Multimodal artifact"));
+        ((List<Object>) m.get("definitions")).add(Map.of("kind", "AGENT", "id", "painter", "publishedVersion", 1,
+                "document", Map.of("id", "painter", "model", "ollama/x",
+                        "tools", List.of(Map.of("name", "draw", "type", "image-generate", "config", Map.of("model", "m"))))));
+        var multimodal = Publisher.generate(Json.write(m), OPTS);
+        Map<?, ?> multimodalLock = (Map<?, ?>) Json.read(text(multimodal, "src/main/resources/wayang/artifact-lock.json"));
+        List<String> multimodalArtifacts = ((List<?>) multimodalLock.get("artifacts")).stream()
+                .map(item -> ((Map<?, ?>) item).get("artifactId").toString()).toList();
+        assertTrue(multimodalArtifacts.contains("wayang-multimodal"));
+        assertTrue(multimodalArtifacts.contains("wayang-connectors"));
+    }
+
+    @Test
+    void gamelanArtifactLockUsesWorkerAsItsDeploymentRoot() {
+        var p = Publisher.generate(bundle(false, false, "Gamelan artifact"), GAM);
+        Map<?, ?> lock = (Map<?, ?>) Json.read(text(p, "src/main/resources/wayang/artifact-lock.json"));
+        assertEquals(List.of("wayang-gamelan-worker"), lock.get("roots"));
+        List<String> artifacts = ((List<?>) lock.get("artifacts")).stream()
+                .map(item -> ((Map<?, ?>) item).get("artifactId").toString()).toList();
+        assertTrue(artifacts.containsAll(List.of("wayang-gamelan-worker", "wayang-embed", "wayang-runtime")));
+    }
+
 }
