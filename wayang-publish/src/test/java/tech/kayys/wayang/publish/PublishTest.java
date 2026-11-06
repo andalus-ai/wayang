@@ -557,6 +557,8 @@ class PublishTest {
         for (ReleaseOptions o : List.of(OPTS, GAM)) {
             var p = Publisher.generate(Json.write(m), o);
             assertEquals(List.of("image-generate"), p.connectors());
+            assertTrue(p.components().contains("wayang.multimodal.image-generate"), p.components().toString());
+            assertTrue(p.components().contains("wayang.agent.invoke"), p.components().toString());
             assertTrue(text(p, "pom.xml").contains("wayang-multimodal"), o.target().toString());
         }
         var plain = Publisher.generate(bundle(true, false, "Plain"), OPTS);
