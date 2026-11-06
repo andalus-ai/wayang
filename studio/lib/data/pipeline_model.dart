@@ -76,6 +76,109 @@ String encodeSteps(List<Map<String, dynamic>> steps, {String? previous}) {
   return const JsonEncoder.withIndent('  ').convert(doc);
 }
 
+/// A named nested execution lane already represented inside an EIP step's JSON.
+class NestedStepGroup {
+  const NestedStepGroup({
+    required this.label,
+    required this.steps,
+    this.condition,
+  });
+
+  final String label;
+  final List<Map<String, dynamic>> steps;
+  final String? condition;
+}
+
+List<Map<String, dynamic>> _stepObjects(Object? value) {
+  if (value is! List) return const [];
+  return [
+    for (final item in value)
+      if (item is Map) Map<String, dynamic>.from(item),
+  ];
+}
+
+/// Projects known nested EIP structures into display-only lanes.
+///
+/// Supports the actual catalog shapes: choice.branches/otherwise,
+/// switch.cases/default, multicast.branches, loadBalance.targets,
+/// routingSlip.stages, and steps/fallback wrappers (guard, retry, loop,
+/// circuitBreaker). It does not mutate or normalize the source JSON.
+List<NestedStepGroup> nestedStepGroups(Map<String, dynamic> step) {
+  final groups = <NestedStepGroup>[];
+
+  void addList(String label, Object? value, {String? condition}) {
+    final children = _stepObjects(value);
+    if (children.isNotEmpty) {
+      groups.add(NestedStepGroup(
+        label: label,
+        steps: children,
+        condition: condition,
+      ));
+    }
+  }
+
+  void addMap(String label, Object? value) {
+    if (value is! Map) return;
+    for (final entry in value.entries) {
+      addList('$label · ${entry.key}', entry.value);
+    }
+  }
+
+  final branches = step['branches'];
+  if (branches is List) {
+    var index = 0;
+    for (final branch in branches) {
+      index++;
+      if (branch is Map) {
+        addList(
+          'Branch $index',
+          branch['steps'],
+          condition: branch['when']?.toString(),
+        );
+      }
+    }
+  } else if (branches is Map) {
+    addMap('Branch', branches);
+  }
+
+  final cases = step['cases'];
+  if (cases is Map) addMap('Case', cases);
+
+  final targets = step['targets'];
+  if (targets is Map) addMap('Target', targets);
+
+  final stages = step['stages'];
+  if (stages is Map) addMap('Stage', stages);
+
+  // These keys represent independent nested sequences in the catalog.
+  addList('Otherwise', step['otherwise']);
+  addList('Default', step['default']);
+  addList('Main steps', step['steps']);
+  addList('Fallback', step['fallback']);
+
+  return groups;
+}
+
+/// Human-readable route metadata for router/recipient-list style steps.
+List<String> routeSummaries(Map<String, dynamic> step) {
+  final routes = step['routes'];
+  if (routes is! List) return const [];
+  final summaries = <String>[];
+  for (final route in routes) {
+    if (route is! Map) continue;
+    final target = route['to']?.toString() ?? 'unnamed target';
+    final condition = route['when']?.toString();
+    summaries.add(condition == null || condition.isEmpty
+        ? target
+        : '$target  when $condition');
+  }
+  final otherwise = step['otherwise'];
+  if (otherwise is String && otherwise.isNotEmpty) {
+    summaries.add('otherwise → $otherwise');
+  }
+  return summaries;
+}
+
 /// A copy of [list] with the item at [index] moved by [delta] places; unchanged when that would leave the list.
 List<T> moved<T>(List<T> list, int index, int delta) {
   final to = index + delta;

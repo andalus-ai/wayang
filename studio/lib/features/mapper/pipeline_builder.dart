@@ -154,11 +154,14 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
     );
   }
 
-  Widget _node(int index, Map<String, dynamic> step, StepKind? kind) {
+  Widget _node(int index, Map<String, dynamic> step, Map<String, StepKind> byType) {
     final colors = Theme.of(context).colorScheme;
+    final kind = byType[step['type']];
     final selected = _selectedIndex == index;
     final summary = describeStep(step);
-    return SizedBox(width: 224, child: Material(
+    final nestedGroups = nestedStepGroups(step);
+    final routeInfo = routeSummaries(step);
+    return SizedBox(width: nestedGroups.isEmpty && routeInfo.isEmpty ? 224 : 300, child: Material(
       color: selected ? colors.secondaryContainer : colors.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
@@ -189,6 +192,87 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
             Text(summary.isEmpty ? 'No summary properties' : summary,
               maxLines: 2, overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant)),
+            if (nestedGroups.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerHighest.withOpacity(0.38),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Icon(Icons.account_tree_outlined, size: 13,
+                          color: colors.primary),
+                      const SizedBox(width: 5),
+                      Text('NESTED EXECUTION',
+                        style: TextStyle(fontSize: 9, letterSpacing: 0.8,
+                          fontWeight: FontWeight.w700,
+                          color: colors.onSurfaceVariant)),
+                    ]),
+                    const SizedBox(height: 7),
+                    for (final group in nestedGroups) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4, bottom: 3),
+                        child: Text(group.label,
+                          style: const TextStyle(fontSize: 11,
+                            fontWeight: FontWeight.w700)),
+                      ),
+                      if (group.condition != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text('when ${group.condition}',
+                            maxLines: 2, overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 10,
+                              color: colors.onSurfaceVariant)),
+                        ),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: [
+                          for (var childIndex = 0;
+                              childIndex < group.steps.length;
+                              childIndex++)
+                            InputChip(
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              label: Text(
+                                byType[group.steps[childIndex]['type']]?.label ??
+                                  (group.steps[childIndex]['type']?.toString() ?? 'Custom'),
+                                style: const TextStyle(fontSize: 10)),
+                              avatar: Icon(
+                                stepIcons[byType[group.steps[childIndex]['type']]?.icon] ??
+                                  Icons.extension,
+                                size: 13),
+                              onPressed: () => setState(() => _selectedIndex = index),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+            if (routeInfo.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                children: [
+                  for (final route in routeInfo)
+                    Chip(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      avatar: const Icon(Icons.alt_route, size: 13),
+                      label: Text(route,
+                        style: const TextStyle(fontSize: 10)),
+                    ),
+                ],
+              ),
+            ],
             const SizedBox(height: 10),
             Row(children: [
               Icon(Icons.circle, size: 7, color: colors.tertiary),
@@ -313,7 +397,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
                 final vertical = constraints.maxWidth < 620;
                 final nodes = <Widget>[];
                 for (var i = 0; i < steps.length; i++) {
-                  nodes.add(_node(i, steps[i], byType[steps[i]['type']]));
+                  nodes.add(_node(i, steps[i], byType));
                   if (i < steps.length - 1) nodes.add(_connector(vertical));
                 }
                 if (vertical) return ListView(
