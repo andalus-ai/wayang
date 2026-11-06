@@ -70,3 +70,16 @@ final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.dark);
 final componentCatalogProvider = FutureProvider<List<ComponentCatalogEntry>>((ref) {
   return ref.watch(repositoryProvider).componentCatalog();
 });
+
+
+/// Recent executions and pending human/timer/message work for the Compose overview.
+final runsProvider = FutureProvider.autoDispose<List<RunView>>((ref) {
+  return ref.watch(repositoryProvider).listRuns(limit: 50);
+});
+
+final tasksProvider = FutureProvider.autoDispose<List<TaskView>>((ref) {
+  return ref.watch(repositoryProvider).listTasks(limit: 100);
+});
+
+/// Run selected from dashboard activity or the Runs explorer.
+final selectedRunIdProvider = StateProvider<String?>((ref) => null);

@@ -7,6 +7,14 @@ import '../../data/api_client.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
 
+Color runStatusColor(RunStatus status) => switch (status) {
+      RunStatus.running => AppColors.primaryBright,
+      RunStatus.waiting => AppColors.warning,
+      RunStatus.completed => AppColors.success,
+      RunStatus.failed => AppColors.danger,
+      RunStatus.cancelled => AppColors.textMutedDark,
+    };
+
 /// Compose-mode overview. Every metric and activity item comes from the API;
 /// refresh revalidates the same providers used by the rest of Studio.
 class DashboardScreen extends ConsumerWidget {
