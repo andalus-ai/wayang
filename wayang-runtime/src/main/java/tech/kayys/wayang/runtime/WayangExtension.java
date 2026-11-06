@@ -35,4 +35,13 @@ public interface WayangExtension {
     default List<DomainHandler> handlers() {
         return List.of();
     }
+
+    /**
+     * Metadata catalog contributed by this extension. Descriptors do not replace
+     * executable handlers; they describe selectable components for authoring and
+     * release-time dependency resolution.
+     */
+    default List<ComponentDescriptor> components() {
+        return List.of();
+    }
 }
