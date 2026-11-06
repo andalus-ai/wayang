@@ -68,7 +68,7 @@ public final class TemplateService {
                         new Param("calendarConnection", "The OAuth connection id for Google Calendar (see docs/EMAIL.md), used when calendar is true", false, "google"),
                         new Param("emailRecipients", "Comma-separated addresses the assistant may email (optional, at most 10); an email is sent only after you answer yes in the chat. Setting it also lets the assistant search and read your mailbox. Needs the gmail.send and gmail.readonly scopes on the connection", false, ""),
                         new Param("emailConnection", "The OAuth connection id for Gmail, used when emailRecipients is set", false, "google"),
-                        new Param("images", "true lets the assistant draw pictures and send them to this chat (Telegram only; OpenAI-compatible images API; needs the secret IMAGE_API_KEY and the wayang-multimodal module, media profile feature)", false, "false"),
+                        new Param("images", "true lets the assistant draw pictures and send them to this chat (OpenAI-compatible images API; needs the secret IMAGE_API_KEY and the wayang-multimodal module, media profile feature)", false, "false"),
                         new Param("imageModel", "The image model used when images is true", false, "gpt-image-1"),
                         new Param("notes", "true gives the assistant a private notebook (save, list, search; delete only after you approve). Notes are kept under WAYANG_NOTES_DIR or WAYANG_STATE_DIR/notes", false, "false"),
                         new Param("webSearch", "true lets the assistant search the web (Brave Search API, needs the secret BRAVE_API_KEY); results are treated as untrusted data", false, "false"),
@@ -88,7 +88,7 @@ public final class TemplateService {
                         new Param("calendarConnection", "The OAuth connection id for Google Calendar (see docs/EMAIL.md), used when calendar is true", false, "google"),
                         new Param("emailRecipients", "Comma-separated addresses the assistant may email (optional, at most 10); an email is sent only after you answer yes in the chat. Setting it also lets the assistant search and read your mailbox. Needs the gmail.send and gmail.readonly scopes on the connection", false, ""),
                         new Param("emailConnection", "The OAuth connection id for Gmail, used when emailRecipients is set", false, "google"),
-                        new Param("images", "true lets the assistant draw pictures and send them to this chat (Telegram only; OpenAI-compatible images API; needs the secret IMAGE_API_KEY and the wayang-multimodal module, media profile feature)", false, "false"),
+                        new Param("images", "true lets the assistant draw pictures and send them to this chat (OpenAI-compatible images API; needs the secret IMAGE_API_KEY and the wayang-multimodal module, media profile feature; the Slack app needs the files:write scope)", false, "false"),
                         new Param("imageModel", "The image model used when images is true", false, "gpt-image-1"),
                         new Param("notes", "true gives the assistant a private notebook (save, list, search; delete only after you approve). Notes are kept under WAYANG_NOTES_DIR or WAYANG_STATE_DIR/notes", false, "false"),
                         new Param("webSearch", "true lets the assistant search the web (Brave Search API, needs the secret BRAVE_API_KEY); results are treated as untrusted data", false, "false"),
@@ -206,9 +206,6 @@ public final class TemplateService {
                 throw ApiException.badRequest("images must be true or false");
             }
             if (iv.equalsIgnoreCase("true")) {
-                if (slack) {
-                    throw ApiException.badRequest("images are available on the Telegram assistant only");
-                }
                 String im = text(in, "imageModel", "gpt-image-1");
                 if (!im.matches("[A-Za-z0-9._:/-]{1,100}")) {
                     throw ApiException.badRequest("imageModel is not a valid model name");
@@ -250,7 +247,7 @@ public final class TemplateService {
             }
             email = new Email(conn, List.copyOf(addrs));
         }
-        Map<String, Object> bundle = slack ? assistantSlack(name, chat, model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes)
+        Map<String, Object> bundle = slack ? assistantSlack(name, chat, model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes, images)
                 : assistantTelegram(name, Long.parseLong(chat), model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes, images, voice);
         Map<String, Object> o = new LinkedHashMap<>();
         o.put("dryRun", dryRun);
@@ -445,13 +442,18 @@ public final class TemplateService {
 
     /** @param notes adds a private notebook (the notes connector): add, list and search freely, delete only after approval */
     static Map<String, Object> assistantSlack(String projectName, String channelId, String model, String persona, String lookupUrl, String lookupDesc, String lookupSecret, int memoryTurns, String calendar, boolean webSearch, Email email, boolean notes) {
+        return assistantSlack(projectName, channelId, model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes, null);
+    }
+
+    /** @param images adds image generation and sharing in the channel (secret IMAGE_API_KEY; the Slack app needs files:write), or null */
+    static Map<String, Object> assistantSlack(String projectName, String channelId, String model, String persona, String lookupUrl, String lookupDesc, String lookupSecret, int memoryTurns, String calendar, boolean webSearch, Email email, boolean notes, Images images) {
         Map<String, Object> trigger = new LinkedHashMap<>();
         trigger.put("id", "assistant-inbox");
         trigger.put("kind", "WEBHOOK");
         trigger.put("processId", "personal-assistant");
         trigger.put("enabled", false);
         trigger.put("config", Map.of("auth", "slack", "signingSecret", "${secret:SLACK_SIGNING_SECRET}", "allowedChannels", List.of(channelId), "approvals", true, "rateLimit", Map.of("perHour", 60)));
-        return bundle(projectName, "Slack assistant with an approval policy (from a template)", model, persona, lookupUrl, lookupDesc, lookupSecret, "{{ event.channel }}", memoryTurns, calendar, webSearch, email, notes, null, process(true), trigger);
+        return bundle(projectName, "Slack assistant with an approval policy (from a template)", model, persona, lookupUrl, lookupDesc, lookupSecret, "{{ event.channel }}", memoryTurns, calendar, webSearch, email, notes, images == null ? null : new Images(images.model(), 0, channelId), process(true), trigger);
     }
 
     private static Map<String, Object> bundle(String projectName, String description, String model, String persona, String lookupUrl, String lookupDesc, String lookupSecret, String memoryKey, int memoryTurns, String calendar, boolean webSearch, Email email, boolean notes, Images images, ProcessModel process, Map<String, Object> trigger) {
@@ -556,8 +558,14 @@ public final class TemplateService {
         return agent(model, persona, lookupUrl, lookupDesc, lookupSecret, memoryKey, memoryTurns, calendar, webSearch, email, notes, null);
     }
 
-    /** Picture tools for the Telegram assistant: {@code chatId} is fixed in the send tool's configuration, so the model cannot choose another chat. */
-    record Images(String model, long chatId) {
+    /**
+     * Picture tools: {@code chatId} (Telegram) or {@code channel} (Slack, needs the files:write scope) is fixed in the send tool's
+     * configuration, so the model cannot choose another chat.
+     */
+    record Images(String model, long chatId, String channel) {
+        Images(String model, long chatId) {
+            this(model, chatId, null);
+        }
     }
 
     static final String IMAGE_SECRET = "IMAGE_API_KEY";
@@ -594,6 +602,13 @@ public final class TemplateService {
                     "config", Map.of("model", images.model(), "size", "1024x1024", "apiKey", "${secret:" + IMAGE_SECRET + "}", "timeoutMs", 60000,
                             "parameters", Map.of("type", "object", "required", List.of("prompt"),
                                     "properties", Map.of("prompt", Map.of("type", "string", "description", "What the picture should show, up to 4000 characters"))))));
+            if (images.channel() != null) {
+                tools.add(Map.of("name", "send_image", "type", "slack", "description", "Share a generated image (by mediaId) in this channel",
+                        "config", Map.of("operation", "uploadFile", "botToken", "${secret:SLACK_BOT_TOKEN}", "channel", images.channel(),
+                                "parameters", Map.of("type", "object", "required", List.of("mediaId"),
+                                        "properties", Map.of("mediaId", Map.of("type", "string", "description", "The mediaId returned by generate_image"),
+                                                "text", Map.of("type", "string", "description", "Optional message shown with the image, up to 4000 characters"))))));
+            } else
             tools.add(Map.of("name", "send_image", "type", "telegram", "description", "Send a generated image (by mediaId) to this chat",
                     "config", Map.of("operation", "sendPhoto", "botToken", "${secret:TELEGRAM_TOKEN}", "chatId", images.chatId(),
                             "parameters", Map.of("type", "object", "required", List.of("mediaId"),

@@ -74,6 +74,20 @@ public final class MediaHttp {
         return parse(send(rb, timeoutMs, maxBytes));
     }
 
+    /** Checks a URL the provider handed back (for example an upload URL) against the same guard. */
+    public URI check(String url) throws ServiceHandler.ConnectorException {
+        try {
+            return guard.check(url);
+        } catch (IllegalArgumentException e) {
+            throw new ServiceHandler.ConnectorException(e.getMessage(), false);
+        }
+    }
+
+    /** POST of raw bytes whose answer is not parsed (plain-text acknowledgements). No default headers are added. */
+    public void postRaw(URI uri, String contentType, byte[] body, long timeoutMs) throws ServiceHandler.ConnectorException {
+        send(HttpRequest.newBuilder(uri).header("Content-Type", contentType).POST(HttpRequest.BodyPublishers.ofByteArray(body)), timeoutMs, 4096);
+    }
+
     public Object getJson(URI uri, Map<String, String> headers, long timeoutMs) throws ServiceHandler.ConnectorException {
         HttpRequest.Builder rb = HttpRequest.newBuilder(uri).header("Accept", "application/json").GET();
         headers.forEach(rb::header);
