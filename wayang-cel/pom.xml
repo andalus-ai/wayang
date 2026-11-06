@@ -6,4 +6,11 @@
     <artifactId>wayang-cel</artifactId>
     <name>wayang-cel</name>
     <description>Engine-neutral CEL contracts and deterministic evaluation test primitives</description>
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>
