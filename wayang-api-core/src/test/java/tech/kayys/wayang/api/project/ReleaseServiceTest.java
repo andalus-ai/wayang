@@ -172,6 +172,7 @@ class ReleaseServiceTest {
         assertEquals("STANDALONE", plan.target());
         assertEquals("my-app", plan.artifactId());
         assertTrue(plan.files().contains("pom.xml") && !plan.files().contains("deploy/kubernetes.yaml"));
+        assertTrue(plan.files().contains("src/main/resources/wayang/component-lock.json"));
         assertThrows(ApiException.class, () -> releases.plan(acme, pid, Map.of("groupId", "Not Valid")));
         assertThrows(ApiException.class, () -> releases.plan(acme, pid, Map.of("target", "LAMBDA")));
         assertThrows(ApiException.class, () -> releases.plan(acme, pid, Map.of("package", "com.class")));
