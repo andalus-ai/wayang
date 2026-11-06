@@ -96,9 +96,9 @@ class TelegramPhotoTest {
     @Test
     void aFixedChatInTheConfigurationCannotBeOverriddenByTheModel() throws Exception {
         String id = (String) store.save(PNG).get("mediaId");
-        sender.call(cfg("chatId", 42), Map.of("mediaId", id, "chatId", 999));
+        sender.call(cfg("chatId", 42), Map.of("mediaId", id, "chatId", 987654321));
         String text = new String(bodies.get(0), StandardCharsets.ISO_8859_1);
-        assertTrue(text.contains("\r\n\r\n42\r\n") && !text.contains("999"), text);
+        assertTrue(text.contains("\r\n\r\n42\r\n") && !text.contains("987654321"), text);
     }
 
     @Test

@@ -123,6 +123,9 @@ public final class Telegram {
             if (op.equals("sendPhoto")) {
                 return sendPhoto(config, inputs);
             }
+            if (op.equals("sendVoice")) {
+                return voice(http, media, config, inputs);
+            }
             if (op.equals("downloadFile")) {
                 return download(config, inputs);
             }
@@ -203,6 +206,44 @@ public final class Telegram {
         out.write(bytes);
         out.write(("\r\n--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
         Map<String, Object> res = api(http, config, "sendPhoto", "POST", out.toByteArray(), null, Map.of("Content-Type", "multipart/form-data; boundary=" + boundary));
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (res.get("result") instanceof Map<?, ?> r) {
+            result.put("messageId", r.get("message_id"));
+        }
+        return result;
+    }
+
+    /**
+     * {@code sendVoice}: sends stored audio ({@code mediaId}) as a voice note when it is Ogg/Opus, otherwise as an audio file. The chat is
+     * {@code chatId} from the configuration when set, else from the inputs.
+     */
+    private static Map<String, Object> voice(HttpConnector http, MediaStore media, Map<String, Object> config, Map<String, Object> inputs)
+            throws Exception {
+        Object chat = config.get("chatId") != null ? config.get("chatId") : inputs.get("chatId");
+        String chatText = chat instanceof Number || chat instanceof String cs && !cs.isBlank() ? String.valueOf(chat) : "";
+        if (!chatText.matches("-?[0-9]{1,20}|@[A-Za-z0-9_]{4,64}")) {
+            throw new ServiceHandler.ConnectorException("telegram sendVoice needs a valid 'chatId'", false);
+        }
+        String id = inputs.get("mediaId") instanceof String m ? m : null;
+        byte[] bytes = id == null ? null : media.read(id);
+        String mime = bytes == null ? null : MediaStore.sniffAudio(bytes);
+        if (mime == null) {
+            throw new ServiceHandler.ConnectorException("telegram sendVoice needs a 'mediaId' of stored audio", false);
+        }
+        boolean note = mime.equals("audio/ogg");
+        String boundary = "wayang" + java.util.UUID.randomUUID().toString().replace("-", "");
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        field(out, boundary, "chat_id", chatText);
+        if (inputs.get("replyTo") instanceof Number n) {
+            field(out, boundary, "reply_to_message_id", Long.toString(n.longValue()));
+        }
+        String ext = id.substring(id.lastIndexOf('.') + 1);
+        out.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"" + (note ? "voice" : "audio") + "\"; filename=\"audio." + ext
+                + "\"\r\nContent-Type: " + mime + "\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        out.write(bytes);
+        out.write(("\r\n--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        Map<String, Object> res = api(http, config, note ? "sendVoice" : "sendAudio", "POST", out.toByteArray(), null,
+                Map.of("Content-Type", "multipart/form-data; boundary=" + boundary));
         Map<String, Object> result = new LinkedHashMap<>();
         if (res.get("result") instanceof Map<?, ?> r) {
             result.put("messageId", r.get("message_id"));

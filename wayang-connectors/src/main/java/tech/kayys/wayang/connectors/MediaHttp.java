@@ -65,6 +65,14 @@ public final class MediaHttp {
         return parse(send(rb, timeoutMs, maxBytes));
     }
 
+    /** POST of JSON whose answer is binary (speech audio). */
+    public byte[] postJsonForBytes(URI uri, Map<String, String> headers, Object body, long timeoutMs, long maxBytes) throws ServiceHandler.ConnectorException {
+        HttpRequest.Builder rb = HttpRequest.newBuilder(uri).header("Content-Type", "application/json").header("Accept", "*/*")
+                .POST(HttpRequest.BodyPublishers.ofString(Json.write(body)));
+        headers.forEach(rb::header);
+        return send(rb, timeoutMs, maxBytes);
+    }
+
     /** POST of a raw body (multipart, for example) whose answer is JSON. */
     public Object postBytes(URI uri, Map<String, String> headers, String contentType, byte[] body, long timeoutMs, long maxBytes)
             throws ServiceHandler.ConnectorException {
