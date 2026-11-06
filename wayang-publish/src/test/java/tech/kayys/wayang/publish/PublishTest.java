@@ -101,7 +101,8 @@ class PublishTest {
         Map<?, ?> lock = (Map<?, ?>) Json.read(text(p, "src/main/resources/wayang/component-lock.json"));
         assertEquals("wayang.component-lock", lock.get("format"));
         assertEquals(1, ((Number) lock.get("formatVersion")).intValue());
-        assertTrue(lock.get("sha256") instanceof String sha && sha.matches("[0-9a-f]{64}"));
+        String artifactLockDigest = String.valueOf(lock.get("sha256"));
+        assertTrue(artifactLockDigest.matches("[0-9a-f]{64}"));
         assertEquals(p.components(), ((List<?>) lock.get("components")).stream()
                 .map(x -> ((Map<?, ?>) x).get("id").toString()).toList());
         Map<?, ?> releaseMeta = (Map<?, ?>) Json.read(text(p, "src/main/resources/wayang/release.json"));
@@ -594,7 +595,7 @@ class PublishTest {
         assertTrue(text(p, "README.md").contains("artifact-lock.json"));
         Map<?, ?> release = (Map<?, ?>) Json.read(text(p, "src/main/resources/wayang/release.json"));
         assertEquals(artifacts, release.get("artifacts"));
-        assertEquals(sha, release.get("artifactLockSha256"));
+        assertEquals(artifactLockDigest, release.get("artifactLockSha256"));
 
         var again = Publisher.generate(bundle(false, false, "Artifact lock"), OPTS);
         assertEquals(text(p, "src/main/resources/wayang/artifact-lock.json"),
