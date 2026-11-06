@@ -42,6 +42,18 @@ The testing package now provides an evaluator conformance runner and immutable r
 
 This is evaluator-side infrastructure only. It does not yet test compilation, parser/type-check conformance, actual cost enforcement, cancellation, custom function isolation or an actual third-party engine. See [CEL engine qualification ADR](CEL-ENGINE-ADR.md); engine selection is deliberately deferred until candidate evidence is collected.
 
+## Compiler conformance runner (implementation increment 4)
+
+The testing package now also provides `CelCompilationConformanceRunner`:
+
+- Executes compile cases against one exact compiler provider.
+- Checks expected success/failure outcomes; unexpected outcomes fail the conformance job.
+- For successful compilation, verifies provider id/version and environment, scope, function-registry and semantic-profile fingerprints against the request.
+- Requires stable diagnostic codes for expected compile failures.
+- Rejects duplicate case IDs, null provider results and provider exceptions rather than hiding provider defects.
+
+A passing compile case verifies the declared compile expectation and artifact provenance contract. It does not prove full CEL language conformance, semantic correctness, cost enforcement, cancellation or production readiness.
+
 ## Module map
 
 | Area | Responsibility | Initial status |
