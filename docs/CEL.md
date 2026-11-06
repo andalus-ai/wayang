@@ -14,6 +14,20 @@ This document consolidates the CEL design series 3B.2.6.1–3B.2.6.21 into one i
 - Gamelan owns durable workflow execution, retries, timeouts, cancellation, checkpoints and recovery. CEL evaluation returns a typed outcome; it does not schedule retries.
 - Andalus remains CEL-agnostic. No CEL-specific API belongs in Andalus core.
 
+## Provider registration and conformance (implementation increment 2)
+
+The provider boundary now includes a deterministic registry:
+
+- Providers are identified by the exact pair `providerId + providerVersion`.
+- A provider is usable only when both compiler and evaluator SPIs are registered for that exact identity.
+- Duplicate compiler or evaluator identities fail startup/registry construction; classpath ordering never selects a winner.
+- A compiler-only or evaluator-only identity fails registry construction and reports the unmatched identities.
+- Artifact resolution must request the exact pinned provider id and version. There is no implicit latest-version or fallback behavior.
+- Java `ServiceLoader` discovery is available through `CelProviderRegistry.discover(ClassLoader)`; explicit construction remains available for tests and controlled embedding.
+- Provider health output exposes only stable id/version/status codes, not implementation class names or configuration.
+
+The registry validates provider wiring, not provider correctness. Each concrete engine adapter still needs a shared semantic conformance suite covering type checking, evaluation semantics, missing/null/unknown handling, diagnostics, resource limits, cancellation, and deterministic behavior. No concrete engine is selected by this increment.
+
 ## Module map
 
 | Area | Responsibility | Initial status |
