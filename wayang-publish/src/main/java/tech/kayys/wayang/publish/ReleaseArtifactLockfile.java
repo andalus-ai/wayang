@@ -36,7 +36,7 @@ final class ReleaseArtifactLockfile {
         document.put("format", "wayang.artifact-lock");
         document.put("formatVersion", 1);
         document.put("versionPolicy", "wayangVersion");
-        document.put("roots", List.of("wayang-embed"));
+        document.put("roots", gamelan ? List.of("wayang-gamelan-worker") : List.of("wayang-embed"));
         document.put("artifacts", entries);
         String digest = sha256(Json.write(canonical(document)));
         document.put("sha256", digest);
