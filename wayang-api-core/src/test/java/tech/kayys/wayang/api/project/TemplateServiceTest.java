@@ -550,4 +550,31 @@ class TemplateServiceTest {
         var r = templates.instantiate(acme, "assistant-slack", Map.of("channelId", "C0123456789", "images", "true"), true);
         assertTrue(r.ok(), r.problems().toString());
     }
+
+    @Test
+    void spokenRepliesNeedVoiceAndPinTheChat() {
+        var b = TemplateService.assistantTelegram("n", 7L, "openai/gpt-4o-mini", "", "", "", "", 10, null, false, null, false, null, true, true);
+        var agent = (Map<?, ?>) ((Map<?, ?>) ((List<?>) b.get("definitions")).stream().filter(d -> "AGENT".equals(((Map<?, ?>) d).get("kind"))).findFirst().orElseThrow()).get("document");
+        var tools = (List<?>) agent.get("tools");
+        var say = (Map<?, ?>) tools.stream().filter(t -> "say".equals(((Map<?, ?>) t).get("name"))).findFirst().orElseThrow();
+        assertEquals("speak", say.get("type"));
+        assertEquals("${secret:OPENAI_API_KEY}", ((Map<?, ?>) say.get("config")).get("apiKey"));
+        var send = (Map<?, ?>) tools.stream().filter(t -> "send_voice".equals(((Map<?, ?>) t).get("name"))).findFirst().orElseThrow();
+        var cfg = (Map<?, ?>) send.get("config");
+        assertEquals("sendVoice", cfg.get("operation"));
+        assertEquals(7L, cfg.get("chatId"));
+        assertFalse(((Map<?, ?>) ((Map<?, ?>) cfg.get("parameters")).get("properties")).containsKey("chatId"), "the model cannot pick a chat");
+        assertFalse(b.toString().contains("generate_image"), "speak does not turn images on");
+        // only a voice note asks for a spoken answer
+        String tpl = (String) agent.get("inputTemplate");
+        String voiceNote = tech.kayys.wayang.agent.PromptTemplate.render(tpl, Map.of("event", Map.of("text", "", "voiceFileId", "AwAD"), "hear", Map.of("text", "hi there")));
+        String typed = tech.kayys.wayang.agent.PromptTemplate.render(tpl, Map.of("event", Map.of("text", "hello")));
+        assertTrue(voiceNote.contains("hi there") && voiceNote.contains("by voice"), voiceNote);
+        assertEquals("Reply briefly to: hello", typed);
+
+        var r = templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "voice", "true", "speak", "true"), true);
+        assertTrue(r.ok(), r.problems().toString());
+        assertThrows(ApiException.class, () -> templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "speak", "true"), false));
+        assertThrows(ApiException.class, () -> templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "voice", "true", "speak", "yes"), false));
+    }
 }
