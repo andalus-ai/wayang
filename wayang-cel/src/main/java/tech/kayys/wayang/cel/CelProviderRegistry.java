@@ -49,11 +49,21 @@ public final class CelProviderRegistry {
     }
 
     public CelCompilerProvider requireCompiler(String providerId, String providerVersion) {
-        return require(compilers, new ProviderKey(providerId, providerVersion), "compiler");
+        ProviderKey key = new ProviderKey(providerId, providerVersion);
+        CelCompilerProvider provider = compilers.get(key);
+        if (provider == null) {
+            throw new IllegalArgumentException("No CEL compiler provider registered for " + key);
+        }
+        return provider;
     }
 
     public CelEvaluatorProvider requireEvaluator(String providerId, String providerVersion) {
-        return require(evaluators, new ProviderKey(providerId, providerVersion), "evaluator");
+        ProviderKey key = new ProviderKey(providerId, providerVersion);
+        CelEvaluatorProvider provider = evaluators.get(key);
+        if (provider == null) {
+            throw new IllegalArgumentException("No CEL evaluator provider registered for " + key);
+        }
+        return provider;
     }
 
     /** Stable, sorted identities suitable for diagnostics and health reporting. */
@@ -62,31 +72,13 @@ public final class CelProviderRegistry {
                 .thenComparing(ProviderKey::providerVersion)).toList();
     }
 
-    private static CelCompilerProvider require(Map<ProviderKey, CelCompilerProvider> providers,
-            ProviderKey key, String kind) {
-        CelCompilerProvider provider = providers.get(key);
-        if (provider == null) {
-            throw new IllegalArgumentException("No CEL " + kind + " provider registered for " + key);
-        }
-        return provider;
-    }
-
-    private static CelEvaluatorProvider require(Map<ProviderKey, CelEvaluatorProvider> providers,
-            ProviderKey key, String kind) {
-        CelEvaluatorProvider provider = providers.get(key);
-        if (provider == null) {
-            throw new IllegalArgumentException("No CEL " + kind + " provider registered for " + key);
-        }
-        return provider;
-    }
-
     private static Map<ProviderKey, CelCompilerProvider> indexCompilers(
             Collection<? extends CelCompilerProvider> providers) {
         Map<ProviderKey, CelCompilerProvider> indexed = new TreeMap<>(Comparator
                 .comparing(ProviderKey::providerId).thenComparing(ProviderKey::providerVersion));
         for (CelCompilerProvider provider : providers) {
             Objects.requireNonNull(provider, "compiler provider");
-            ProviderKey key = key(provider.providerId(), provider.providerVersion());
+            ProviderKey key = new ProviderKey(provider.providerId(), provider.providerVersion());
             if (indexed.putIfAbsent(key, provider) != null) {
                 throw new IllegalArgumentException("Duplicate CEL compiler provider: " + key);
             }
@@ -100,16 +92,12 @@ public final class CelProviderRegistry {
                 .comparing(ProviderKey::providerId).thenComparing(ProviderKey::providerVersion));
         for (CelEvaluatorProvider provider : providers) {
             Objects.requireNonNull(provider, "evaluator provider");
-            ProviderKey key = key(provider.providerId(), provider.providerVersion());
+            ProviderKey key = new ProviderKey(provider.providerId(), provider.providerVersion());
             if (indexed.putIfAbsent(key, provider) != null) {
                 throw new IllegalArgumentException("Duplicate CEL evaluator provider: " + key);
             }
         }
         return Map.copyOf(indexed);
-    }
-
-    private static ProviderKey key(String id, String version) {
-        return new ProviderKey(id, version);
     }
 
     private static <T> List<T> difference(Collection<T> left, Collection<T> right) {
