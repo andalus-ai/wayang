@@ -1,0 +1,98 @@
+package tech.kayys.wayang.publish;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeSet;
+
+import tech.kayys.wayang.bpmn.ElementType;
+import tech.kayys.wayang.embed.ReleaseBundle;
+import tech.kayys.wayang.runtime.ComponentDescriptor;
+import tech.kayys.wayang.runtime.ComponentRegistry;
+import tech.kayys.wayang.runtime.ComponentRequirements;
+import tech.kayys.wayang.runtime.Extensions;
+import tech.kayys.wayang.runtime.Profile;
+import tech.kayys.wayang.runtime.json.Json;
+
+/** Creates the deterministic, exact component dependency lock embedded in every generated release. */
+final class ComponentLockfile {
+    record Result(String json, String sha256, List<String> componentIds) {
+        Result {
+            componentIds = List.copyOf(componentIds);
+        }
+    }
+
+    private ComponentLockfile() {}
+
+    static Result create(ReleaseBundle bundle, Profile profile, Extensions extensions) {
+        ComponentRegistry registry = ComponentRegistry.standard(profile, extensions);
+        TreeSet<String> roots = new TreeSet<>();
+        for (ReleaseBundle.Definition definition : bundle.definitions()) {
+            if (!"PROCESS".equals(definition.kind())) continue;
+            Object rawElements = definition.document().get("elements");
+            if (!(rawElements instanceof List<?> elements)) {
+                throw new IllegalArgumentException("Process '" + definition.id() + "' has no element list for component resolution");
+            }
+            List<ElementType> types = new ArrayList<>();
+            for (Object raw : elements) {
+                if (!(raw instanceof Map<?, ?> element) || !(element.get("type") instanceof String type)) {
+                    throw new IllegalArgumentException("Process '" + definition.id() + "' contains a malformed element");
+                }
+                try {
+                    types.add(ElementType.valueOf(type.toUpperCase(java.util.Locale.ROOT)));
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("Process '" + definition.id() + "' uses unsupported element type '" + type + "'");
+                }
+            }
+            roots.addAll(ComponentRequirements.componentIds(types));
+        }
+        if (roots.isEmpty()) {
+            throw new IllegalArgumentException("The release has no process component requirements");
+        }
+        List<ComponentDescriptor> resolved;
+        try {
+            resolved = registry.resolve(roots);
+        } catch (ComponentRegistry.ComponentResolutionException e) {
+            throw new IllegalArgumentException("Cannot resolve release component dependencies: " + e.getMessage(), e);
+        }
+
+        List<Map<String, Object>> locked = new ArrayList<>();
+        for (ComponentDescriptor descriptor : resolved) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", descriptor.id());
+            item.put("version", descriptor.version());
+            item.put("kind", descriptor.kind().name());
+            item.put("executorType", descriptor.executorType());
+            item.put("isolationLevel", descriptor.isolationLevel().name());
+            item.put("requiredFeatures", descriptor.requiredFeatures().stream().map(Enum::name).sorted().toList());
+            item.put("capabilities", descriptor.capabilities().stream().sorted().toList());
+            item.put("dependencies", descriptor.dependencies().stream()
+                    .map(d -> Map.of("componentId", d.componentId(), "version", d.version()))
+                    .sorted(java.util.Comparator.comparing(d -> String.valueOf(d.get("componentId"))))
+                    .toList());
+            locked.add(item);
+        }
+        Map<String, Object> document = new LinkedHashMap<>();
+        document.put("format", "wayang.component-lock");
+        document.put("formatVersion", 1);
+        document.put("profile", profile.name());
+        document.put("roots", List.copyOf(roots));
+        document.put("components", locked);
+        String digest = sha256(Json.write(document));
+        document.put("sha256", digest);
+        return new Result(Json.write(document), digest, resolved.stream().map(ComponentDescriptor::id).toList());
+    }
+
+    private static String sha256(String value) {
+        try {
+            byte[] hash = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
+        }
+    }
+}
