@@ -62,7 +62,11 @@ final class ReleaseArtifactCatalog {
 
     private ReleaseArtifactCatalog() {}
 
-    static List<Artifact> resolve(Collection<String> componentIds, String version) {\n        return resolve(componentIds, version, false);\n    }\n\n    static List<Artifact> resolve(Collection<String> componentIds, String version, boolean gamelan) {
+    static List<Artifact> resolve(Collection<String> componentIds, String version) {
+        return resolve(componentIds, version, false);
+    }
+
+    static List<Artifact> resolve(Collection<String> componentIds, String version, boolean gamelan) {
         Objects.requireNonNull(componentIds, "componentIds");
         if (version == null || version.isBlank()) throw new IllegalArgumentException("Wayang artifact version is required");
 
