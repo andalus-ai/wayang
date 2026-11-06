@@ -63,7 +63,8 @@ public final class ControlHandler implements DomainHandler {
             if (!(nameCfg instanceof String name) || name.isBlank()) {
                 return new NodeOutcome.Failed("Message event '" + node.id() + "' needs a 'message' name", false);
             }
-            String key = correlationKey(node, vars);
+            String tenant = vars.get(SecretResolver.TENANT_VARIABLE) instanceof String tv ? tv : "";
+            String key = WaitRegistry.scoped(tenant, correlationKey(node, vars));
             Optional<WaitRegistry.Registered> existing = waits.findByNode(runId, node.id());
             if (existing.isPresent()) {
                 return new NodeOutcome.Waiting(existing.get().ticket());

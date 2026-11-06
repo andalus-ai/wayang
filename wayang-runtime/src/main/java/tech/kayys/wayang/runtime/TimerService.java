@@ -46,6 +46,12 @@ public final class TimerService {
      * nobody waits yet (so a message that overtakes the process is not lost).
      */
     public Delivery deliver(String name, String correlationKey, Map<String, Object> payload) {
+        return deliver(null, name, correlationKey, payload);
+    }
+
+    /** As {@link #deliver(String, String, Map)} for the runs of one tenant: other tenants' waits and buffered messages are never touched. */
+    public Delivery deliver(String tenant, String name, String correlationKey, Map<String, Object> payload) {
+        correlationKey = WaitRegistry.scoped(tenant, correlationKey);
         var waiting = waits.findMessage(name, correlationKey);
         if (waiting.isPresent() && completer.complete(waiting.get().ticket().token(), payload)) {
             return Delivery.DELIVERED;

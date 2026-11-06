@@ -202,6 +202,33 @@ class WayangApiTest {
         assertEquals("paid", api.getRun(acme, run.id()).waiting().get(0).messageName());
         assertEquals("BUFFERED", api.sendMessage(globex, "paid", "k1", Map.of())); // other tenant must not complete it
         assertEquals(RunStatus.WAITING, api.getRun(acme, run.id()).status());
+        assertEquals("k1", api.getRun(acme, run.id()).waiting().get(0).correlationKey(), "views show the key as written");
+        assertEquals("DELIVERED", api.sendMessage(acme, "paid", "k1", Map.of()));
+        assertEquals(RunStatus.COMPLETED, api.getRun(acme, run.id()).status());
+    }
+
+    @Test
+    void aMessageBufferedByOneTenantIsNeverConsumedByAnother() {
+        Map<String, Object> proc = Map.of("id", "w", "elements", List.of(
+                Map.of("id", "s", "type", "START_EVENT"),
+                Map.of("id", "m", "type", "MESSAGE_CATCH_EVENT", "config", Map.of("message", "paid", "correlation", "\"k1\"")),
+                Map.of("id", "e", "type", "END_EVENT")),
+                "flows", List.of(Map.of("id", "b", "source", "s", "target", "m"), Map.of("id", "c", "source", "m", "target", "e")));
+        for (Principal p : List.of(acme, globex)) {
+            api.saveDraft(p, DefinitionKind.PROCESS, "w", proc, null);
+            api.publish(p, DefinitionKind.PROCESS, "w");
+        }
+        // acme's message arrives first and is kept for acme's run; globex's run, waiting for the same name and key, must not take it
+        assertEquals("BUFFERED", api.sendMessage(acme, "paid", "k1", Map.of("who", "acme")));
+        RunView g = api.startRun(globex, "w", null, Map.of());
+        assertEquals(RunStatus.WAITING, g.status(), "globex's run did not consume acme's buffered message");
+        RunView a = api.startRun(acme, "w", null, Map.of());
+        assertEquals(RunStatus.COMPLETED, a.status(), "acme's own run did");
+        // both tenants waiting on the same name and key: each message reaches only its own tenant's run
+        RunView a2 = api.startRun(acme, "w", null, Map.of());
+        assertEquals("DELIVERED", api.sendMessage(globex, "paid", "k1", Map.of("who", "globex")));
+        assertEquals(RunStatus.COMPLETED, api.getRun(globex, g.id()).status());
+        assertEquals(RunStatus.WAITING, api.getRun(acme, a2.id()).status(), "globex's message did not reach acme's run");
     }
 
     @Test

@@ -312,7 +312,7 @@ public final class ReferenceRunEngine implements RunEngine {
         Object title = t.info().get("title");
         Object assignee = t.info().get("assignee");
         return new TaskView(t.token(), runId, t.nodeId(), t.kind(), title == null ? null : String.valueOf(title),
-                assignee == null ? null : String.valueOf(assignee), t.info(), t.dueAt(), t.messageName(), t.correlationKey());
+                assignee == null ? null : String.valueOf(assignee), t.info(), t.dueAt(), t.messageName(), tech.kayys.wayang.runtime.WaitRegistry.unscoped(t.correlationKey()));
     }
 
     private void evict() {
