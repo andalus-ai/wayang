@@ -66,6 +66,28 @@ public final class CelProviderRegistry {
         return provider;
     }
 
+    /** Resolve a compiler only when every mandatory compiler gate is declared verified. */
+    public CelCompilerProvider requireQualifiedCompiler(String providerId, String providerVersion) {
+        CelCompilerProvider provider = requireCompiler(providerId, providerVersion);
+        List<String> gaps = provider.capabilities().compilerGaps();
+        if (!gaps.isEmpty()) {
+            throw new IllegalStateException("CEL compiler provider " + providerId + "@"
+                    + providerVersion + " is not qualified: " + gaps);
+        }
+        return provider;
+    }
+
+    /** Resolve an evaluator only when every mandatory runtime gate is declared verified. */
+    public CelEvaluatorProvider requireQualifiedEvaluator(String providerId, String providerVersion) {
+        CelEvaluatorProvider provider = requireEvaluator(providerId, providerVersion);
+        List<String> gaps = provider.capabilities().evaluatorGaps();
+        if (!gaps.isEmpty()) {
+            throw new IllegalStateException("CEL evaluator provider " + providerId + "@"
+                    + providerVersion + " is not qualified: " + gaps);
+        }
+        return provider;
+    }
+
     /** Stable, sorted identities suitable for diagnostics and health reporting. */
     public List<ProviderKey> providers() {
         return compilers.keySet().stream().sorted(Comparator.comparing(ProviderKey::providerId)
