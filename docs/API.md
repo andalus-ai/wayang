@@ -36,7 +36,7 @@ All transports are thin shells over `WayangApi` (`wayang-api-core`). They authen
 | `GET /config`, `PUT|DELETE /config/{key}` (`?project=`) | plain settings for `${config:NAME}` |
 | `GET /projects/{id}/export`, `POST /workspace/import` `{bundle, options}` | workspace bundle, dry run by default |
 | `GET /templates`, `POST /templates/{id}/instantiate` `{params, dryRun}` | starter projects (`assistant-telegram`); a dry run unless `dryRun` is false; triggers are created disabled |
-| `POST /projects/{id}/release/plan`, `POST /projects/{id}/release` `{target, groupId, artifactId, version, package, port}` | what a release of the published versions would contain; download it as a Maven project zip (`docs/RELEASE.md`) |
+| `POST /projects/{id}/release/plan`, `POST /projects/{id}/release` `{target, groupId, artifactId, version, package, port, profile}` | release preview includes resolved component IDs; generated archive includes `wayang/component-lock.json` and its digest in `wayang/release.json` (`docs/RELEASE.md`) |
 | `POST /admin/timers/fire` | ADMIN; a ticker also does it every 5s |
 
 ## WebSocket `/ws/events`
