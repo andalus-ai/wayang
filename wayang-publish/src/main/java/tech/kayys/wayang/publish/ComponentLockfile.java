@@ -70,6 +70,7 @@ final class ComponentLockfile {
             item.put("isolationLevel", descriptor.isolationLevel().name());
             item.put("requiredFeatures", descriptor.requiredFeatures().stream().map(Enum::name).sorted().toList());
             item.put("capabilities", descriptor.capabilities().stream().sorted().toList());
+            item.put("configSchema", descriptor.configSchema());
             item.put("dependencies", descriptor.dependencies().stream()
                     .map(d -> Map.of("componentId", d.componentId(), "version", d.version()))
                     .sorted(java.util.Comparator.comparing(d -> String.valueOf(d.get("componentId"))))
