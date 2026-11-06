@@ -36,7 +36,8 @@ src/main/java/<pkg>/App.java         generated: builds the runtime, wires only t
 src/main/java/<pkg>/Processes.java   generated: process ids as constants, published versions, connectors used
 src/main/java/<pkg>/Agents.java      only when a workflow has agent tasks: an explicit stub to implement
 src/main/resources/wayang/bundle.json   the workflows; do not edit, release again instead
-src/main/resources/wayang/component-lock.json  exact component IDs, versions, dependency closure and profile\nsrc/main/resources/wayang/release.json  target, bundle hash, processes, components, connectors and component-lock digest
+src/main/resources/wayang/component-lock.json  exact component IDs, versions, dependency closure and profile
+src/main/resources/wayang/release.json  target, bundle hash, processes, components, connectors and component-lock digest
 Dockerfile, .dockerignore, .gitignore, .env.example, README.md
 deploy/kubernetes.yaml               SERVICE only: Secret, Deployment (probes, non-root, read-only fs), Service
 ```
