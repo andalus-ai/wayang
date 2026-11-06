@@ -88,6 +88,7 @@ class PublishTest {
         assertEquals(List.of("report"), p.processes());
         assertEquals(List.of("wayang.bpmn.control-flow", "wayang.human.task"), p.components());
         assertTrue(p.files().containsKey("src/main/resources/wayang/component-lock.json"));
+        assertTrue(text(p, "README.md").contains("Resolved components:"));
         assertTrue(p.files().containsKey("deploy/kubernetes.yaml"));
     }
 
