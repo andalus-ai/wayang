@@ -63,3 +63,9 @@ const platformSectionsAfterPlugins = [
 final selectedNavKeyProvider = StateProvider<String>((ref) => platformSectionDashboard.key);
 
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.dark);
+
+
+/// Reusable runtime component contracts exposed by the active Wayang profile.
+final componentCatalogProvider = FutureProvider<List<ComponentCatalogEntry>>((ref) {
+  return ref.watch(repositoryProvider).componentCatalog();
+});
