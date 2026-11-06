@@ -124,11 +124,12 @@ void main() {
   test('release form validates like the server and serialises only what is set', () {
     const f = ReleaseForm();
     expect(f.problem, isNull);
-    expect(f.toJson(), {'target': 'SERVICE', 'groupId': 'com.example', 'version': '1.0.0', 'port': 8080});
+    expect(f.toJson(), {'target': 'SERVICE', 'groupId': 'com.example', 'version': '1.0.0', 'port': 8080, 'profile': 'full'});
     final g = f.copyWith(artifactId: 'shop', packageName: 'com.shop.release', target: 'STANDALONE');
     expect(g.toJson()['artifactId'], 'shop');
     expect(g.toJson()['package'], 'com.shop.release');
     expect(g.toJson()['target'], 'STANDALONE');
+    expect(f.copyWith(profile: 'agentic').toJson()['profile'], 'agentic');
     expect(f.copyWith(groupId: 'Com.Acme').problem, contains('groupId'));
     expect(f.copyWith(artifactId: 'A B').problem, contains('artifactId'));
     expect(f.copyWith(version: '1<').problem, contains('version'));
@@ -144,6 +145,7 @@ void main() {
       'artifactId': 'shop',
       'version': '1.0.0',
       'processes': ['orders'],
+      'components': ['wayang.bpmn.control-flow', 'wayang.service.connector'],
       'connectors': ['slack'],
       'usesAgents': false,
       'requiredSecrets': ['SLACK'],
@@ -152,9 +154,10 @@ void main() {
       'notes': ['n1'],
       'bundleSha256': 'abc',
     });
-    expect(p.summary, '1 process(es), connectors: slack, 1 secret(s), 1 setting(s)');
+    expect(p.components, ['wayang.bpmn.control-flow', 'wayang.service.connector']);
+    expect(p.summary, '1 process(es), 2 component(s), connectors: slack, 1 secret(s), 1 setting(s)');
     expect(p.zipName, 'shop-1.0.0.zip');
-    expect(ReleasePlan.fromJson({}).summary, '0 process(es), no connectors, 0 secret(s), 0 setting(s)');
+    expect(ReleasePlan.fromJson({}).summary, '0 process(es), 0 component(s), no connectors, 0 secret(s), 0 setting(s)');
     final cmd = releaseDownloadCommand('https://w.example.com/', 'p1', const ReleaseForm(artifactId: "it's"), p.zipName);
     expect(cmd, contains("https://w.example.com/api/v1/projects/p1/release'"));
     expect(cmd, contains(r'Bearer $WAYANG_TOKEN'));
