@@ -21,6 +21,12 @@ class WayangRepository {
     return [for (final e in asList(j)) NodeCatalogEntry.fromJson(asMap(e))];
   }
 
+  /// Profile-filtered reusable runtime capabilities and their configuration contracts.
+  Future<List<ComponentCatalogEntry>> componentCatalog() async {
+    final j = await _api.getJson('/api/v1/catalog/components');
+    return [for (final e in asList(j)) ComponentCatalogEntry.fromJson(asMap(e))];
+  }
+
   // ----------------------------------------------------------------- projects
 
   Future<List<Project>> listProjects() async =>
