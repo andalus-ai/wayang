@@ -62,6 +62,6 @@ public class ComponentCatalogResource {
         List<ComponentConfigValidator.Violation> violations =
                 ComponentConfigValidator.validate(descriptor, config == null ? Map.of() : config);
         ConfigValidation result = new ConfigValidation(violations.isEmpty(), violations);
-        return Response.status(result.valid() ? Response.Status.OK : 422).entity(result).build();
+        return Response.status(result.valid() ? 200 : 422).entity(result).build();
     }
 }
