@@ -245,6 +245,12 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   bool _tplBrief = false;
   bool _tplCalendar = false;
   bool _tplWebSearch = false;
+  bool _tplNotes = false;
+  bool _tplImages = false;
+  bool _tplVoice = false;
+  bool _tplSpeak = false;
+  final _tplImageModel = TextEditingController(text: 'gpt-image-1');
+  final _tplEmail = TextEditingController();
   final _tplMemory = TextEditingController(text: '10');
   final _tplCalConn = TextEditingController(text: 'google');
   ImportReport? _tplReport;
@@ -262,6 +268,10 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         'name': _tplName.text.trim(),
         if (!_tplBrief && _tplCalendar) ...{'calendar': 'true', 'calendarConnection': _tplCalConn.text.trim()},
         if (!_tplBrief && _tplWebSearch) 'webSearch': 'true',
+        if (!_tplBrief && _tplNotes) 'notes': 'true',
+        if (!_tplBrief && _tplImages) ...{'images': 'true', 'imageModel': _tplImageModel.text.trim()},
+        if (!_tplBrief && !_tplSlack && _tplVoice) ...{'voice': 'true', if (_tplSpeak) 'speak': 'true'},
+        if (!_tplBrief && _tplEmail.text.trim().isNotEmpty) 'emailRecipients': _tplEmail.text.trim(),
         if (!_tplBrief) 'memoryTurns': _tplMemory.text.trim(),
         if (_tplBrief) ...{'topic': _tplTopic.text.trim(), 'cron': _tplCron.text.trim(), 'timezone': _tplZone.text.trim()},
       }, dryRun: dry);
@@ -287,7 +297,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
 
   Widget _templateCard() {
     final idKey = _tplSlack ? 'channelId' : 'chatId';
-    final fields = {idKey: _tplChat, 'model': _tplModel, 'persona': _tplPersona, 'name': _tplName, 'lookupUrl': _tplLookup, 'lookupDescription': _tplLookupDesc, 'lookupSecret': _tplLookupSecret, if (_tplBrief) ...{'cron': _tplCron, 'timezone': _tplZone}, if (!_tplBrief && _tplCalendar) 'calendarConnection': _tplCalConn, if (!_tplBrief) 'memoryTurns': _tplMemory};
+    final fields = {idKey: _tplChat, 'model': _tplModel, 'persona': _tplPersona, 'name': _tplName, 'lookupUrl': _tplLookup, 'lookupDescription': _tplLookupDesc, 'lookupSecret': _tplLookupSecret, if (_tplBrief) ...{'cron': _tplCron, 'timezone': _tplZone}, if (!_tplBrief && _tplCalendar) 'calendarConnection': _tplCalConn, if (!_tplBrief && _tplImages) 'imageModel': _tplImageModel, if (!_tplBrief) ...{'memoryTurns': _tplMemory, 'emailRecipients': _tplEmail}};
     final ok = fields.entries.every((e) => assistantFieldProblem(e.key, e.value.text) == null) && (!_tplBrief || assistantFieldProblem('topic', _tplTopic.text) == null);
     Widget field(String key, String label, TextEditingController c, {int lines = 1}) => SizedBox(
           width: 260,
@@ -345,6 +355,53 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 _tplReport = null;
               }),
             ),
+          if (!_tplBrief)
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Private notebook: save, list, search notes (delete only after you approve)'),
+              value: _tplNotes,
+              onChanged: (v) => setState(() {
+                _tplNotes = v;
+                _tplReport = null;
+
+              }),
+            ),
+          if (!_tplBrief)
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Draw pictures and send them to the chat (needs the secret IMAGE_API_KEY and the multimodal module)'),
+              value: _tplImages,
+              onChanged: (v) => setState(() {
+                _tplImages = v;
+                _tplReport = null;
+
+              }),
+            ),
+          if (!_tplBrief && !_tplSlack)
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Understand voice notes (needs the secret OPENAI_API_KEY and the multimodal module)'),
+              value: _tplVoice,
+              onChanged: (v) => setState(() {
+                _tplVoice = v;
+                _tplReport = null;
+                if (!v) _tplSpeak = false;
+              }),
+            ),
+          if (!_tplBrief && !_tplSlack && _tplVoice)
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Answer voice notes by voice (text to speech, secret OPENAI_API_KEY)'),
+              value: _tplSpeak,
+              onChanged: (v) => setState(() {
+                _tplSpeak = v;
+                _tplReport = null;
+              }),
+            ),
           const SizedBox(height: 4),
           Text(_tplBrief
               ? 'An agent writes a short brief on a cron schedule and sends it to you. A run missed while the release was down is skipped, not sent late. The schedule is created switched off.'
@@ -361,6 +418,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             field('lookupDescription', 'What that address answers (optional)', _tplLookupDesc),
             field('lookupSecret', 'Secret name sent as a bearer token (optional)', _tplLookupSecret),
             if (!_tplBrief && _tplCalendar) field('calendarConnection', 'Google OAuth connection id', _tplCalConn),
+            if (!_tplBrief && _tplImages) field('imageModel', 'Image model', _tplImageModel),
+            if (!_tplBrief) field('emailRecipients', 'Addresses the assistant may email (optional, comma-separated; sent only after you answer yes)', _tplEmail),
             if (_tplBrief) ...[
               field('topic', 'What the brief covers', _tplTopic),
               field('cron', 'Cron (minute hour day month weekday)', _tplCron),
