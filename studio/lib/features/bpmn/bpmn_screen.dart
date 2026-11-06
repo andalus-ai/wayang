@@ -57,12 +57,52 @@ class BpmnScreen extends ConsumerWidget {
                 );
               }
               if (state.loading) return const LoadingView(label: 'Loading process…');
-              return const Row(
-                children: [
-                  BpmnPalette(),
-                  Expanded(child: BpmnCanvas()),
-                  BpmnInspector(),
-                ],
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  // Keep the three-pane editor on desktop. On compact screens,
+                  // expose the same palette, canvas and inspector as tabs so
+                  // the canvas never gets squeezed between fixed-width panels.
+                  if (constraints.maxWidth < 920) {
+                    return DefaultTabController(
+                      length: 3,
+                      child: Column(
+                        children: [
+                          Material(
+                            color: AppColors.darkSurface,
+                            child: TabBar(
+                              isScrollable: false,
+                              indicatorColor: AppColors.primaryBright,
+                              labelColor: AppColors.primaryBright,
+                              unselectedLabelColor: AppColors.textMutedDark,
+                              tabs: const [
+                                Tab(icon: Icon(Icons.widgets_outlined, size: 16), text: 'Palette'),
+                                Tab(icon: Icon(Icons.account_tree_outlined, size: 16), text: 'Canvas'),
+                                Tab(icon: Icon(Icons.tune_rounded, size: 16), text: 'Properties'),
+                              ],
+                            ),
+                          ),
+                          const Expanded(
+                            child: TabBarView(
+                              children: [
+                                BpmnPalette(),
+                                BpmnCanvas(),
+                                BpmnInspector(),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return const Row(
+                    children: [
+                      BpmnPalette(),
+                      Expanded(child: BpmnCanvas()),
+                      BpmnInspector(),
+                    ],
+                  );
+                },
               );
             },
           ),
