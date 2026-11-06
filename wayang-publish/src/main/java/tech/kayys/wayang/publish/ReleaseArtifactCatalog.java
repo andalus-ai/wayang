@@ -56,17 +56,18 @@ final class ReleaseArtifactCatalog {
             Map.entry("wayang-dmn", List.of("wayang-expression")),
             Map.entry("wayang-integration", List.of("wayang-expression")),
             Map.entry("wayang-agent", List.of("wayang-expression")),
-            Map.entry("wayang-expression", List.of())
+            Map.entry("wayang-expression", List.of()),
+            Map.entry("wayang-gamelan-worker", List.of("wayang-runtime", "wayang-embed"))
     );
 
     private ReleaseArtifactCatalog() {}
 
-    static List<Artifact> resolve(Collection<String> componentIds, String version) {
+    static List<Artifact> resolve(Collection<String> componentIds, String version) {\n        return resolve(componentIds, version, false);\n    }\n\n    static List<Artifact> resolve(Collection<String> componentIds, String version, boolean gamelan) {
         Objects.requireNonNull(componentIds, "componentIds");
         if (version == null || version.isBlank()) throw new IllegalArgumentException("Wayang artifact version is required");
 
         TreeSet<String> roots = new TreeSet<>();
-        roots.add("wayang-embed"); // generated entry point always uses the embedded runtime
+        roots.add(gamelan ? "wayang-gamelan-worker" : "wayang-embed"); // Gamelan worker embeds the runtime; standalone uses the embedded entry point
         for (String componentId : componentIds) {
             List<String> mapped = COMPONENT_ARTIFACTS.get(componentId);
             if (mapped == null) {
