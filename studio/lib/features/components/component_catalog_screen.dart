@@ -58,7 +58,7 @@ class _ComponentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final properties = asMap(component.configSchema['properties']);
-    final required = asList(component.configSchema['required']).map((e) => '$e').toSet();
+    final requiredFields = asList(component.configSchema['required']).map((e) => '$e').toSet();
     final dependencies = component.dependencies;
     return Card(
       color: AppColors.darkSurface,
@@ -109,7 +109,7 @@ class _ComponentCard extends StatelessWidget {
                     Expanded(
                       flex: 2,
                       child: Text(
-                        '${field.key}${required.contains(field.key) ? ' *' : ''}',
+                        '${field.key}${requiredFields.contains(field.key) ? ' *' : ''}',
                         style: const TextStyle(fontFamily: 'monospace', fontSize: 11.5, fontWeight: FontWeight.w600),
                       ),
                     ),
