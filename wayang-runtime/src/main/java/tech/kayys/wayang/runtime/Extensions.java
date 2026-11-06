@@ -69,6 +69,15 @@ public final class Extensions {
         return out;
     }
 
+    /** All component metadata contributed by extensions accepted for this profile. */
+    public List<ComponentDescriptor> components() {
+        List<ComponentDescriptor> out = new ArrayList<>();
+        for (WayangExtension e : loaded) {
+            out.addAll(e.components());
+        }
+        return List.copyOf(out);
+    }
+
     private <V> Map<String, V> merge(Map<String, V> base, String what,
             java.util.function.Function<WayangExtension, Map<String, V>> get) {
         Map<String, V> m = new LinkedHashMap<>(base);
