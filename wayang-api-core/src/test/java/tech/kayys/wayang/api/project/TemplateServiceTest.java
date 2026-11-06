@@ -534,4 +534,20 @@ class TemplateServiceTest {
         assertTrue(all.contains("voice=true"), "trigger listens for voice notes");
         assertTrue(all.contains("chatId=1"), "send_image is pinned to the configured chat");
     }
+
+    @Test
+    void theSlackAssistantCanShareImagesInItsOwnChannelOnly() {
+        var b = TemplateService.assistantSlack("n", "C0123456789", "openai/gpt-4o-mini", "", "", "", "", 10, null, false, null, false, new TemplateService.Images("gpt-image-1", 0));
+        var tools = (List<?>) ((Map<?, ?>) ((Map<?, ?>) ((List<?>) b.get("definitions")).stream().filter(d -> "AGENT".equals(((Map<?, ?>) d).get("kind"))).findFirst().orElseThrow())
+                .get("document")).get("tools");
+        var send = (Map<?, ?>) tools.stream().filter(t -> "send_image".equals(((Map<?, ?>) t).get("name"))).findFirst().orElseThrow();
+        assertEquals("slack", send.get("type"));
+        var cfg = (Map<?, ?>) send.get("config");
+        assertEquals("uploadFile", cfg.get("operation"));
+        assertEquals("C0123456789", cfg.get("channel"));
+        assertEquals("${secret:SLACK_BOT_TOKEN}", cfg.get("botToken"));
+        assertFalse(((Map<?, ?>) ((Map<?, ?>) cfg.get("parameters")).get("properties")).containsKey("channel"), "the model cannot pick a channel");
+        var r = templates.instantiate(acme, "assistant-slack", Map.of("channelId", "C0123456789", "images", "true"), true);
+        assertTrue(r.ok(), r.problems().toString());
+    }
 }

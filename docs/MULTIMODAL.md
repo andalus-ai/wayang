@@ -59,3 +59,9 @@ Verified: unit tests against local fake servers only. Not run against real Teleg
 ### Template option `voice`
 
 `assistant-telegram` accepts `voice: true` (MEDIA profile required; Telegram only). The process then starts with `kind`: a message with `event.voiceFileId` goes `fetch` (telegram `downloadFile`) → `hear` (`transcribe`, secret `OPENAI_API_KEY`) → `draft`; everything else follows the normal path. The agent reads `{{ event.text }}{{ hear.text }}`, and the approval policy now checks the typed text **and** the transcript for pay / transfer / password / delete (case-insensitive), so a spoken request is held for approval exactly like a typed one. Replies to voice notes are text.
+
+## Images on Slack
+
+Connector `slack`, operation `uploadFile` shares a stored image in a channel using Slack's external upload flow (`files.getUploadURLExternal`, the bytes to the returned URL, `files.completeUploadExternal`). The Slack app needs the `files:write` scope; `channel` must be a channel **id** (C…, G…, D…). The bot token goes only to `slack.com`, never to the upload host. Inputs: `mediaId`, optional `text` (shown with the image), `threadTs`, `title`; output `fileId`, `channel`. Template `assistant-slack` accepts `images: true` like the Telegram one: the `send_image` tool has the channel fixed in its configuration, so the model cannot post elsewhere.
+
+Verified against a local fake Slack only, not the real Slack API.
