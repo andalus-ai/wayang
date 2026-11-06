@@ -261,7 +261,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
         const SizedBox(height: 12),
         Container(width: double.infinity, padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: colors.surfaceContainerHighest.withValues(alpha: 0.45),
+            color: colors.surfaceContainerHighest.withOpacity(0.45),
             borderRadius: BorderRadius.circular(8)),
           child: SelectableText(const JsonEncoder.withIndent('  ').convert(step), style: _mono)),
       ]),
