@@ -100,6 +100,17 @@ final class ReleaseArtifactCatalog {
         ordered.add(id);
     }
 
+    static List<String> roots(Collection<String> componentIds, boolean gamelan) {
+        TreeSet<String> roots = new TreeSet<>();
+        roots.add(gamelan ? "wayang-gamelan-worker" : "wayang-embed");
+        for (String componentId : componentIds) {
+            List<String> mapped = COMPONENT_ARTIFACTS.get(componentId);
+            if (mapped == null) throw new IllegalArgumentException("No Maven artifact mapping is registered for component '" + componentId + "'");
+            roots.addAll(mapped);
+        }
+        return List.copyOf(roots);
+    }
+
     static List<String> mappedArtifacts(String componentId) {
         return COMPONENT_ARTIFACTS.getOrDefault(componentId, List.of());
     }
