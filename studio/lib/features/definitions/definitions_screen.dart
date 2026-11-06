@@ -187,7 +187,7 @@ class _DefinitionsScreenState extends ConsumerState<DefinitionsScreen> {
                                     SegmentedButton<bool>(
                                       showSelectedIcon: false,
                                       segments: const [
-                                        ButtonSegment(value: true, icon: Icon(Icons.view_list_rounded, size: 15), label: Text('Builder')),
+                                        ButtonSegment(value: true, icon: Icon(Icons.account_tree_outlined, size: 15), label: Text('Graph')),
                                         ButtonSegment(value: false, icon: Icon(Icons.code_rounded, size: 15), label: Text('JSON')),
                                       ],
                                       selected: {_visualBuilder},
