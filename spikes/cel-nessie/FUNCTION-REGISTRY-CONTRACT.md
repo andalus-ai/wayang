@@ -112,6 +112,11 @@ runtime implementations; it must not assume that matching names alone prove pari
 
 ## 6. Evaluation result semantics
 
+The spike now includes `ConditionOutcome`, which maps CEL values into distinct
+TRUE, FALSE, ERROR, UNKNOWN, NULL, NON_BOOLEAN, and HOST_FAILURE outcomes. Only
+TRUE/FALSE carry a Boolean decision. Host failure diagnostics use a stable code and
+do not expose exception messages.
+
 The adapter must preserve distinctions among:
 
 - successful Boolean false;
@@ -186,12 +191,16 @@ preemptive cancellation, bounded results, or durable recovery.
   gate, deterministic registry fingerprint.
 - `CelFunctionBinding` / `GovernedCelLibrary`: exact descriptor-to-provider-binding
   composition, complete binding coverage, and immutable CEL-Java option lists.
+- `ConditionOutcome`: strict condition-result classification that never collapses
+  error/unknown/null/non-Boolean/host failure into Boolean false.
 - `NessieCustomFunctionTest`: verifies missing declaration, declaration without
   implementation, typed runtime behavior, wrong argument type rejection, and repeatability.
 - `FunctionRegistryTest`: verifies unknown/duplicate rejection, safe-profile rejection,
   fingerprint stability/version sensitivity, registration-order independence, zero-arity
   descriptor support, and builder freeze.
 - `GovernedCelLibraryTest`: verifies missing binding and descriptor mismatch rejection.
+- `ConditionOutcomeTest`: verifies true/false distinction, CEL error/unknown/null,
+  non-Boolean and host-failure outcomes, and sanitized diagnostic codes.
 
 These are executable probes, not production qualification. The adapter still needs
 stronger proof that every runtime overload maps to the exact descriptor overload ID
