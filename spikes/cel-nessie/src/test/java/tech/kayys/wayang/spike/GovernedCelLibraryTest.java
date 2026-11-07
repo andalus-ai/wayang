@@ -43,9 +43,10 @@ class GovernedCelLibraryTest {
         assertThrows(IllegalArgumentException.class,
                 () -> new GovernedCelLibrary(registry, List.of(
                         new CelFunctionBinding(differentVersion,
+                                registered.overloadId(),
                                 EnvOption.declarations(),
                                 ProgramOption.functions(Overload.function(
-                                        registered.functionName(), values -> BoolT.True))))));
+                                        registered.overloadId(), values -> BoolT.True))))));
     }
 
     @Test
@@ -54,12 +55,13 @@ class GovernedCelLibraryTest {
         FunctionRegistry registry = FunctionRegistry.builder().register(descriptor).build();
         CelFunctionBinding binding = new CelFunctionBinding(
                 descriptor,
+                descriptor.overloadId(),
                 EnvOption.declarations(Decls.newFunction(
                         descriptor.functionName(),
                         Decls.newOverload(descriptor.overloadId(),
                                 List.of(Decls.Int), Decls.Bool))),
                 ProgramOption.functions(Overload.function(
-                        descriptor.functionName(), values -> BoolT.True)));
+                        descriptor.overloadId(), values -> BoolT.True)));
 
         GovernedCelLibrary library = new GovernedCelLibrary(registry, List.of(binding));
 
