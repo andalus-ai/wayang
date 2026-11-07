@@ -141,7 +141,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
 
   void _writeNested(Map<String, dynamic> document, StepAddress path) {
     widget.controller.text = const JsonEncoder.withIndent('  ').convert(document);
-    setState(() { _selectedNestedPath = path; _selectedIndex = path.indices.first; });
+    setState(() { _selectedNestedPath = path; _selectedIndex = path.segments.firstWhere((segment) => segment.isIndex).index; });
   }
 
   Future<void> _editNested(StepAddress path, Map<String, dynamic> step) async {
@@ -169,7 +169,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
     if (updated != null) _writeNested(updated, path);
   }
 
-  Widget _nestedInspector() {
+  Widget _nestedInspector(List<StepKind> kinds) {
     final path = _selectedNestedPath;
     if (path == null || path.segments.isEmpty || !path.segments.last.isIndex) return const SizedBox.shrink();
     final document = _document();
@@ -201,6 +201,19 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
             setState(() => _selectedNestedPath = remaining.isEmpty ? null : StepAddress(sequenceAddress.segments.followedBy([StepAddressSegment.index(childIndex >= remaining.length ? remaining.length - 1 : childIndex)])));
           }, icon: Icon(Icons.delete_outline, color: colors.error)),
         ]),
+        const SizedBox(height: 8),
+          PopupMenuButton<StepKind>(
+            tooltip: 'Add a nested step',
+            onSelected: (kind) {
+              final updated = insertStepAtAddress(document, sequenceAddress, siblings.length, kind.instantiate());
+              if (updated != null) _writeNested(updated, sequenceAddress.at(siblings.length));
+            },
+            itemBuilder: (_) => [
+              for (final kind in kinds) PopupMenuItem<StepKind>(
+                value: kind, child: Text(kind.label)),
+            ],
+            child: const Chip(avatar: Icon(Icons.add, size: 16), label: Text('Add nested step')),
+          ),
         const SizedBox(height: 8),
         Container(width: double.infinity, padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(color: colors.surfaceContainerHighest.withOpacity(0.45), borderRadius: BorderRadius.circular(8)),
@@ -496,7 +509,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
           const SizedBox(height: 10),
           _inspector(steps, byType),
           const SizedBox(height: 8),
-          _nestedInspector(),
+          _nestedInspector(kinds),
         ]);
       },
     );
