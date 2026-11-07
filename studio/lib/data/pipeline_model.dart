@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'json_copy.dart';
 import 'step_address.dart';
 
 /// One kind of pipeline step the builder can add. The catalog is `assets/pipeline_steps.json`; a Java test builds every
@@ -37,11 +38,7 @@ class StepKind {
 List<StepKind> parseCatalog(String json) =>
     [for (final e in jsonDecode(json) as List) StepKind.fromJson(Map<String, dynamic>.from(e as Map))];
 
-Object? deepCopy(Object? v) {
-  if (v is Map) return {for (final e in v.entries) e.key as String: deepCopy(e.value)};
-  if (v is List) return [for (final e in v) deepCopy(e)];
-  return v;
-}
+Object? deepCopy(Object? value) => deepCopyJson(value);
 
 /// The steps of a pipeline document `{"steps": [...]}`, or null when [text] is not one (bad JSON, no list, a non-object step).
 /// The builder then shows a hint instead of guessing, and the JSON view stays the source of truth.
