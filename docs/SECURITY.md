@@ -31,5 +31,11 @@ What is enforced, how it is tested, and what is **not** covered. Report anything
 Responses carry `nosniff`, `X-Frame-Options: DENY`, `no-referrer`, `Cache-Control: no-store` and a restrictive CSP; CORS is closed unless configured. The headers are configuration,
 verified only by reading the properties (no running server in CI).
 
+## Tenants, triggers and chat channels
+- Every API call is scoped to the caller's tenant (runs, tasks, definitions, projects, secrets, triggers); a suspended tenant is refused before anything runs. Cross-tenant tests cover runs, tasks, cancel, subscribe, messages and sweeps.
+- **Messages:** waiting message events and early (buffered) messages are keyed by tenant + name + correlation key, so one tenant's message can never be delivered to, or consumed by, another tenant's run. (This was a known gap until the tenant-messages fix; waits stored by an older version keep their unscoped key, so drain or restart such runs when upgrading.)
+- **Webhooks:** the secret is compared in constant time; a caller with the right secret is still held to the trigger's `rateLimit` (429) when one is set. Rate limits are opt-in: set one on any trigger that is reachable from outside.
+- **Chat triggers:** Telegram needs `allowedChatIds`, Slack `allowedChannels` (a trigger without them never fires, and the Doctor fails a release that has one). In a group or channel every member can write, so add `allowedUserIds` (Telegram) / `allowedUsers` (Slack) to accept only named senders. The assistant template uses a private chat and `approvals: true` for risky tools.
+
 ## Not verified here
 No penetration test, no fuzzing campaign beyond the cases above, no review of the Quarkus runtime configuration of a deployed server, no live Gamelan/Numu/Postgres run in CI.
