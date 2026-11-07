@@ -33,9 +33,6 @@ public record FunctionDescriptor(
         functionVersion = requireVersion(functionVersion, "functionVersion");
         overloadId = requireIdentifier(overloadId, "overloadId");
         argumentTypes = List.copyOf(Objects.requireNonNull(argumentTypes, "argumentTypes"));
-        if (argumentTypes.isEmpty()) {
-            throw new IllegalArgumentException("CEL functions must declare at least one argument type");
-        }
         argumentTypes.forEach(type -> requireIdentifier(type, "argumentType"));
         resultType = requireIdentifier(resultType, "resultType");
         effect = Objects.requireNonNull(effect, "effect");
