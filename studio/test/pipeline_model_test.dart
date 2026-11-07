@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wayang_studio/data/pipeline_model.dart';
+import 'package:wayang_studio/data/step_address.dart';
 
 // Not run in the environment that produced it (no Dart SDK there). The catalog itself is checked by a Java test that builds
 // every template with the real pipeline loader.
