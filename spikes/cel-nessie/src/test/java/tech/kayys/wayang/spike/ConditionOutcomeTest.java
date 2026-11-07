@@ -36,7 +36,7 @@ class ConditionOutcomeTest {
         assertEquals(ConditionOutcome.Kind.ERROR,
                 ConditionOutcome.fromCelValue(Err.newErr("internal detail")).kind());
         assertEquals(ConditionOutcome.Kind.UNKNOWN,
-                ConditionOutcome.fromCelValue(UnknownT.UnknownOf(1)).kind());
+                ConditionOutcome.fromCelValue(UnknownT.unknownOf(1)).kind());
         assertEquals(ConditionOutcome.Kind.NULL,
                 ConditionOutcome.fromCelValue(NullT.NullValue).kind());
         assertEquals(ConditionOutcome.Kind.NON_BOOLEAN,
