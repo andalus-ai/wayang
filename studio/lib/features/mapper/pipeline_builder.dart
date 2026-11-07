@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
 import '../../data/pipeline_model.dart';
-import '../../data/nested_step_path.dart';
 import '../../data/step_address.dart';
 
 const _mono = TextStyle(fontFamily: 'monospace', fontSize: 12);
