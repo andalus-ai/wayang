@@ -80,13 +80,19 @@ remains the authority for identity and policy.
 
 The spike now includes `CelFunctionBinding` and `GovernedCelLibrary`. The latter
 requires exactly one binding for every registry descriptor, rejects unregistered or
-mismatched descriptors, and exposes immutable compile/program option lists. This
-closes the partial-library assembly gap at the adapter composition boundary.
+mismatched descriptors, and exposes immutable compile/program option lists.
 
-It does **not** introspect opaque CEL-Java `ProgramOption` instances to prove that
-the runtime dispatch table actually contains the declared overload ID. The current
-API represents runtime dispatch by function name and implementation overload
-metadata; exact multi-overload ID parity remains a separate qualification gate.
+A source inspection of CEL-Java's `Dispatcher` revealed an important detail:
+`Dispatcher.add` indexes each runtime `Overload` by `Overload.operator`, while a
+checked call resolves using the checker reference's overload ID. Therefore
+`Overload.function(...)` must be constructed with the descriptor's **overloadId**,
+not the source-level function name. `CelFunctionBinding` now carries an explicit
+`runtimeOverloadId` and rejects a mismatch before options are installed.
+
+The ProgramOption itself remains opaque after construction, so this metadata check
+does not prove that arbitrary caller-supplied options contain the claimed overload.
+The production adapter should eventually construct the ProgramOption internally
+from a typed runtime function binding rather than accept an arbitrary ProgramOption.
 
 ## 5. Declaration/runtime parity
 
@@ -104,7 +110,9 @@ For each descriptor, qualification must compare:
 
 A declaration without a runtime implementation is not executable. A runtime
 implementation without a checker declaration is not callable from a checked
-expression. Both failure modes must be covered by tests.
+expression. Both failure modes must be covered by tests. The executable spike now
+uses the overload ID as the CEL-Java dispatcher key and rejects a descriptor/runtime
+key mismatch at binding construction.
 
 The current CEL-Java API's generic function dispatcher may resolve by function name
 and argument types. The adapter must prove how overload IDs are associated with
@@ -190,7 +198,8 @@ preemptive cancellation, bounded results, or durable recovery.
 - `FunctionRegistry`: explicit immutable allowlist, duplicate rejection, safe-profile
   gate, deterministic registry fingerprint.
 - `CelFunctionBinding` / `GovernedCelLibrary`: exact descriptor-to-provider-binding
-  composition, complete binding coverage, and immutable CEL-Java option lists.
+  composition, complete binding coverage, dispatcher-key validation, and immutable
+  CEL-Java option lists.
 - `ConditionOutcome`: strict condition-result classification that never collapses
   error/unknown/null/non-Boolean/host failure into Boolean false.
 - `NessieCustomFunctionTest`: verifies missing declaration, declaration without
@@ -198,7 +207,8 @@ preemptive cancellation, bounded results, or durable recovery.
 - `FunctionRegistryTest`: verifies unknown/duplicate rejection, safe-profile rejection,
   fingerprint stability/version sensitivity, registration-order independence, zero-arity
   descriptor support, and builder freeze.
-- `GovernedCelLibraryTest`: verifies missing binding and descriptor mismatch rejection.
+- `GovernedCelLibraryTest`: verifies missing binding, descriptor mismatch, and
+  runtime dispatcher-key mismatch rejection.
 - `ConditionOutcomeTest`: verifies true/false distinction, CEL error/unknown/null,
   non-Boolean and host-failure outcomes, and sanitized diagnostic codes.
 
