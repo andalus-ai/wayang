@@ -3,7 +3,7 @@ package tech.kayys.wayang.adapter.andalus;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import tech.kayys.andalus.execution.ExecutionContext;
+import tech.kayys.andalus.execution.GraphExecutionContext;
 import tech.kayys.andalus.execution.VariableEntry;
 import tech.kayys.andalus.service.ExecutionService;
 import tech.kayys.wayang.agent.AgentInvoker;
@@ -37,7 +37,7 @@ public final class AndalusAgentInvoker implements AgentInvoker {
         in.put("wayang.maxSteps", spec.maxSteps());
         in.put("wayang.timeoutSeconds", spec.timeoutSeconds());
         in.put("wayang.requireApproval", spec.requireApproval());
-        ExecutionContext ctx = executions.startAgent(spec.id(), in);
+        GraphExecutionContext ctx = executions.startAgent(spec.id(), in);
         Map<String, Object> out = new LinkedHashMap<>();
         for (VariableEntry<?> e : ctx.variables().entries()) {
             out.put(e.getKey().name(), e.getValue());
