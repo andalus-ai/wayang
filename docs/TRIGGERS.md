@@ -20,6 +20,7 @@ POST /api/v1/triggers
 
 * `botToken` must be a secret reference (set it under Secrets). `allowedChatIds` is **required**: anyone can message a
   bot, so messages from other chats are dropped (and acknowledged, so they are not re-read) and never start a run.
+  In a **group** every member can write: add `allowedUserIds` (Telegram user ids; Slack: `allowedUsers` on the webhook) to accept only those senders.
 * Event: `updateId, chatId, chatType, fromId, fromUsername, messageId, text, date`. Only text messages.
 * Reply with a service task: connector `telegram`, config `{ "botToken": "${secret:TELEGRAM_TOKEN}" }`, inputs `chatId`,
   `text` (max 4096), optional `replyTo`.

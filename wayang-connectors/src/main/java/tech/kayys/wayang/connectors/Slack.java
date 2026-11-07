@@ -17,7 +17,7 @@ import tech.kayys.wayang.runtime.WebhookProvider;
 /**
  * Slack: Events API webhooks and {@code chat.postMessage}.
  *
- * <p>Webhook config: {@code signingSecret} (use {@code ${secret:...}}), <b>{@code allowedChannels} (required)</b>. Requests
+ * <p>Webhook config: {@code signingSecret} (use {@code ${secret:...}}), <b>{@code allowedChannels} (required)</b>, optional {@code allowedUsers} (only these senders count in an allowed channel). Requests
  * older or newer than 5 minutes are rejected (replay protection). Bot messages and message subtypes (edits, joins) are
  * dropped so the assistant cannot answer itself. Event: {@code type, channel, user, text, ts, threadTs}.
  *
@@ -88,6 +88,10 @@ public final class Slack {
             if (ev.get("bot_id") != null || ev.get("subtype") != null || !(ev.get("text") instanceof String text)
                     || !allowed.contains(String.valueOf(ev.get("channel")))) {
                 return out;
+            }
+            if (config.get("allowedUsers") instanceof List<?> ul && !ul.isEmpty()
+                    && ul.stream().noneMatch(u -> String.valueOf(u).equals(String.valueOf(ev.get("user"))))) {
+                return out; // a channel lets every member write: with allowedUsers only these senders count
             }
             Map<String, Object> d = new LinkedHashMap<>();
             d.put("type", type);

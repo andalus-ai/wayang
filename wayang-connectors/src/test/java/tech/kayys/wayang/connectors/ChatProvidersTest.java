@@ -88,6 +88,16 @@ class ChatProvidersTest {
         assertEquals(1, slack.events(cfg, slackEvent(Map.of("type", "app_mention", "channel", "D1", "user", "U", "text", "<@B> hi", "ts", "2"))).size());
     }
 
+    @Test
+    void slackAllowedUsersNarrowTheChannel() {
+        Map<String, Object> cfg = Map.of("allowedChannels", List.of("C1"), "allowedUsers", List.of("U1"));
+        assertEquals(1, slack.events(cfg, slackEvent(Map.of("type", "message", "channel", "C1", "user", "U1", "text", "hi", "ts", "1"))).size());
+        assertTrue(slack.events(cfg, slackEvent(Map.of("type", "message", "channel", "C1", "user", "U2", "text", "hi", "ts", "1"))).isEmpty(), "another member");
+        assertTrue(slack.events(cfg, slackEvent(Map.of("type", "message", "channel", "C1", "text", "hi", "ts", "1"))).isEmpty(), "no sender");
+        Map<String, Object> open = Map.of("allowedChannels", List.of("C1"), "allowedUsers", List.of());
+        assertEquals(1, slack.events(open, slackEvent(Map.of("type", "message", "channel", "C1", "user", "U2", "text", "hi", "ts", "1"))).size(), "empty list = the channel rule only");
+    }
+
     // -------------------------------------------------------------- whatsapp
 
     private static String sign(String secret, String body) {
