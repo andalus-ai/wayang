@@ -93,9 +93,9 @@ class NessieCustomFunctionTest {
                 EnvOption.declarations(Decls.newFunction(
                         FUNCTION,
                         Decls.newOverload(OVERLOAD_ID, List.of(Decls.Int), Decls.Bool))),
-                ProgramOption.functions(Overload.function(OVERLOAD_ID, values -> {
-                    if (values.length != 1 || !(values[0] instanceof IntT integer)) {
-                        return Err.newErr("invalid arguments for %s", FUNCTION);
+                ProgramOption.functions(Overload.unary(OVERLOAD_ID, value -> {
+                    if (!(value instanceof IntT integer)) {
+                        return Err.newErr("invalid argument for %s", FUNCTION);
                     }
                     return boolOf(integer.intValue() % 2L == 0L);
                 })));
