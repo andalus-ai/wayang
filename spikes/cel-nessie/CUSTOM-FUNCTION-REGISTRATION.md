@@ -1,78 +1,77 @@
 # Custom function registration qualification
 
-Status: source/API inspection; executable qualification is still pending.
+Status: executable registration fixture added; local Maven execution remains pending.
 
 ## Purpose
 
-Determine whether the isolated CEL-Java 0.8.0 spike can safely expose a Wayang-owned,
+Determine whether the isolated CEL-Java 0.8.0 spike can expose a Wayang-owned,
 pure function without turning arbitrary Java methods into CEL capabilities.
 
 This is a spike only. It does not add CEL to the Wayang runtime, change FEEL, or
 qualify the provider for production.
 
-## API facts verified against Project Nessie cel-java 0.8.0 source
+## Verified public API
 
-- A declaration is created with `Decls.newFunction(name, overloads...)`.
-- An overload declaration uses `Decls.newOverload(id, argumentTypes, resultType)`.
-- Runtime implementations are supplied through `ProgramOption.functions(Overload...)`.
-- `Overload.function(operator, FunctionOp)` accepts a `FunctionOp`.
-- `FunctionOp.invoke(Val... values)` is the invocation boundary.
+The preferred composition boundary is CEL-Java's `Library` interface:
 
-Declarations and implementations are separate. A declaration alone does not implement a function;
-runtime registration alone does not make a function statically declared. Qualification must
-test both together and test each failure mode.
+- `getCompileOptions()` supplies declarations and other compile-time options.
+- `getProgramOptions()` supplies runtime implementation options.
+- `Library.Lib(library)` adapts the library into an `EnvOption`, installing both
+  compile-time and program-time configuration.
+- `Env.newCustomEnv(...)` creates an environment without implicitly installing
+  the standard CEL function and macro library.
+- `Decls.newFunction(name, overloads...)` declares a function.
+- `Decls.newOverload(id, argumentTypes, resultType)` defines a global overload contract.
+- `ProgramOption.functions(Overload...)` installs runtime overloads.
+- `Overload.function(operator, FunctionOp)` creates a runtime implementation;
+  `FunctionOp.invoke(Val... values)` is its invocation boundary.
 
-## Proposed minimal qualification fixture
+The lower-level declaration and runtime APIs remain available, but a reusable Wayang
+function bundle should implement `Library` so compile-time and runtime halves cannot
+be accidentally configured in unrelated call sites.
 
-Use a single pure function with one CEL integer argument and CEL boolean result:
+## Executable fixture
+
+`NessieCustomFunctionTest` adds the first executable fixture:
 
 `wayang_is_even(int) -> bool`
 
-The implementation must:
-1. Accept exactly one integer CEL value.
-2. Return a CEL boolean, not a Java Boolean or an unchecked object.
-3. Have no access to workflow services, tenant context, clocks, files, network, or mutable state.
-4. Be deterministic for the same input.
-5. Avoid arithmetic overflow; parity can be evaluated with remainder.
-6. Convert unexpected input or implementation exceptions into CEL errors rather than throwing
-   across the evaluator boundary.
+The fixture verifies:
+1. The function is unavailable in an empty custom environment.
+2. The declared and implemented function evaluates for positive, negative, zero,
+   even, and odd values.
+3. Repeated evaluation of the same immutable program/input yields the same result.
+4. The fixture is installed explicitly through `Library.Lib(...)`.
 
-## Required tests before qualification
-
-| Case | Expected |
-|---|---|
-| expression without declaration | compile/check rejection |
-| declaration without runtime overload | compile succeeds; evaluation produces CEL error |
-| declaration and matching runtime overload | evaluation produces CEL boolean |
-| even, odd, zero, negative input | stable expected booleans |
-| repeated evaluation of same input | identical result |
-| wrong argument type / arity | compile rejection or CEL error; never host exception escape |
-| runtime overload signature mismatch | explicit error; no coercion surprise |
-| function omitted from approved registry | unavailable |
+The implementation only reads the CEL integer argument and returns a CEL boolean.
+It does not access workflow services, tenant context, clocks, files, network, or
+mutable state. Parity uses remainder and is safe for the signed 64-bit minimum value.
 
 ## Registration policy
 
-The production-facing registry must be explicit and allowlisted. Function names and overload IDs
-are stable identifiers; they are not arbitrary Java method names. Each registered function
-needs a versioned descriptor recording argument/result CEL types, purity, determinism,
-and implementation version. Only functions marked pure and deterministic may enter the
-expression evaluation profile.
+The production-facing registry must be explicit and allowlisted. Function names and
+overload IDs are stable identifiers; they are not arbitrary Java method names. Each
+registered function needs a versioned descriptor recording argument/result CEL types,
+purity, determinism, and implementation version. Only functions marked pure and
+deterministic may enter the expression evaluation profile.
 
-Do not use reflection-based discovery or expose all methods of a service. Side effects belong
-in workflow nodes and must remain outside CEL evaluation.
+Do not use reflection-based discovery or expose all methods of a service. Side effects
+belong in workflow nodes and must remain outside CEL evaluation.
 
-## Qualification boundary
+## Remaining qualification gates
 
-This source/API inspection establishes the registration mechanism, not these properties:
-- hard CPU or memory budget;
+This fixture does not establish:
+- behavior for deliberately unchecked/malformed ASTs or host-level runtime misuse;
+- hard CPU or memory budgets;
 - preemptive cancellation;
 - bounded result size;
 - durable serialized-program recovery;
 - native-image compatibility;
-- production-grade error normalization.
+- production-grade error normalization under arbitrary extension failures.
 
-The existing Nessie qualification matrix remains authoritative for those unresolved gates.
-Do not promote the provider or claim bounded execution until each gate has executable evidence.
+CEL's non-Turing-completeness is not evidence of a hard CPU or memory budget.
+Do not promote the provider or claim bounded execution until each gate has executable
+evidence in the consuming application.
 
 ## Run
 
