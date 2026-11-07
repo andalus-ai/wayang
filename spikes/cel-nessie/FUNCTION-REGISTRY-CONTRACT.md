@@ -82,17 +82,23 @@ The spike now includes `CelFunctionBinding` and `GovernedCelLibrary`. The latter
 requires exactly one binding for every registry descriptor, rejects unregistered or
 mismatched descriptors, and exposes immutable compile/program option lists.
 
-A source inspection of CEL-Java's `Dispatcher` revealed an important detail:
-`Dispatcher.add` indexes each runtime `Overload` by `Overload.operator`, while a
-checked call resolves using the checker reference's overload ID. Therefore
-`Overload.function(...)` must be constructed with the descriptor's **overloadId**,
-not the source-level function name. `CelFunctionBinding` now carries an explicit
-`runtimeOverloadId` and rejects a mismatch before options are installed.
+A source inspection of CEL-Java's `Dispatcher` and `InterpretablePlanner`
+revealed two important details:
 
-The ProgramOption itself remains opaque after construction, so this metadata check
-does not prove that arbitrary caller-supplied options contain the claimed overload.
-The production adapter should eventually construct the ProgramOption internally
-from a typed runtime function binding rather than accept an arbitrary ProgramOption.
+1. `Dispatcher.add` indexes each runtime `Overload` by `Overload.operator`, while
+   checked calls first resolve using the checker reference's overload ID.
+   `CelFunctionBinding` therefore carries an explicit `runtimeOverloadId` and
+   rejects a mismatch before options are installed.
+2. The planner selects an arity-specific implementation slot. A one-argument
+   function must use `Overload.unary(overloadId, UnaryOp)`; using
+   `Overload.function(overloadId, FunctionOp)` does not populate the unary slot
+   and fails when the planner creates the call. Binary/ternary/etc. functions must
+   use their matching factories; generic FunctionOp is for the generic varargs path.
+
+The ProgramOption itself remains opaque after construction, so metadata validation
+cannot prove that arbitrary caller-supplied options contain the claimed overload.
+The production adapter should construct ProgramOptions internally from typed
+arity-specific runtime bindings rather than accept arbitrary opaque options.
 
 ## 5. Declaration/runtime parity
 
@@ -199,7 +205,8 @@ preemptive cancellation, bounded results, or durable recovery.
   gate, deterministic registry fingerprint.
 - `CelFunctionBinding` / `GovernedCelLibrary`: exact descriptor-to-provider-binding
   composition, complete binding coverage, dispatcher-key validation, and immutable
-  CEL-Java option lists.
+  CEL-Java option lists. The executable one-argument fixture uses the arity-specific
+  unary dispatch API.
 - `ConditionOutcome`: strict condition-result classification that never collapses
   error/unknown/null/non-Boolean/host failure into Boolean false.
 - `NessieCustomFunctionTest`: verifies missing declaration, declaration without
