@@ -23,8 +23,11 @@ The preferred composition boundary is CEL-Java's `Library` interface:
 - `Decls.newFunction(name, overloads...)` declares a function.
 - `Decls.newOverload(id, argumentTypes, resultType)` defines a global overload contract.
 - `ProgramOption.functions(Overload...)` installs runtime overloads.
-- `Overload.function(operator, FunctionOp)` creates a runtime implementation;
-  `FunctionOp.invoke(Val... values)` is its invocation boundary.
+- `Overload.function(overloadId, FunctionOp)` creates a runtime implementation;
+  `FunctionOp.invoke(Val... values)` is its invocation boundary. Important:
+  CEL-Java's Dispatcher indexes the runtime overload by this string, and checked
+  calls resolve using the checker overload ID. Pass the descriptor overload ID,
+  not merely the source-level function name.
 
 The lower-level declaration and runtime APIs remain available, but a reusable Wayang
 function bundle should implement `Library` so compile-time and runtime halves cannot
