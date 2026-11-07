@@ -37,6 +37,10 @@ public final class GovernedCelLibrary implements Library {
                 throw new IllegalArgumentException(
                         "Provider binding descriptor does not match registry entry: " + overloadId);
             }
+            if (!overloadId.equals(binding.runtimeOverloadId())) {
+                throw new IllegalArgumentException(
+                        "Runtime dispatcher key does not match registered overload ID: " + overloadId);
+            }
             if (byOverload.putIfAbsent(overloadId, binding) != null) {
                 throw new IllegalArgumentException("Duplicate provider binding: " + overloadId);
             }
