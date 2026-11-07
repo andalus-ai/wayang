@@ -37,7 +37,9 @@ class NodeCatalogTest {
         assertTrue(NodeCatalog.validateConfig(ElementType.SERVICE_TASK, Map.of("connector", "http", "url", "https://x.example/a",
                 "method", "POST", "headers", Map.of("Authorization", "Bearer ${secret:T}"), "timeoutMs", 5000)).isEmpty());
         assertFalse(NodeCatalog.validateConfig(ElementType.SERVICE_TASK, Map.of("connector", "http", "timeoutMs", 5)).isEmpty());
-        assertFalse(NodeCatalog.validateConfig(ElementType.SERVICE_TASK, Map.of("connector", "http", "method", "TRACE")).isEmpty());
+        assertFalse(NodeCatalog.validateConfig(ElementType.SERVICE_TASK, Map.of("connector", "http", "method", "TR ACE")).isEmpty());
+        // grpc uses "method" for the RPC name; the http connector itself still refuses methods it does not support
+        assertTrue(NodeCatalog.validateConfig(ElementType.SERVICE_TASK, Map.of("connector", "grpc", "url", "https://x", "service", "a.B", "method", "GetOrder")).isEmpty());
         assertFalse(NodeCatalog.validateConfig(ElementType.SERVICE_TASK, Map.of("connector", "http", "url", 5)).isEmpty());
     }
 
@@ -73,5 +75,22 @@ class NodeCatalogTest {
         assertFalse(JsonSchemaLite.validate(s, Map.of("a", "ab", "c", "z")).isEmpty());
         assertFalse(JsonSchemaLite.validate(s, "not an object").isEmpty());
         assertTrue(JsonSchemaLite.validate(s, Map.of("a", "ab", "l", List.of(1))).isEmpty());
+    }
+
+    @Test
+    void newConnectorSettingsAreKnownToTheForm() {
+        for (Map<String, Object> cfg : List.<Map<String, Object>>of(
+                Map.of("connector", "graphql", "url", "https://x/graphql", "query", "{ a }", "allowDynamicQuery", false, "failOnErrors", true),
+                Map.of("connector", "a2a", "url", "https://x", "operation", "send", "blocking", true),
+                Map.of("connector", "websocket", "url", "wss://x", "collect", 2, "waitMs", 5000, "subprotocol", "v1"),
+                Map.of("connector", "script", "language", "ces", "code", "1 + 1"),
+                Map.of("connector", "speak", "voice", "nova", "format", "opus", "model", "tts-1"),
+                Map.of("connector", "transcribe", "language", "id", "model", "whisper-1"),
+                Map.of("connector", "telegram", "operation", "sendVoice", "botToken", "${secret:T}"))) {
+            assertTrue(NodeCatalog.validateConfig(ElementType.SERVICE_TASK, cfg).isEmpty(), cfg.toString());
+        }
+        assertFalse(NodeCatalog.validateConfig(ElementType.SERVICE_TASK, Map.of("connector", "speak", "format", "flac")).isEmpty());
+        assertFalse(NodeCatalog.validateConfig(ElementType.SERVICE_TASK, Map.of("connector", "websocket", "url", "wss://x", "collect", 99)).isEmpty());
+        assertTrue(NodeCatalog.validateConfig(ElementType.SERVICE_TASK, Map.of("connector", "http", "url", "https://x", "query", Map.of("a", "b"))).isEmpty());
     }
 }

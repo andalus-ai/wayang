@@ -83,7 +83,7 @@ public class WayangRuntime {
 
     /** Delivers (or buffers) a message for a message-catch event. */
     public TimerService.Delivery deliverMessage(String name, String correlationKey, Map<String, Object> payload) {
-        return timers().deliver(name, correlationKey, payload == null ? Map.of() : payload);
+        return timers().deliver(tech.kayys.wayang.embed.ReleaseEngine.TENANT, name, correlationKey, payload == null ? Map.of() : payload);
     }
 
     private TimerService timers() {

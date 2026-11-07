@@ -406,6 +406,15 @@ String? assistantFieldProblem(String field, String value) {
         final n = int.tryParse(v);
         return n != null && n >= 0 && n <= 30 ? null : 'A whole number from 0 to 30 (0 = no memory)';
       }
+    case 'imageModel':
+      return RegExp(r'^[A-Za-z0-9._:/-]{1,100}$').hasMatch(v) ? null : 'A model name: letters, digits and . _ : / -';
+    case 'emailRecipients':
+      {
+        if (v.isEmpty) return null;
+        final parts = v.split(',').map((a) => a.trim()).toList();
+        if (parts.length > 10) return 'At most 10 addresses';
+        return parts.every((a) => RegExp(r'^[^\s@,]{1,64}@[^\s@,]{1,200}\.[^\s@,]{2,}$').hasMatch(a)) ? null : 'Comma-separated email addresses';
+      }
     case 'persona':
       return v.length <= 1000 ? null : 'At most 1000 characters';
     case 'name':

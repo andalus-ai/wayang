@@ -9,11 +9,17 @@ import java.util.Set;
 /**
  * Server-side request forgery guard for outbound calls whose URL is chosen by a process author. Only http/https;
  * no credentials in the URL; the host must resolve exclusively to public addresses unless the operator
- * allow-listed it. Residual risk: the HTTP client resolves the name again when it connects, so a hostile DNS
- * server could answer differently the second time (DNS rebinding); run the engine behind an egress firewall
- * for hard guarantees.
+ * allow-listed it.
+ *
+ * <p>DNS rebinding: the HTTP client resolves the name again when it connects. Both lookups go through the JVM's address cache
+ * ({@code networkaddress.cache.ttl}, 30 seconds by default), so the second one gets the answer the guard just checked, and a hostile DNS
+ * server cannot flip it in between. That protection is gone when the cache is switched off ({@code 0}): {@link #dnsAnswersArePinned()}
+ * says which case this JVM is in, and the constructor warns once when it is not. The remaining sliver is a cache entry expiring between
+ * the check and the connect; an egress firewall closes that too.
  */
 public final class UrlGuard {
+
+    private static final java.util.concurrent.atomic.AtomicBoolean WARNED = new java.util.concurrent.atomic.AtomicBoolean();
 
     private final boolean allowPrivate;
     private final Set<String> allowedHosts;
@@ -23,8 +29,31 @@ public final class UrlGuard {
      * @param allowedHosts  exact host names that are permitted even if they resolve to private addresses
      */
     public UrlGuard(boolean allowPrivate, Set<String> allowedHosts) {
+        if (!dnsAnswersArePinned() && WARNED.compareAndSet(false, true)) {
+            System.getLogger(UrlGuard.class.getName()).log(System.Logger.Level.WARNING,
+                    "The JVM address cache is switched off (networkaddress.cache.ttl=0): the URL guard cannot pin DNS answers, so DNS rebinding is possible. "
+                            + "Leave the cache on (the default) or run behind an egress firewall.");
+        }
         this.allowPrivate = allowPrivate;
         this.allowedHosts = Set.copyOf(allowedHosts.stream().map(h -> h.toLowerCase(Locale.ROOT)).toList());
+    }
+
+    /** Whether the JVM caches name lookups, so the second lookup (the connect) returns what the guard checked. */
+    public static boolean dnsAnswersArePinned() {
+        return dnsAnswersArePinned(System.getProperty("sun.net.inetaddr.ttl"), java.security.Security.getProperty("networkaddress.cache.ttl"));
+    }
+
+    /** @param systemTtl the {@code sun.net.inetaddr.ttl} property, which wins when set; @param securityTtl the {@code networkaddress.cache.ttl} security property */
+    static boolean dnsAnswersArePinned(String systemTtl, String securityTtl) {
+        String v = systemTtl != null ? systemTtl : securityTtl;
+        if (v == null) {
+            return true; // the JDK default: 30 seconds
+        }
+        try {
+            return Integer.parseInt(v.strip()) != 0; // negative = cached forever
+        } catch (NumberFormatException e) {
+            return true; // the JDK ignores a bad value and keeps its default
+        }
     }
 
     public static UrlGuard strict() {

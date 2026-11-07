@@ -120,4 +120,17 @@ class TelegramVoiceTest {
         Poller.Result off = poller.poll(cfg("allowedChatIds", List.of(42)), null);
         assertEquals(1, off.events().size(), "without voice:true only text is an event");
     }
+
+    @Test
+    void allowedUserIdsNarrowAGroupChat() throws Exception {
+        updates = "[{\"update_id\":1,\"message\":{\"message_id\":1,\"date\":1,\"chat\":{\"id\":-100,\"type\":\"group\"},\"from\":{\"id\":7,\"username\":\"me\"},\"text\":\"mine\"}},"
+                + "{\"update_id\":2,\"message\":{\"message_id\":2,\"date\":1,\"chat\":{\"id\":-100,\"type\":\"group\"},\"from\":{\"id\":8},\"text\":\"a stranger\"}},"
+                + "{\"update_id\":3,\"message\":{\"message_id\":3,\"date\":1,\"chat\":{\"id\":-100,\"type\":\"group\"},\"text\":\"no sender\"}}]";
+        Telegram.Updates poller = new Telegram.Updates(new UrlGuard(true, Set.of()));
+        Poller.Result r = poller.poll(cfg("allowedChatIds", List.of(-100), "allowedUserIds", List.of(7)), null);
+        assertEquals(1, r.events().size(), r.events().toString());
+        assertEquals("mine", r.events().get(0).get("text"));
+        assertEquals("4", r.nextCursor(), "dropped updates are still acknowledged");
+        assertEquals(3, poller.poll(cfg("allowedChatIds", List.of(-100)), null).events().size(), "without allowedUserIds the chat rule applies");
+    }
 }

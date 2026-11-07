@@ -18,7 +18,7 @@ import tech.kayys.wayang.runtime.ServiceHandler;
  * optional {@code replyTo}. Output {@code messageId}, {@code chatId}.
  *
  * <p>Poller {@code telegram} (getUpdates): config {@code botToken}, <b>{@code allowedChatIds} (required, non-empty)</b>,
- * optional {@code baseUrl}, {@code limit}. Anyone can message a bot, so updates from chats not on the list are dropped
+ * optional {@code allowedUserIds} (only these senders count inside an allowed chat: a group lets every member write), optional {@code baseUrl}, {@code limit}. Anyone can message a bot, so updates from chats not on the list are dropped
  * (the cursor still advances past them) and never start a run. Each event: {@code updateId, chatId, chatType, fromId,
  * fromUsername, messageId, text, date}; with {@code voice: true} a voice note of at most 5 minutes from an allowed chat is an event with an
  * empty {@code text} plus {@code voiceFileId} and {@code voiceSeconds} (fetch it with {@code downloadFile}).
@@ -270,6 +270,10 @@ public final class Telegram {
             if (config.get("allowedChatIds") instanceof List<?> l) {
                 l.forEach(o -> allowed.add(String.valueOf(o)));
             }
+            Set<String> users = new java.util.HashSet<>();
+            if (config.get("allowedUserIds") instanceof List<?> ul) {
+                ul.forEach(o -> users.add(String.valueOf(o)));
+            }
             if (allowed.isEmpty()) {
                 throw new ServiceHandler.ConnectorException(
                         "telegram trigger needs a non-empty 'allowedChatIds': anyone can message a bot", false);
@@ -296,6 +300,10 @@ public final class Telegram {
                     }
                     String chatId = String.valueOf(chat.get("id"));
                     if (!allowed.contains(chatId)) {
+                        continue;
+                    }
+                    // In a group every member can write: with allowedUserIds only these senders count (a message with no sender is dropped).
+                    if (!users.isEmpty() && !(msg.get("from") instanceof Map<?, ?> sender && users.contains(String.valueOf(sender.get("id"))))) {
                         continue;
                     }
                     String voiceId = null;
