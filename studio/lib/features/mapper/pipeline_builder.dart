@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
 import '../../data/pipeline_model.dart';
+import '../../data/nested_step_path.dart';
 
 const _mono = TextStyle(fontFamily: 'monospace', fontSize: 12);
 
@@ -39,6 +40,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
   late final Future<List<StepKind>> _kinds =
       rootBundle.loadString('assets/pipeline_steps.json').then(parseCatalog);
   int? _selectedIndex;
+  StepPath? _selectedNestedPath;
 
   @override
   void initState() {
@@ -53,6 +55,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
       oldWidget.controller.removeListener(_refresh);
       widget.controller.addListener(_refresh);
       _selectedIndex = null;
+      _selectedNestedPath = null;
     }
   }
 
@@ -73,7 +76,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
 
   void _write(List<Map<String, dynamic>> steps, {int? select}) {
     widget.controller.text = encodeSteps(steps, previous: widget.controller.text);
-    setState(() => _selectedIndex = select);
+    setState(() { _selectedIndex = select; _selectedNestedPath = null; });
   }
 
   Future<void> _edit(List<Map<String, dynamic>> steps, int index) async {
@@ -122,6 +125,81 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
     if (!mounted || result == null) return;
     final next = List<Map<String, dynamic>>.of(steps)..[index] = result;
     _write(next, select: index);
+  }
+
+  Map<String, dynamic>? _document() {
+    try { final value = jsonDecode(widget.controller.text); return value is Map ? Map<String, dynamic>.from(value) : null; }
+    on FormatException { return null; }
+  }
+
+  void _writeNested(Map<String, dynamic> document, StepPath path) {
+    widget.controller.text = const JsonEncoder.withIndent('  ').convert(document);
+    setState(() { _selectedNestedPath = path; _selectedIndex = path.indices.first; });
+  }
+
+  Future<void> _editNested(StepPath path, Map<String, dynamic> step) async {
+    final editor = TextEditingController(text: const JsonEncoder.withIndent('  ').convert(step));
+    String? error;
+    final result = await showDialog<Map<String, dynamic>>(context: context, builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setLocal) => AlertDialog(title: const Text('Edit nested step'),
+        content: SizedBox(width: 560, height: 380, child: Column(children: [
+          Expanded(child: TextField(controller: editor, expands: true, maxLines: null, minLines: null,
+            textAlignVertical: TextAlignVertical.top, style: _mono,
+            decoration: const InputDecoration(border: OutlineInputBorder(), helperText: 'Edit nested step JSON.'))),
+          if (error != null) Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+        ])),
+        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          FilledButton(onPressed: () { try { Navigator.pop(dialogContext, parseStep(editor.text)); }
+            on FormatException catch (e) { setLocal(() => error = e.message); }
+          }, child: const Text('Apply'))],
+      ),
+    ));
+    editor.dispose();
+    if (!mounted || result == null) return;
+    final document = _document();
+    if (document == null) return;
+    final updated = replaceStepAtPath(document, path, result);
+    if (updated != null) _writeNested(updated, path);
+  }
+
+  Widget _nestedInspector() {
+    final path = _selectedNestedPath;
+    if (path == null || path.indices.length != 2) return const SizedBox.shrink();
+    final document = _document();
+    final step = document == null ? null : stepAtPath(document, path);
+    if (document == null || step == null) return const SizedBox.shrink();
+    final parentIndex = path.indices[0];
+    final childIndex = path.indices[1];
+    final siblings = (stepAtPath(document, StepPath([parentIndex]))?['steps'] as List?) ?? const [];
+    final colors = Theme.of(context).colorScheme;
+    return Card(margin: EdgeInsets.zero, child: Padding(padding: const EdgeInsets.all(16), child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [Icon(Icons.subdirectory_arrow_right, color: colors.primary), const SizedBox(width: 8),
+          Expanded(child: Text('Nested step · parent ${parentIndex + 1} · child ${childIndex + 1}',
+            style: const TextStyle(fontWeight: FontWeight.w700))),
+          IconButton(tooltip: 'Move nested step up', onPressed: childIndex == 0 ? null : () {
+            final updated = moveStepAtPath(document, path, -1);
+            if (updated != null) _writeNested(updated, StepPath([parentIndex, childIndex - 1]));
+          }, icon: const Icon(Icons.arrow_upward)),
+          IconButton(tooltip: 'Move nested step down', onPressed: childIndex >= siblings.length - 1 ? null : () {
+            final updated = moveStepAtPath(document, path, 1);
+            if (updated != null) _writeNested(updated, StepPath([parentIndex, childIndex + 1]));
+          }, icon: const Icon(Icons.arrow_downward)),
+          IconButton(tooltip: 'Edit nested step JSON', onPressed: () => _editNested(path, step), icon: const Icon(Icons.edit_outlined)),
+          IconButton(tooltip: 'Remove nested step', onPressed: () {
+            final updated = removeStepAtPath(document, path);
+            if (updated == null) return;
+            widget.controller.text = const JsonEncoder.withIndent('  ').convert(updated);
+            final remaining = (stepAtPath(updated, StepPath([parentIndex]))?['steps'] as List?) ?? const [];
+            setState(() => _selectedNestedPath = remaining.isEmpty ? null : StepPath([parentIndex, childIndex >= remaining.length ? remaining.length - 1 : childIndex]));
+          }, icon: Icon(Icons.delete_outline, color: colors.error)),
+        ]),
+        const SizedBox(height: 8),
+        Container(width: double.infinity, padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: colors.surfaceContainerHighest.withOpacity(0.45), borderRadius: BorderRadius.circular(8)),
+          child: SelectableText(const JsonEncoder.withIndent('  ').convert(step), style: _mono)),
+      ],
+    )));
   }
 
   Widget _addButton(List<StepKind> kinds, List<Map<String, dynamic>> steps) {
@@ -247,7 +325,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
                                 stepIcons[byType[group.steps[childIndex]['type']]?.icon] ??
                                   Icons.extension,
                                 size: 13),
-                              onPressed: () => setState(() => _selectedIndex = index),
+                              onPressed: group.label == 'Main steps' ? () => setState(() { _selectedIndex = index; _selectedNestedPath = StepPath([index, childIndex]); }) : null,
                             ),
                         ],
                       ),
@@ -410,6 +488,8 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
               })),
           const SizedBox(height: 10),
           _inspector(steps, byType),
+          const SizedBox(height: 8),
+          _nestedInspector(),
         ]);
       },
     );
