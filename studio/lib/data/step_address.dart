@@ -95,6 +95,13 @@ bool _assignAtAddress(Object root, StepAddress address, Object? value) {
   return true;
 }
 
+List<Map<String, dynamic>>? stepSequenceAtAddress(
+  Map<String, dynamic> document, StepAddress address) {
+  final value = _valueAtAddress(document, address);
+  if (value is! List || value.any((item) => item is! Map)) return null;
+  return [for (final item in value) Map<String, dynamic>.from(item as Map)];
+}
+
 Map<String, dynamic>? stepAtAddress(
   Map<String, dynamic> document, StepAddress address) {
   final value = _valueAtAddress(document, address);
