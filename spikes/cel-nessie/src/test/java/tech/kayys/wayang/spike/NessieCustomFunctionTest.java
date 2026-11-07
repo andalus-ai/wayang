@@ -19,13 +19,7 @@ import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.interpreter.functions.Overload;
 
-/**
- * Executable registration probes for one deliberately small, pure CEL function.
- *
- * <p>The fixture exercises both CEL-Java's Library composition API and the
- * Wayang-side versioned function descriptor/allowlist contract. It remains an
- * isolated compatibility spike, not a production registry.
- */
+/** Executable probes for explicit, governed custom CEL function registration. */
 class NessieCustomFunctionTest {
 
     private static final String FUNCTION = "wayang_is_even";
@@ -33,8 +27,7 @@ class NessieCustomFunctionTest {
 
     @Test
     void functionIsNotAvailableWithoutAnExplicitLibrary() {
-        Env env = Env.newCustomEnv();
-        Env.AstIssuesTuple compiled = env.compile(FUNCTION + "(2)");
+        Env.AstIssuesTuple compiled = Env.newCustomEnv().compile(FUNCTION + "(2)");
         assertTrue(compiled.hasIssues(),
                 "A custom function must not become visible without explicit registration");
     }
@@ -54,16 +47,16 @@ class NessieCustomFunctionTest {
 
     @Test
     void declaredAndImplementedFunctionEvaluatesForEvenAndOddValues() {
-        Env env = Env.newCustomEnv(Library.Lib(new EvenFunctionLibrary()));
-        assertBoolean(env, "wayang_is_even(2)", true);
-        assertBoolean(env, "wayang_is_even(3)", false);
-        assertBoolean(env, "wayang_is_even(0)", true);
-        assertBoolean(env, "wayang_is_even(-7)", false);
+        Env env = Env.newCustomEnv(Library.Lib(evenFunctionLibrary()));
+        assertBoolean(env, FUNCTION + "(2)", true);
+        assertBoolean(env, FUNCTION + "(3)", false);
+        assertBoolean(env, FUNCTION + "(0)", true);
+        assertBoolean(env, FUNCTION + "(-7)", false);
     }
 
     @Test
     void checkerRejectsWrongArgumentTypeBeforeEvaluation() {
-        Env env = Env.newCustomEnv(Library.Lib(new EvenFunctionLibrary()));
+        Env env = Env.newCustomEnv(Library.Lib(evenFunctionLibrary()));
         Env.AstIssuesTuple compiled = env.compile(FUNCTION + "(\"not-an-int\")");
         assertTrue(compiled.hasIssues(),
                 "The declared int overload must not silently accept a string argument");
@@ -71,21 +64,46 @@ class NessieCustomFunctionTest {
 
     @Test
     void functionIsDeterministicAcrossRepeatedEvaluations() {
-        Env env = Env.newCustomEnv(Library.Lib(new EvenFunctionLibrary()));
+        Env env = Env.newCustomEnv(Library.Lib(evenFunctionLibrary()));
         Ast ast = compile(env, FUNCTION + "(-9223372036854775808)");
         Program program = env.program(ast);
 
         for (int i = 0; i < 20; i++) {
             Program.EvalResult result = program.eval(Map.of());
             assertEquals(TypeEnum.Bool, result.getVal().type().typeEnum());
-            assertEquals(true, result.getVal().value(),
-                    "The same immutable input must produce the same boolean result");
+            assertEquals(true, result.getVal().value());
         }
     }
 
+    private static GovernedCelLibrary evenFunctionLibrary() {
+        FunctionDescriptor descriptor = new FunctionDescriptor(
+                "wayang.math", FUNCTION, "1.0.0", OVERLOAD_ID,
+                List.of("int"), "bool",
+                FunctionDescriptor.Effect.PURE,
+                FunctionDescriptor.Determinism.DETERMINISTIC,
+                "1.0.0");
+        FunctionRegistry registry = FunctionRegistry.builder()
+                .register(descriptor)
+                .build()
+                .requireExpressionSafe();
+
+        CelFunctionBinding binding = new CelFunctionBinding(
+                descriptor,
+                EnvOption.declarations(Decls.newFunction(
+                        FUNCTION,
+                        Decls.newOverload(OVERLOAD_ID, List.of(Decls.Int), Decls.Bool))),
+                ProgramOption.functions(Overload.function(FUNCTION, values -> {
+                    if (values.length != 1 || !(values[0] instanceof IntT integer)) {
+                        return Err.newErr("invalid arguments for %s", FUNCTION);
+                    }
+                    return boolOf(integer.intValue() % 2L == 0L);
+                })));
+
+        return new GovernedCelLibrary(registry, List.of(binding));
+    }
+
     private static void assertBoolean(Env env, String expression, boolean expected) {
-        Ast ast = compile(env, expression);
-        Program.EvalResult result = env.program(ast).eval(Map.of());
+        Program.EvalResult result = env.program(compile(env, expression)).eval(Map.of());
         assertEquals(TypeEnum.Bool, result.getVal().type().typeEnum());
         assertEquals(expected, result.getVal().value());
     }
@@ -95,42 +113,5 @@ class NessieCustomFunctionTest {
         assertTrue(!compiled.hasIssues(),
                 () -> "Expected expression to compile: " + expression + " / " + compiled.getIssues());
         return compiled.getAst();
-    }
-
-    private static final class EvenFunctionLibrary implements Library {
-
-        private final FunctionRegistry registry = FunctionRegistry.builder()
-                .register(new FunctionDescriptor(
-                        "wayang.math",
-                        FUNCTION,
-                        "1.0.0",
-                        OVERLOAD_ID,
-                        List.of("int"),
-                        "bool",
-                        FunctionDescriptor.Effect.PURE,
-                        FunctionDescriptor.Determinism.DETERMINISTIC,
-                        "1.0.0"))
-                .build()
-                .requireExpressionSafe();
-
-        @Override
-        public List<EnvOption> getCompileOptions() {
-            registry.require(OVERLOAD_ID);
-            return List.of(EnvOption.declarations(
-                    Decls.newFunction(
-                            FUNCTION,
-                            Decls.newOverload(OVERLOAD_ID, List.of(Decls.Int), Decls.Bool))));
-        }
-
-        @Override
-        public List<ProgramOption> getProgramOptions() {
-            return List.of(ProgramOption.functions(
-                    Overload.function(FUNCTION, values -> {
-                        if (values.length != 1 || !(values[0] instanceof IntT integer)) {
-                            return Err.newErr("invalid arguments for %s", FUNCTION);
-                        }
-                        return boolOf(integer.intValue() % 2L == 0L);
-                    })));
-        }
     }
 }
