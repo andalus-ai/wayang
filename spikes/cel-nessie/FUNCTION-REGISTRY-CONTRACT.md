@@ -78,6 +78,16 @@ the same contribution set. CEL-Java's `Library` abstraction is a suitable adapte
 boundary because it composes EnvOptions and ProgramOptions, but the Wayang descriptor
 remains the authority for identity and policy.
 
+The spike now includes `CelFunctionBinding` and `GovernedCelLibrary`. The latter
+requires exactly one binding for every registry descriptor, rejects unregistered or
+mismatched descriptors, and exposes immutable compile/program option lists. This
+closes the partial-library assembly gap at the adapter composition boundary.
+
+It does **not** introspect opaque CEL-Java `ProgramOption` instances to prove that
+the runtime dispatch table actually contains the declared overload ID. The current
+API represents runtime dispatch by function name and implementation overload
+metadata; exact multi-overload ID parity remains a separate qualification gate.
+
 ## 5. Declaration/runtime parity
 
 For each descriptor, qualification must compare:
@@ -174,10 +184,14 @@ preemptive cancellation, bounded results, or durable recovery.
 - `FunctionDescriptor`: immutable typed metadata and stable per-overload fingerprint.
 - `FunctionRegistry`: explicit immutable allowlist, duplicate rejection, safe-profile
   gate, deterministic registry fingerprint.
+- `CelFunctionBinding` / `GovernedCelLibrary`: exact descriptor-to-provider-binding
+  composition, complete binding coverage, and immutable CEL-Java option lists.
 - `NessieCustomFunctionTest`: verifies missing declaration, declaration without
   implementation, typed runtime behavior, wrong argument type rejection, and repeatability.
 - `FunctionRegistryTest`: verifies unknown/duplicate rejection, safe-profile rejection,
-  fingerprint stability/version sensitivity, and builder freeze.
+  fingerprint stability/version sensitivity, registration-order independence, zero-arity
+  descriptor support, and builder freeze.
+- `GovernedCelLibraryTest`: verifies missing binding and descriptor mismatch rejection.
 
 These are executable probes, not production qualification. The adapter still needs
 stronger proof that every runtime overload maps to the exact descriptor overload ID
