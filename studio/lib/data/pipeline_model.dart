@@ -95,13 +95,11 @@ class NestedStepGroup {
 
 List<Map<String, dynamic>> _stepObjects(Object? value) {
   if (value is! List) return const [];
-  return [
-    for (final item in value)
-      if (item is Map) Map<String, dynamic>.from(item),
-  ];
+  if (value.any((item) => item is! Map)) return const [];
+  return [for (final item in value) Map<String, dynamic>.from(item as Map)];
 }
 
-/// Projects known nested EIP structures into display-only lanes.
+/// Projects known nested EIP structures into addressable execution lanes.
 ///
 /// Supports the actual catalog shapes: choice.branches/otherwise,
 /// switch.cases/default, multicast.branches, loadBalance.targets,
@@ -118,7 +116,7 @@ List<NestedStepGroup> nestedStepGroups(
         label: label,
         steps: children,
         condition: condition,
-        address: address,
+        address: value.every((item) => item is Map) ? address : null,
       ));
     }
   }
