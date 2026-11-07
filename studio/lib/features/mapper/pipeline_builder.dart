@@ -184,6 +184,8 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
         Row(children: [Icon(Icons.subdirectory_arrow_right, color: colors.primary), const SizedBox(width: 8),
           Expanded(child: Text('Nested step · ${path.toString()}',
             style: const TextStyle(fontWeight: FontWeight.w700))),
+          TextButton.icon(onPressed: () => setState(() => _selectedNestedPath = null),
+            icon: const Icon(Icons.arrow_upward, size: 15), label: const Text('Parent')),
           IconButton(tooltip: 'Move nested step up', onPressed: childIndex == 0 ? null : () {
             final updated = moveStepAtAddress(document, path, -1);
             if (updated != null) _writeNested(updated, StepAddress(path.segments.take(path.segments.length - 1).followedBy([StepAddressSegment.index(childIndex - 1)])));
