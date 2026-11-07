@@ -1,3 +1,5 @@
+import 'json_copy.dart';
+
 /// Immutable address of a step inside the pipeline JSON.
 class StepPath {
   const StepPath(this.indices);
@@ -48,13 +50,13 @@ Map<String, dynamic>? replaceStepAtPath(
   Map<String, dynamic> replacement,
 ) {
   if (path.indices.isEmpty) return null;
-  final copy = deepCopy(document) as Map<String, dynamic>;
+  final copy = deepCopyJson(document) as Map<String, dynamic>;
   Object? sequence = copy['steps'];
   for (var depth = 0; depth < path.indices.length; depth++) {
     final index = path.indices[depth];
     if (sequence is! List || index < 0 || index >= sequence.length) return null;
     if (depth == path.indices.length - 1) {
-      sequence[index] = deepCopy(replacement);
+      sequence[index] = deepCopyJson(replacement);
       return copy;
     }
     final item = sequence[index];
@@ -72,7 +74,7 @@ Map<String, dynamic>? insertStepAtPath(
   int index,
   Map<String, dynamic> step,
 ) {
-  final copy = deepCopy(document) as Map<String, dynamic>;
+  final copy = deepCopyJson(document) as Map<String, dynamic>;
   Object? sequence = copy['steps'];
   for (final parentIndex in parentPath.indices) {
     if (sequence is! List || parentIndex < 0 || parentIndex >= sequence.length) return null;
@@ -81,7 +83,7 @@ Map<String, dynamic>? insertStepAtPath(
     sequence = parent['steps'];
   }
   if (sequence is! List || index < 0 || index > sequence.length) return null;
-  sequence.insert(index, deepCopy(step));
+  sequence.insert(index, deepCopyJson(step));
   return copy;
 }
 
@@ -92,7 +94,7 @@ Map<String, dynamic>? removeStepAtPath(
   StepPath path,
 ) {
   if (path.indices.isEmpty) return null;
-  final copy = deepCopy(document) as Map<String, dynamic>;
+  final copy = deepCopyJson(document) as Map<String, dynamic>;
   Object? sequence = copy['steps'];
   for (var depth = 0; depth < path.indices.length; depth++) {
     final index = path.indices[depth];
@@ -115,7 +117,7 @@ Map<String, dynamic>? moveStepAtPath(
   int delta,
 ) {
   if (path.indices.isEmpty) return null;
-  final copy = deepCopy(document) as Map<String, dynamic>;
+  final copy = deepCopyJson(document) as Map<String, dynamic>;
   Object? sequence = copy['steps'];
   for (var depth = 0; depth < path.indices.length; depth++) {
     final index = path.indices[depth];
