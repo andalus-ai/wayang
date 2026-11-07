@@ -252,7 +252,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
     );
   }
 
-  Widget _node(int index, Map<String, dynamic> step, Map<String, StepKind> byType) {
+  Widget _node(int index, Map<String, dynamic> step, Map<String, StepKind> byType, List<StepKind> kinds) {
     final colors = Theme.of(context).colorScheme;
     final kind = byType[step['type']];
     final selected = _selectedIndex == index;
@@ -313,12 +313,27 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
                     ]),
                     const SizedBox(height: 7),
                     for (final group in nestedGroups) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4, bottom: 3),
-                        child: Text(group.label,
-                          style: const TextStyle(fontSize: 11,
-                            fontWeight: FontWeight.w700)),
-                      ),
+                      Row(children: [
+                        Expanded(child: Padding(
+                          padding: const EdgeInsets.only(top: 4, bottom: 3),
+                          child: Text(group.label,
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                        )),
+                        if (group.address != null)
+                          PopupMenuButton<StepKind>(
+                            tooltip: 'Add to \${group.label}',
+                            padding: EdgeInsets.zero, iconSize: 17,
+                            onSelected: (kind) {
+                              final document = _document();
+                              if (document == null) return;
+                              final current = stepSequenceAtAddress(document, group.address!) ?? const <Map<String, dynamic>>[];
+                              final updated = insertStepAtAddress(document, group.address!, current.length, kind.instantiate());
+                              if (updated != null) _writeNested(updated, group.address!.at(current.length));
+                            },
+                            itemBuilder: (_) => [for (final kind in kinds) PopupMenuItem<StepKind>(value: kind, child: Text(kind.label))],
+                            icon: const Icon(Icons.add_circle_outline),
+                          ),
+                      ]),
                       if (group.condition != null)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 4),
@@ -495,7 +510,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
                 final vertical = constraints.maxWidth < 620;
                 final nodes = <Widget>[];
                 for (var i = 0; i < steps.length; i++) {
-                  nodes.add(_node(i, steps[i], byType));
+                  nodes.add(_node(i, steps[i], byType, kinds));
                   if (i < steps.length - 1) nodes.add(_connector(vertical));
                 }
                 if (vertical) return ListView(
