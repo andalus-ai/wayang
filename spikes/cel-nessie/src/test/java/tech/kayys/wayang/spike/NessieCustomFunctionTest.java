@@ -89,10 +89,11 @@ class NessieCustomFunctionTest {
 
         CelFunctionBinding binding = new CelFunctionBinding(
                 descriptor,
+                OVERLOAD_ID,
                 EnvOption.declarations(Decls.newFunction(
                         FUNCTION,
                         Decls.newOverload(OVERLOAD_ID, List.of(Decls.Int), Decls.Bool))),
-                ProgramOption.functions(Overload.function(FUNCTION, values -> {
+                ProgramOption.functions(Overload.function(OVERLOAD_ID, values -> {
                     if (values.length != 1 || !(values[0] instanceof IntT integer)) {
                         return Err.newErr("invalid arguments for %s", FUNCTION);
                     }
