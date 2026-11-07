@@ -16,14 +16,15 @@ import org.projectnessie.cel.ProgramOption;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.IntT;
-import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.interpreter.functions.Overload;
 
 /**
- * Executable registration probes for one deliberately small, pure custom CEL function.
+ * Executable registration probes for one deliberately small, pure CEL function.
  *
- * <p>The fixture uses the public Library contract so declaration and runtime implementation are
- * installed together. It remains an isolated compatibility spike, not a production registry.
+ * <p>The fixture exercises both CEL-Java's Library composition API and the
+ * Wayang-side versioned function descriptor/allowlist contract. It remains an
+ * isolated compatibility spike, not a production registry.
  */
 class NessieCustomFunctionTest {
 
@@ -33,11 +34,22 @@ class NessieCustomFunctionTest {
     @Test
     void functionIsNotAvailableWithoutAnExplicitLibrary() {
         Env env = Env.newCustomEnv();
-
         Env.AstIssuesTuple compiled = env.compile(FUNCTION + "(2)");
-
         assertTrue(compiled.hasIssues(),
                 "A custom function must not become visible without explicit registration");
+    }
+
+    @Test
+    void declarationWithoutRuntimeImplementationEvaluatesToCelError() {
+        Env env = Env.newCustomEnv(EnvOption.declarations(
+                Decls.newFunction(FUNCTION,
+                        Decls.newOverload(OVERLOAD_ID, List.of(Decls.Int), Decls.Bool))));
+        Ast ast = compile(env, FUNCTION + "(2)");
+
+        Program.EvalResult result = env.program(ast).eval(Map.of());
+
+        assertEquals(TypeEnum.Err, result.getVal().type().typeEnum(),
+                "A checker declaration must not be mistaken for an executable implementation");
     }
 
     @Test
@@ -50,13 +62,22 @@ class NessieCustomFunctionTest {
     }
 
     @Test
+    void checkerRejectsWrongArgumentTypeBeforeEvaluation() {
+        Env env = Env.newCustomEnv(Library.Lib(new EvenFunctionLibrary()));
+        Env.AstIssuesTuple compiled = env.compile(FUNCTION + "(\"not-an-int\")");
+        assertTrue(compiled.hasIssues(),
+                "The declared int overload must not silently accept a string argument");
+    }
+
+    @Test
     void functionIsDeterministicAcrossRepeatedEvaluations() {
         Env env = Env.newCustomEnv(Library.Lib(new EvenFunctionLibrary()));
-        Ast ast = compile(env, "wayang_is_even(-9223372036854775808)");
-
+        Ast ast = compile(env, FUNCTION + "(-9223372036854775808)");
         Program program = env.program(ast);
+
         for (int i = 0; i < 20; i++) {
             Program.EvalResult result = program.eval(Map.of());
+            assertEquals(TypeEnum.Bool, result.getVal().type().typeEnum());
             assertEquals(true, result.getVal().value(),
                     "The same immutable input must produce the same boolean result");
         }
@@ -65,6 +86,7 @@ class NessieCustomFunctionTest {
     private static void assertBoolean(Env env, String expression, boolean expected) {
         Ast ast = compile(env, expression);
         Program.EvalResult result = env.program(ast).eval(Map.of());
+        assertEquals(TypeEnum.Bool, result.getVal().type().typeEnum());
         assertEquals(expected, result.getVal().value());
     }
 
@@ -77,8 +99,23 @@ class NessieCustomFunctionTest {
 
     private static final class EvenFunctionLibrary implements Library {
 
+        private final FunctionRegistry registry = FunctionRegistry.builder()
+                .register(new FunctionDescriptor(
+                        "wayang.math",
+                        FUNCTION,
+                        "1.0.0",
+                        OVERLOAD_ID,
+                        List.of("int"),
+                        "bool",
+                        FunctionDescriptor.Effect.PURE,
+                        FunctionDescriptor.Determinism.DETERMINISTIC,
+                        "1.0.0"))
+                .build()
+                .requireExpressionSafe();
+
         @Override
         public List<EnvOption> getCompileOptions() {
+            registry.require(OVERLOAD_ID);
             return List.of(EnvOption.declarations(
                     Decls.newFunction(
                             FUNCTION,
@@ -90,8 +127,7 @@ class NessieCustomFunctionTest {
             return List.of(ProgramOption.functions(
                     Overload.function(FUNCTION, values -> {
                         if (values.length != 1 || !(values[0] instanceof IntT integer)) {
-                            Val first = values.length == 0 ? null : values[0];
-                            return Err.noSuchOverload(first, FUNCTION, first);
+                            return Err.newErr("invalid arguments for %s", FUNCTION);
                         }
                         return boolOf(integer.intValue() % 2L == 0L);
                     })));
