@@ -29,8 +29,8 @@ jobs:
           distribution: temurin
           java-version: "25" # Gamelan and Andalus compile with release 25; Wayang itself targets 21
           cache: maven
-      # Wayang builds against Gamelan (version in the parent pom); install it from source. The Andalus adapter is the -Pandalus profile:
-      # the andalus-ai/andalus repository does not define the classes it needs, so CI does not build it.
+      # Wayang builds against Gamelan (version in the parent pom); install it from source. The Andalus adapter is the -Pandalus profile,
+      # built by the `andalus` job below (its classes live in andalus-ai/andalus-framework).
       - name: Gamelan
         uses: actions/checkout@v4
         with:
@@ -42,6 +42,27 @@ jobs:
         env:
           WAYANG_TEST_JDBC_URL: jdbc:postgresql://localhost/wayang?user=postgres&password=pw
         run: mvn -B verify
+
+  andalus:
+    # The adapter compiles against andalus-framework (engine + plugin SPI). Kept separate so a framework problem is visible on its own.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      - name: Andalus framework
+        uses: actions/checkout@v4
+        with:
+          repository: andalus-ai/andalus-framework
+          path: deps/andalus-framework
+      - name: Install the framework modules the adapter needs
+        run: mvn -B -q -f deps/andalus-framework/pom.xml install -DskipTests -pl framework/andalus-engine,framework/andalus-plugin -am
+      - name: Build and test the Andalus adapter
+        run: mvn -B -Pandalus -pl wayang-adapter-andalus -am verify
 
   studio:
     runs-on: ubuntu-latest
