@@ -46,8 +46,8 @@
             <scope>provided</scope>
         </dependency>
         <dependency>
-            <groupId>io.quarkus.arc</groupId>
-            <artifactId>arc</artifactId>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-arc</artifactId>
             <scope>provided</scope>
         </dependency>
         <dependency>
