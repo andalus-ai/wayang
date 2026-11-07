@@ -15,15 +15,15 @@ and a passing isolated test is not production qualification.
 
 | Gate | Required evidence | Current status | Promotion consequence |
 |---|---|---|---|
-| Custom environment | Only explicitly declared identifiers/operators/functions compile | Probe added; execution pending | No promotion until CI/maintainer run |
-| Function registration | Explicit library installs compile declarations and runtime implementations | Probe added; execution pending | No implicit/global function exposure |
+| Custom environment | Only explicitly declared identifiers/operators/functions compile | Pass: JDK 21 isolated workflow | No promotion until CI/maintainer run |
+| Function registration | Explicit library installs compile declarations and runtime implementations | Pass: JDK 21 isolated workflow | No implicit/global function exposure |
 | Declaration/runtime parity | Function name, overload ID, arity, argument and result types agree | Partial probe; exact overload-ID mapping remains unproven | Reject provider |
-| Missing runtime binding | Declaration compiles but missing runtime implementation yields CEL error | Probe added; execution pending | Must fail closed |
-| Wrong argument type | Checker rejects mismatched argument type | Probe added; execution pending | No silent coercion |
-| Function identity | Stable descriptor includes semantic and implementation versions | Probe added; execution pending | No unversioned function artifacts |
-| Registry allowlist | Unknown/duplicate overload rejected; immutable after build | Probe added; execution pending | No reflection discovery |
-| Effect/determinism | Expression-safe profile accepts only pure + deterministic functions | Probe added; execution pending | Contextual/side-effecting functions excluded |
-| Registry fingerprint | Stable across order; changes when contract/implementation changes | Probe added; execution pending | Recovery requires exact match |
+| Missing runtime binding | Declaration compiles but missing runtime implementation yields CEL error | Pass: JDK 21 isolated workflow | Must fail closed |
+| Wrong argument type | Checker rejects mismatched argument type | Pass: JDK 21 isolated workflow | No silent coercion |
+| Function identity | Stable descriptor includes semantic and implementation versions | Pass: JDK 21 isolated workflow | No unversioned function artifacts |
+| Registry allowlist | Unknown/duplicate overload rejected; immutable after build | Pass: JDK 21 isolated workflow | No reflection discovery |
+| Effect/determinism | Expression-safe profile accepts only pure + deterministic functions | Pass: JDK 21 isolated workflow | Contextual/side-effecting functions excluded |
+| Registry fingerprint | Stable across order; changes when contract/implementation changes | Pass: JDK 21 isolated workflow | Recovery requires exact match |
 | Error mapping | CEL errors, unknown, null and host failures remain distinct | Not tested | Reject provider |
 | Cost estimation | Representative estimates measured; advisory semantics documented | Not tested | Never call estimate a hard budget |
 | Hard evaluation budget | Runtime stops work before configured CPU/instruction/allocation ceiling | Blocked / not demonstrated | Do not run untrusted production expressions |
@@ -45,8 +45,12 @@ and a passing isolated test is not production qualification.
 - Descriptor identity, validation, registry allowlist, duplicate rejection,
   expression-safe profile, builder freeze, and fingerprint behavior are covered.
 
-These tests have been authored but not executed in this environment. Their status
-must remain **Probe added** until a JDK 21 Maven run is recorded.
+The isolated JDK 21 workflow completed successfully for commit
+`881251f71a7fae86e50bd840bbbcd18241dd5214`:
+[workflow run 42427567914](https://github.com/andalus-ai/wayang/actions/runs/42427567914).
+The 21-test suite passed, including custom function registration, registry,
+governed adapter, and condition-outcome probes. This is a pass for the tested
+spike behaviors only, not production qualification.
 
 ## Adversarial/resource probes still required
 
@@ -73,7 +77,10 @@ mvn -B -ntp clean verify
 ```
 
 Record commit SHA, JDK/Maven versions, command, test names, results, logs, and
-limitations. No local execution is claimed by this change.
+limitations. Recorded run: commit `881251f71a7fae86e50bd840bbbcd18241dd5214`, JDK 21,
+command `mvn -B -ntp -f spikes/cel-nessie/pom.xml clean verify`,
+workflow run 42427567914, success. The main repository CI has separate jobs and
+may still report unrelated dependency/submodule failures.
 
 ## Promotion rule
 
