@@ -323,7 +323,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
                         )),
                         if (group.address != null)
                           PopupMenuButton<StepKind>(
-                            tooltip: 'Add to \${group.label}',
+                            tooltip: 'Add nested step',
                             padding: EdgeInsets.zero, iconSize: 17,
                             onSelected: (kind) {
                               final document = _document();
