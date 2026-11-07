@@ -155,6 +155,16 @@ void main() {
     expect(groups[2].address, root.field('stages').field('prepare'));
   });
 
+  test('malformed nested lane elements are not assigned misleading indices', () {
+    final groups = nestedStepGroups({
+      'type': 'guard',
+      'steps': [{'type': 'label'}, 42, {'type': 'label'}],
+    }, parentAddress: StepAddress.root(0));
+    expect(groups, hasLength(1));
+    expect(groups.single.steps, isEmpty);
+    expect(groups.single.address, isNull);
+  });
+
   test('routeSummaries projects router destinations and conditions', () {
     expect(routeSummaries({
       'type': 'router',
