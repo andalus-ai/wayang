@@ -115,6 +115,29 @@ void main() {
     }).map((g) => g.label), ['Main steps', 'Fallback']);
   });
 
+  test('nested lane projections carry typed addresses for editable branches and cases', () {
+    final choice = {
+      'type': 'choice',
+      'branches': [
+        {'when': 'vip', 'steps': [{'type': 'label', 'name': 'vip'}]},
+      ],
+      'otherwise': [{'type': 'label', 'name': 'other'}],
+    };
+    final groups = nestedStepGroups(choice, parentAddress: StepAddress.root(3));
+    expect(groups[0].address, StepAddress.root(3).field('branches').at(0).field('steps'));
+    expect(groups[1].address, StepAddress.root(3).field('otherwise'));
+
+    final switchStep = {
+      'type': 'switch',
+      'cases': {'paid': [{'type': 'label'}]},
+      'default': <Map<String, dynamic>>[],
+    };
+    final switchGroups = nestedStepGroups(switchStep, parentAddress: StepAddress.root(0));
+    expect(switchGroups[0].address, StepAddress.root(0).field('cases').field('paid'));
+    expect(switchGroups[1].address, StepAddress.root(0).field('default'));
+    expect(switchGroups[1].steps, isEmpty);
+  });
+
   test('routeSummaries projects router destinations and conditions', () {
     expect(routeSummaries({
       'type': 'router',
