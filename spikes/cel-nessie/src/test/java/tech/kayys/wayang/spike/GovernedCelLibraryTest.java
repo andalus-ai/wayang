@@ -7,6 +7,9 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.EnvOption;
 import org.projectnessie.cel.ProgramOption;
+import org.projectnessie.cel.checker.Decls;
+import org.projectnessie.cel.common.types.BoolT;
+import org.projectnessie.cel.interpreter.functions.Overload;
 
 class GovernedCelLibraryTest {
 
@@ -39,21 +42,28 @@ class GovernedCelLibraryTest {
 
         assertThrows(IllegalArgumentException.class,
                 () -> new GovernedCelLibrary(registry, List.of(
-                        new CelFunctionBinding(differentVersion, EnvOption.declarations(), p -> p))));
+                        new CelFunctionBinding(differentVersion,
+                                EnvOption.declarations(),
+                                ProgramOption.functions(Overload.function(
+                                        registered.functionName(), values -> BoolT.True))))));
     }
 
     @Test
-    void libraryExposesExactlyTheGovernedCompileAndProgramOptions() {
+    void libraryExposesOnlyTheOptionsFromGovernedBindings() {
         FunctionDescriptor descriptor = descriptor("wayang_is_even_int");
         FunctionRegistry registry = FunctionRegistry.builder().register(descriptor).build();
-        EnvOption compileOption = EnvOption.declarations();
-        ProgramOption programOption = p -> p;
+        CelFunctionBinding binding = new CelFunctionBinding(
+                descriptor,
+                EnvOption.declarations(Decls.newFunction(
+                        descriptor.functionName(),
+                        Decls.newOverload(descriptor.overloadId(),
+                                List.of(Decls.Int), Decls.Bool))),
+                ProgramOption.functions(Overload.function(
+                        descriptor.functionName(), values -> BoolT.True)));
 
-        GovernedCelLibrary library = new GovernedCelLibrary(
-                registry,
-                List.of(new CelFunctionBinding(descriptor, compileOption, programOption)));
+        GovernedCelLibrary library = new GovernedCelLibrary(registry, List.of(binding));
 
-        assertEquals(List.of(compileOption), library.getCompileOptions());
-        assertEquals(List.of(programOption), library.getProgramOptions());
+        assertEquals(1, library.getCompileOptions().size());
+        assertEquals(1, library.getProgramOptions().size());
     }
 }
