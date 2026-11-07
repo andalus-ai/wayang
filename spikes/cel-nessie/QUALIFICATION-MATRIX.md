@@ -48,7 +48,7 @@ and a passing isolated test is not production qualification.
 The isolated JDK 21 workflow completed successfully for commit
 `881251f71a7fae86e50bd840bbbcd18241dd5214`:
 [workflow run 42427567914](https://github.com/andalus-ai/wayang/actions/runs/42427567914).
-The 21-test suite passed, including custom function registration, registry,
+The 22-test suite passed, including custom function registration, registry,
 governed adapter, and condition-outcome probes. This is a pass for the tested
 spike behaviors only, not production qualification.
 
