@@ -139,6 +139,22 @@ void main() {
     expect(switchGroups[1].steps, isEmpty);
   });
 
+  test('map-based branch, multicast, target and stage lanes are addressable', () {
+    final step = {
+      'type': 'multicast',
+      'branches': {'left': [{'type': 'label', 'name': 'left'}]},
+      'targets': {'primary': [{'type': 'label', 'name': 'primary'}]},
+      'stages': {'prepare': [{'type': 'label', 'name': 'prepare'}]},
+    };
+    final root = StepAddress.root(2);
+    final groups = nestedStepGroups(step, parentAddress: root);
+    expect(groups.map((group) => group.label),
+      ['Branch · left', 'Target · primary', 'Stage · prepare']);
+    expect(groups[0].address, root.field('branches').field('left'));
+    expect(groups[1].address, root.field('targets').field('primary'));
+    expect(groups[2].address, root.field('stages').field('prepare'));
+  });
+
   test('routeSummaries projects router destinations and conditions', () {
     expect(routeSummaries({
       'type': 'router',
