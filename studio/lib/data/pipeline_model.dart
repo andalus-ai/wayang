@@ -113,7 +113,7 @@ List<NestedStepGroup> nestedStepGroups(
 
   void addList(String label, Object? value, {String? condition, StepAddress? address}) {
     final children = _stepObjects(value);
-    if (children.isNotEmpty) {
+    if (value is List) {
       groups.add(NestedStepGroup(
         label: label,
         steps: children,
