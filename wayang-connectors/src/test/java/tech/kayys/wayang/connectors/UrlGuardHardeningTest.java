@@ -57,4 +57,15 @@ class UrlGuardHardeningTest {
         assertNotNull(new UrlGuard(false, Set.of("localhost")).check("http://localhost:8080/x"));
         assertThrows(IllegalArgumentException.class, () -> new UrlGuard(false, Set.of("localhost")).check("http://127.0.0.1:8080/x"), "the allow-list is by host name, not by what it resolves to");
     }
+
+    @Test
+    void dnsPinningNeedsTheJvmAddressCache() {
+        assertTrue(UrlGuard.dnsAnswersArePinned(null, null), "default: 30 seconds");
+        assertTrue(UrlGuard.dnsAnswersArePinned(null, "30"));
+        assertTrue(UrlGuard.dnsAnswersArePinned(null, "-1"), "forever");
+        assertFalse(UrlGuard.dnsAnswersArePinned(null, "0"), "cache off: the connect resolves again");
+        assertFalse(UrlGuard.dnsAnswersArePinned("0", "30"), "the system property wins");
+        assertTrue(UrlGuard.dnsAnswersArePinned("60", "0"));
+        assertTrue(UrlGuard.dnsAnswersArePinned("soon", null), "a bad value is ignored by the JDK");
+    }
 }

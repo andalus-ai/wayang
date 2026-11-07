@@ -32,7 +32,7 @@ Envoy's gRPC-JSON transcoder and gRPC gateways accept. Unary calls only. Errors 
 A request/answer exchange, not a subscription (use a poller for streams): after connecting it sends `message` (a string, or an object/array as JSON),
 waits for `collect` text messages (0 = send only) up to `waitMs`, then closes. Output `messages`, `text` (last), `json` (last, when it is JSON), `timedOut`.
 No message at all before the timeout is a retryable failure; a too large answer is not. Binary frames are ignored. The connection error never echoes the URL.
-Note: the URL guard resolves the host once for the check and the JDK resolves it again to connect (a small DNS-rebinding window that http shares only partly).
+Note: the URL guard resolves the host for the check and the JDK resolves it again to connect; both go through the JVM address cache, which pins the answer unless the cache is switched off (see `docs/SECURITY.md`).
 
 ## Studio / API
 The connector test button can run `a2a` `agentCard` (reads only). Other operations send data and are refused there, like the other connectors.
