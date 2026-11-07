@@ -1,3 +1,5 @@
+import 'json_copy.dart';
+
 /// A typed JSON path segment used to address nested EIP execution lanes.
 ///
 /// Keys address object properties (for example `branches`, `cases`, or `steps`);
@@ -111,9 +113,9 @@ Map<String, dynamic>? stepAtAddress(
 /// Replaces an addressed step. Returns null for a stale or malformed address.
 Map<String, dynamic>? replaceStepAtAddress(
   Map<String, dynamic> document, StepAddress address, Map<String, dynamic> replacement) {
-  final copy = deepCopy(document) as Map<String, dynamic>;
+  final copy = deepCopyJson(document) as Map<String, dynamic>;
   if (_valueAtAddress(copy, address) is! Map) return null;
-  if (!_assignAtAddress(copy, address, deepCopy(replacement))) return null;
+  if (!_assignAtAddress(copy, address, deepCopyJson(replacement))) return null;
   return copy;
 }
 
@@ -121,10 +123,10 @@ Map<String, dynamic>? replaceStepAtAddress(
 Map<String, dynamic>? insertStepAtAddress(
   Map<String, dynamic> document, StepAddress sequenceAddress, int index,
   Map<String, dynamic> step) {
-  final copy = deepCopy(document) as Map<String, dynamic>;
+  final copy = deepCopyJson(document) as Map<String, dynamic>;
   final sequence = _valueAtAddress(copy, sequenceAddress);
   if (sequence is! List || index < 0 || index > sequence.length) return null;
-  sequence.insert(index, deepCopy(step));
+  sequence.insert(index, deepCopyJson(step));
   return copy;
 }
 
@@ -133,7 +135,7 @@ Map<String, dynamic>? removeStepAtAddress(
   Map<String, dynamic> document, StepAddress address) {
   if (address.segments.isEmpty || !address.segments.last.isIndex) return null;
   final parent = StepAddress(address.segments.take(address.segments.length - 1));
-  final copy = deepCopy(document) as Map<String, dynamic>;
+  final copy = deepCopyJson(document) as Map<String, dynamic>;
   final sequence = _valueAtAddress(copy, parent);
   final index = address.segments.last.index!;
   if (sequence is! List || index < 0 || index >= sequence.length) return null;
@@ -146,7 +148,7 @@ Map<String, dynamic>? moveStepAtAddress(
   Map<String, dynamic> document, StepAddress address, int delta) {
   if (address.segments.isEmpty || !address.segments.last.isIndex) return null;
   final parent = StepAddress(address.segments.take(address.segments.length - 1));
-  final copy = deepCopy(document) as Map<String, dynamic>;
+  final copy = deepCopyJson(document) as Map<String, dynamic>;
   final sequence = _valueAtAddress(copy, parent);
   final index = address.segments.last.index!;
   if (sequence is! List || index < 0 || index >= sequence.length) return null;
