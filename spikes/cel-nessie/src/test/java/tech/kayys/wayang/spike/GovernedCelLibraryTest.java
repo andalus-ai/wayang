@@ -50,6 +50,18 @@ class GovernedCelLibraryTest {
     }
 
     @Test
+    void bindingRejectsRuntimeDispatcherKeyThatDiffersFromDescriptor() {
+        FunctionDescriptor descriptor = descriptor("wayang_is_even_int");
+        assertThrows(IllegalArgumentException.class,
+                () -> new CelFunctionBinding(
+                        descriptor,
+                        "wayang_is_even",
+                        EnvOption.declarations(),
+                        ProgramOption.functions(Overload.function(
+                                descriptor.overloadId(), values -> BoolT.True))));
+    }
+
+    @Test
     void libraryExposesOnlyTheOptionsFromGovernedBindings() {
         FunctionDescriptor descriptor = descriptor("wayang_is_even_int");
         FunctionRegistry registry = FunctionRegistry.builder().register(descriptor).build();
