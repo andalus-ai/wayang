@@ -174,6 +174,13 @@ void main() {
     expect(assistantFieldProblem('model', 'openai/gpt-4o-mini'), isNull);
     expect(assistantFieldProblem('model', 'gpt4'), isNotNull);
     expect(assistantFieldProblem('persona', 'x' * 1001), isNotNull);
+    expect(assistantFieldProblem('imageModel', 'gpt-image-1'), isNull);
+    expect(assistantFieldProblem('imageModel', 'bad model'), isNotNull);
+    expect(assistantFieldProblem('emailRecipients', ''), isNull);
+    expect(assistantFieldProblem('emailRecipients', 'a@x.com, b@y.org'), isNull);
+    expect(assistantFieldProblem('emailRecipients', 'a@x.com b@y.org'), isNotNull);
+    expect(assistantFieldProblem('emailRecipients', 'nobody'), isNotNull);
+    expect(assistantFieldProblem('emailRecipients', List.generate(11, (i) => 'a$i@x.com').join(',')), isNotNull);
     expect(assistantFieldProblem('memoryTurns', '0'), isNull);
     expect(assistantFieldProblem('memoryTurns', '30'), isNull);
     expect(assistantFieldProblem('memoryTurns', '31'), isNotNull);
