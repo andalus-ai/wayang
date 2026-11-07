@@ -70,6 +70,12 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
     final steps = stepsOf(widget.controller.text);
     if (steps == null || (_selectedIndex != null && _selectedIndex! >= steps.length)) {
       _selectedIndex = null;
+      _selectedNestedPath = null;
+    } else if (_selectedNestedPath != null) {
+      final document = _document();
+      if (document == null || stepAtPath(document, _selectedNestedPath!) == null) {
+        _selectedNestedPath = null;
+      }
     }
     setState(() {});
   }
@@ -248,7 +254,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => setState(() => _selectedIndex = index),
+        onTap: () => setState(() { _selectedIndex = index; _selectedNestedPath = null; }),
         child: Padding(padding: const EdgeInsets.all(14), child: Column(
           crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min,
           children: [
