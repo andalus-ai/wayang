@@ -505,7 +505,7 @@ public final class WayangApi {
 
     /**
      * Delivers a correlated message to a waiting run of the caller's tenant, or
-     * buffers it. Known limitation: the buffer is not tenant-namespaced. A project-scoped caller may only
+     * buffers it. The wait and the buffer are private to the tenant (the key is namespaced). A project-scoped caller may only
      * deliver to a run of its own project and cannot buffer (a buffered message is not tied to any project).
      */
     public String sendMessage(Principal p, String name, String correlationKey, Map<String, Object> payload) {
@@ -514,6 +514,7 @@ public final class WayangApi {
             throw ApiException.badRequest("name and correlationKey are required");
         }
         Map<String, Object> body = payload == null ? Map.of() : payload;
+        correlationKey = tech.kayys.wayang.runtime.WaitRegistry.scoped(p.tenantId(), correlationKey); // private to the tenant
         var w = waits.findMessage(name, correlationKey);
         if (w.isPresent() && engine.get(p.tenantId(), w.get().runId()).isPresent()) {
             if (!canOnRun(p, Permission.MESSAGE_SEND, w.get().runId())) {
