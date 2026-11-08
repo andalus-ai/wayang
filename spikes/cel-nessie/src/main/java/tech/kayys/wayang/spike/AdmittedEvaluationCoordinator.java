@@ -157,10 +157,14 @@ public final class AdmittedEvaluationCoordinator implements AutoCloseable {
                 state.set(State.FINISHED);
                 lease.close();
             }
-            if (outcome instanceof EvaluationExecutionOutcome.Failed failed) {
-                emit(EvaluationEvent.Type.EXECUTION_FAILED, elapsedSince(started), failed.code());
-            } else {
+            if (outcome instanceof EvaluationExecutionOutcome.Completed) {
                 emit(EvaluationEvent.Type.EXECUTION_COMPLETED, elapsedSince(started), null);
+            } else if (outcome instanceof EvaluationExecutionOutcome.Failed) {
+                emit(EvaluationEvent.Type.EXECUTION_FAILED, elapsedSince(started), "PROVIDER_FAILURE");
+            } else if (outcome instanceof EvaluationExecutionOutcome.Rejected) {
+                emit(EvaluationEvent.Type.EXECUTION_REJECTED, elapsedSince(started), "PROVIDER_REJECTED");
+            } else if (outcome instanceof EvaluationExecutionOutcome.Unknown) {
+                emit(EvaluationEvent.Type.EXECUTION_RESULT_UNAVAILABLE, elapsedSince(started), "PROVIDER_STATE_UNKNOWN");
             }
             result.complete(outcome);
         }
