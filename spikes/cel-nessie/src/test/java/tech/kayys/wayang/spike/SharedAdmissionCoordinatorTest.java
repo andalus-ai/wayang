@@ -131,4 +131,48 @@ class SharedAdmissionCoordinatorTest {
             admission.close();
         }
     }
+
+    @Test
+    void perTenantLimitIsAlsoSharedAcrossCoordinators() throws Exception {
+        var admission = new EvaluationAdmissionController(
+                new EvaluationAdmissionPolicy(2, 2, 1, 2, Duration.ofSeconds(2)));
+        var firstCoordinator = new AdmittedEvaluationCoordinator(admission,
+                new EvaluationExecutionPolicy(1, 0, Duration.ofSeconds(3)));
+        var secondCoordinator = new AdmittedEvaluationCoordinator(admission,
+                new EvaluationExecutionPolicy(1, 0, Duration.ofSeconds(3)));
+        var firstStarted = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+        var secondStarted = new CountDownLatch(1);
+        var first = new Thread(() -> firstCoordinator.execute(req -> {
+            firstStarted.countDown();
+            try { releaseFirst.await(); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return new EvaluationExecutionOutcome.Completed("first");
+        }, request("same-tenant", "first")));
+        var second = new Thread(() -> secondCoordinator.execute(req -> {
+            secondStarted.countDown();
+            return new EvaluationExecutionOutcome.Completed("second");
+        }, request("same-tenant", "second")));
+        try {
+            first.start();
+            assertTrue(firstStarted.await(1, TimeUnit.SECONDS));
+            second.start();
+            long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
+            while (admission.snapshot().queued() != 1 && System.nanoTime() < until) Thread.yield();
+            assertEquals(1, admission.snapshot().active());
+            assertEquals(1, admission.snapshot().queued());
+            assertEquals(1L, secondStarted.getCount(),
+                    "per-tenant cap must span coordinator instances");
+            releaseFirst.countDown();
+            first.join(2000);
+            second.join(2000);
+            assertEquals(0L, secondStarted.getCount());
+            assertEquals(0, admission.snapshot().active());
+        } finally {
+            releaseFirst.countDown();
+            firstCoordinator.close();
+            secondCoordinator.close();
+            admission.close();
+        }
+    }
 }
