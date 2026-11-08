@@ -78,7 +78,7 @@ public final class WayangCoreMetadataMapper {
         return new Projection(projected, diagnostics);
     }
 
-    private static ComponentExecutionCapabilities mapExecution(
+    private static tech.kayys.wayang.core.model.ComponentExecutionCapabilities mapExecution(
             tech.kayys.wayang.runtime.ComponentExecutionCapabilities source) {
         Set<ExecutionMode> modes = new HashSet<>();
         for (ComponentExecutionMode mode : source.supportedModes()) {
@@ -94,7 +94,7 @@ public final class WayangCoreMetadataMapper {
             case EXTERNALIZED -> StateModel.EXTERNALIZED;
             case AFFINE -> StateModel.AFFINE;
         };
-        return new ComponentExecutionCapabilities(modes, state, source.portablePayloads(),
+        return new tech.kayys.wayang.core.model.ComponentExecutionCapabilities(modes, state, source.portablePayloads(),
                 source.supportsCancellation(), source.idempotent());
     }
 
