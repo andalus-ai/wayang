@@ -201,8 +201,8 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
         Row(children: [Icon(Icons.subdirectory_arrow_right, color: colors.primary), const SizedBox(width: 8),
           Expanded(child: Text('Nested step · ${path.toString()}',
             style: const TextStyle(fontWeight: FontWeight.w700))),
-          TextButton.icon(onPressed: () => setState(() => _selectedNestedPath = null),
-            icon: const Icon(Icons.arrow_upward, size: 15), label: const Text('Parent')),
+          TextButton.icon(onPressed: () => _navigateGraph(_graphStack.length - 2),
+            icon: const Icon(Icons.arrow_upward, size: 15), label: const Text('Parent graph')),
           IconButton(tooltip: 'Move nested step up', onPressed: childIndex == 0 ? null : () {
             final updated = moveStepAtAddress(document, path, -1);
             if (updated != null) _writeNested(updated, StepAddress(path.segments.take(path.segments.length - 1).followedBy([StepAddressSegment.index(childIndex - 1)])));
@@ -288,7 +288,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => setState(() { _selectedIndex = index; _selectedNestedPath = stepAddress; }),
+        onTap: () => setState(() { _selectedIndex = index; _selectedNestedPath = _graphStack.isEmpty ? null : stepAddress; }),
         child: Padding(padding: const EdgeInsets.all(14), child: Column(
           crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min,
           children: [
