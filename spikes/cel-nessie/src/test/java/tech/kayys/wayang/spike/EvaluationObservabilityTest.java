@@ -3,7 +3,6 @@ package tech.kayys.wayang.spike;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.time.Duration;
-import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.Test;
 
@@ -72,8 +71,9 @@ class EvaluationObservabilityTest {
             assertTrue(started.await(1, java.util.concurrent.TimeUnit.SECONDS));
             assertTrue(events.stream().anyMatch(e -> e.type() == EvaluationEvent.Type.CALLER_WAIT_TIMED_OUT));
             assertEquals(1, admission.snapshot().active(), "provider retains its lease after caller timeout");
+            coordinator.close();
             release.countDown();
-            assertTrue(coordinator.awaitTermination(Duration.ofSeconds(1)) || !coordinator.isShutdown());
+            assertTrue(coordinator.awaitTermination(Duration.ofSeconds(1)));
             long until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(1);
             while (admission.snapshot().active() != 0 && System.nanoTime() < until) Thread.yield();
             assertTrue(events.stream().anyMatch(e -> e.type() == EvaluationEvent.Type.EXECUTION_COMPLETED));
@@ -81,6 +81,27 @@ class EvaluationObservabilityTest {
         } finally {
             release.countDown();
             coordinator.close();
+            admission.close();
+        }
+    }
+
+    @Test
+    void admissionRejectionIsObservedWithStableReasonCode() {
+        var events = new CopyOnWriteArrayList<EvaluationEvent>();
+        var admission = new EvaluationAdmissionController(
+                new EvaluationAdmissionPolicy(1, 0, 1, 0, Duration.ZERO));
+        admission.close();
+        try (var coordinator = new AdmittedEvaluationCoordinator(admission,
+                new EvaluationExecutionPolicy(1, 0, Duration.ofSeconds(1)), events::add)) {
+            var outcome = coordinator.execute(req -> {
+                fail("closed admission must not invoke provider");
+                return new EvaluationExecutionOutcome.Completed(null);
+            }, request());
+            assertEquals("ADMISSION_CONTROLLER_CLOSED",
+                    assertInstanceOf(EvaluationExecutionOutcome.Rejected.class, outcome).code());
+            assertTrue(events.stream().anyMatch(e -> e.type() == EvaluationEvent.Type.ADMISSION_REJECTED
+                    && "ADMISSION_CONTROLLER_CLOSED".equals(e.reasonCode())));
+        } finally {
             admission.close();
         }
     }
