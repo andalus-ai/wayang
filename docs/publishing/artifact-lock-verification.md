@@ -19,24 +19,12 @@ The publisher runs this validation before it emits a release archive. The verifi
 
 This digest protects the lock document, not the bytes downloaded from a Maven repository. It is not a substitute for repository-provided checksums, artifact signatures, trusted repository configuration or SBOM verification. Binary SHA-256 verification belongs in the later artifact-fetch/install stage, where the actual downloaded bytes are available. The current release catalog also describes the published module dependency graph; it does not claim that the present `wayang-runtime` Maven dependency tree is already pruned to only the selected feature modules.
 
-
 ## Repository policy boundary
 
-The publishing module also defines `RepositoryPolicy`, an immutable HTTPS
-repository allow-list intended to be supplied to the future artifact downloader.
-Each repository has a stable identifier and a normalized base URL. Policy
-construction rejects duplicate identifiers, duplicate normalized URLs,
-non-HTTPS URLs, embedded credentials, query strings and fragments.
+`RepositoryPolicy` is an immutable HTTPS repository allow-list. It rejects duplicate identifiers and normalized URLs, non-HTTPS URLs, embedded credentials, query strings and fragments. Candidate URLs must match a configured origin and path boundary.
 
-A candidate artifact URL is allowed only when its scheme, host, effective port
-and path are within one configured repository base. Host suffix tricks and
-sibling paths are not accepted. Repository paths are compared on segment
-boundaries (a configured `/maven2/` does not authorize `/maven2-evil/`).
+## Maven coordinate location stage
 
-This is a trust-policy primitive, not a downloader. It does not authenticate
-repository ownership, prevent a compromised HTTPS repository from serving
-malicious bytes, or verify checksums/signatures. The resolver integration must
-apply this policy before every request, disable redirects or re-check every
-redirect target, enforce response-size/time limits, and verify trusted binary
-digests before packaging. Credentials should be supplied through a separate
-secret provider and never embedded in repository URLs or release manifests.
+`MavenArtifactLocationResolver` converts validated Maven coordinates into the conventional repository layout for POM, JAR, and SHA-256 sidecar locations. It returns one location set per configured repository, preserving repository priority, and checks every generated URL against `RepositoryPolicy`.
+
+This stage is intentionally a pure URL planner: it does not make HTTP requests, download artifacts, follow redirects, or trust checksum sidecars. The next fetch/install stage must revalidate every redirect target, impose connection/read/size limits, verify downloaded bytes against a trusted digest or signature policy, and only then expose artifacts to packaging. A sidecar served by the same repository is useful for transport-integrity checks but is not an independent trust anchor.
