@@ -20,9 +20,6 @@ class WayangCoreMetadataMapperTest {
 
     @Test
     void projectsManifestAndPreservesWayangSpecificFields() {
-        var execution = execution(ComponentStateModel.AFFINE, "session",
-                Set.of("gpu", "media.decode"), Map.of("memory", "2Gi", "cpu", "2"));
-        var result = mapper.map(manifest(), List.of(descriptor()), List.of(execution));
         var manifest = manifest();
         var descriptor = descriptor();
         var execution = execution(ComponentStateModel.AFFINE, "session", Set.of("gpu", "media.decode"),
@@ -62,11 +59,10 @@ class WayangCoreMetadataMapperTest {
 
     @Test
     void rejectsMalformedPluginApiVersion() {
-        var malformed = new PluginManifest("acme.media", "1.2.3", "1.x", "Acme", ">=1.0 <2.0",
+        // the manifest itself refuses a malformed apiVersion, so construction is what must throw
+        assertThrows(IllegalArgumentException.class, () -> new PluginManifest("acme.media", "1.2.3", "1.x", "Acme", ">=1.0 <2.0",
                 List.of(new PluginManifest.ProvidedComponent("acme.media.fetch", "1.2.3")),
-                List.of(), Set.of(), null);
-        assertThrows(IllegalArgumentException.class,
-                () -> mapper.map(malformed, List.of(descriptor()), List.of(execution())));
+                List.of(), Set.of(), null));
     }
 
     private static PluginManifest manifest() {
