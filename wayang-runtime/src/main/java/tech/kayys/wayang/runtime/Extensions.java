@@ -78,6 +78,15 @@ public final class Extensions {
         return List.copyOf(out);
     }
 
+    /** Executable component bindings contributed by profile-enabled extensions. */
+    public List<ComponentExecutorCatalog.ComponentExecutorBinding> componentExecutors() {
+        List<ComponentExecutorCatalog.ComponentExecutorBinding> out = new ArrayList<>();
+        for (WayangExtension extension : loaded) {
+            out.addAll(extension.componentExecutors());
+        }
+        return List.copyOf(out);
+    }
+
     /**
      * All deployment capability declarations contributed by profile-enabled extensions.
      * Duplicate IDs are rejected when declarations are validated against the component registry.
