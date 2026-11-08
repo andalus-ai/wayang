@@ -87,9 +87,6 @@ class NessieCustomFunctionTest {
 
         CelFunctionBinding binding = CelFunctionBinding.unary(
                 descriptor,
-                EnvOption.declarations(Decls.newFunction(
-                        FUNCTION,
-                        Decls.newOverload(OVERLOAD_ID, List.of(Decls.Int), Decls.Bool))),
                 value -> {
                     if (!(value instanceof IntT integer)) {
                         return Err.newErr("invalid argument for %s", FUNCTION);
