@@ -5,8 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.projectnessie.cel.EnvOption;
-import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.BoolT;
 
 class GovernedCelLibraryTest {
@@ -21,12 +19,7 @@ class GovernedCelLibraryTest {
     }
 
     private static CelFunctionBinding binding(FunctionDescriptor descriptor) {
-        return CelFunctionBinding.unary(
-                descriptor,
-                EnvOption.declarations(Decls.newFunction(
-                        descriptor.functionName(),
-                        Decls.newOverload(descriptor.overloadId(), List.of(Decls.Int), Decls.Bool))),
-                value -> BoolT.True);
+        return CelFunctionBinding.unary(descriptor, value -> BoolT.True);
     }
 
     @Test
@@ -57,17 +50,16 @@ class GovernedCelLibraryTest {
                 List.of("int", "int"), "int", FunctionDescriptor.Effect.PURE,
                 FunctionDescriptor.Determinism.DETERMINISTIC, "1.0.0");
         assertThrows(IllegalArgumentException.class,
-                () -> CelFunctionBinding.unary(binary, EnvOption.declarations(), value -> BoolT.True));
+                () -> CelFunctionBinding.unary(binary, value -> BoolT.True));
     }
 
     @Test
-    void libraryExposesOnlyOptionsFromGovernedTypedBindings() {
+    void libraryGeneratesCompileAndRuntimeOptionsFromSameBindings() {
         FunctionDescriptor descriptor = descriptor("wayang_is_even_int");
         FunctionRegistry registry = FunctionRegistry.builder().register(descriptor).build();
         GovernedCelLibrary library = new GovernedCelLibrary(registry, List.of(binding(descriptor)));
 
         assertEquals(1, library.getCompileOptions().size());
         assertEquals(1, library.getProgramOptions().size());
-        assertEquals(descriptor.overloadId(), binding(descriptor).runtimeOverloadId());
     }
 }
