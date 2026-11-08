@@ -48,7 +48,7 @@ class EvaluationAdmissionControllerTest {
             first.close();
             try (var admitted = waiting.get(2, TimeUnit.SECONDS)) {
                 assertEquals(1, controller.snapshot().active());
-                assertTrue(admitted.isReleased() == false);
+                assertFalse(admitted.isReleased());
             }
         } finally {
             controller.close();
@@ -98,6 +98,37 @@ class EvaluationAdmissionControllerTest {
         } finally {
             controller.close();
         }
+    }
+
+    @Test
+    void cancellationRemovesQueuedWaiterWithoutConsumingCapacity() throws Exception {
+        var controller = new EvaluationAdmissionController(
+                policy(1, 1, 1, 1, Duration.ofSeconds(3)));
+        var held = controller.acquire(request("tenant-a"));
+        var token = new EvaluationCancellationToken();
+        var cancelledRequest = new EvaluationRequestContext("tenant-b", "cancel-wait",
+                null, token);
+        FutureTask<String> waiting = new FutureTask<>(() -> {
+            try {
+                controller.acquire(cancelledRequest);
+                return "unexpected";
+            } catch (EvaluationAdmissionException expected) {
+                return expected.code();
+            }
+        });
+        Thread thread = new Thread(waiting, "cancelled-admission-waiter");
+        thread.start();
+        long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (controller.snapshot().queued() == 0 && System.nanoTime() < end) {
+            Thread.yield();
+        }
+        assertEquals(1, controller.snapshot().queued());
+        token.cancel();
+        assertEquals("EVALUATION_CANCELLED", waiting.get(1, TimeUnit.SECONDS));
+        assertEquals(0, controller.snapshot().queued());
+        held.close();
+        assertEquals(0, controller.snapshot().active());
+        controller.close();
     }
 
     @Test
