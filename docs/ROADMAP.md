@@ -399,3 +399,35 @@ The following are proposed architecture decisions, not claims of completed imple
 - Console outage must not stop an already-running runtime.
 
 Immediate next work should be Phase 0 followed by Phase 1. Do not create all proposed modules at once. First inspect the actual code and Maven graph, establish tests/CI, then implement the smallest contract-first vertical slice.
+
+
+## Implementation progress (2026-11-08)
+
+### Phase 0 — source-level baseline review
+
+- [x] Inspected the active Maven reactor, runtime module, current extension SPI, component descriptor/registry, executor catalog, profiles, and architecture documentation.
+- [ ] Full Maven/CI verification remains outstanding; no build or test execution is claimed from this source review.
+
+### Phase 1 — component execution capability contract (first increment)
+
+- [x] Reuse the existing `ComponentDescriptor`, `ComponentRegistry`, `WayangExtension`, and `Extensions` contracts; do not introduce a parallel component identity/catalog.
+- [x] Add explicit execution modes: embedded, isolated-local, remote, and cloud-native.
+- [x] Add state models: stateless, externally persisted, and affinity-bound.
+- [x] Add exact component ID/version-bound capability declarations for payload portability, cancellation, idempotency, required worker capabilities, and resource hints.
+- [x] Add a validating capability registry that rejects unknown components, duplicate declarations, and version mismatches.
+- [x] Preserve source compatibility for existing `WayangExtension` implementations through a default empty capability contribution.
+- [x] Add unit tests for capability validation and profile-filtered extension contributions.
+
+**Remaining Phase 1 work:** define and validate the versioned plugin manifest/package contract, compatibility ranges, dependency metadata, publisher/signature metadata, and conformance fixtures. Execution capability declarations are metadata only; no placement router, worker transport, dynamic loader, or hot-upgrade behavior is implemented by this increment.
+
+**Verification note:** source and documentation changes are committed in the implementation PR. Tests have been added but have not been executed in this environment. Run `mvn -pl wayang-runtime -am test` with JDK 21 and resolvable reactor dependencies before treating this increment as verified.
+
+
+### Phase 1 — plugin manifest model (second increment)
+
+- [x] Add an immutable in-memory `PluginManifest` with plugin identity, semantic version, plugin API version, publisher, runtime compatibility expression, provided component inventory, dependencies, permissions, and license metadata.
+- [x] Add component inventory validation against contributed `ComponentDescriptor` instances.
+- [x] Add an initial JSON Schema for the plugin manifest interchange shape.
+- [x] Add tests for semantic-version syntax, duplicate/self dependencies, permissions, and manifest-to-component inventory consistency.
+
+**Remaining:** implement a parser/serializer, semantic version-range evaluation, signature and artifact provenance verification, and package installation policy. The current model does not authenticate publishers or execute/install plugin code.
