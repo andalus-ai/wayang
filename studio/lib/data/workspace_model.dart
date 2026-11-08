@@ -422,3 +422,65 @@ String? assistantFieldProblem(String field, String value) {
   }
   return null;
 }
+
+/// One parameter of a starter template, as `GET /api/v1/templates` describes it.
+class TemplateParam {
+  const TemplateParam({required this.name, required this.description, required this.required, this.defaultValue});
+
+  factory TemplateParam.fromJson(Map<String, dynamic> j) => TemplateParam(
+        name: '${j['name'] ?? ''}',
+        description: '${j['description'] ?? ''}',
+        required: j['required'] == true,
+        defaultValue: j['defaultValue'] as String?,
+      );
+
+  final String name;
+  final String description;
+  final bool required;
+  final String? defaultValue;
+
+  /// A switch (`true` / `false`) rather than free text.
+  bool get isFlag => defaultValue == 'true' || defaultValue == 'false';
+
+  /// What is wrong with [value], or null. Rules the Studio knows by name are reused; the server checks again.
+  String? problem(String value) {
+    if (value.trim().isEmpty) return required ? 'Required' : null;
+    return assistantFieldProblem(name, value);
+  }
+}
+
+/// A starter template: what it is, which secrets it needs, and the parameters to ask for.
+class TemplateInfo {
+  const TemplateInfo({required this.id, required this.name, required this.description, required this.params, required this.secrets});
+
+  factory TemplateInfo.fromJson(Map<String, dynamic> j) => TemplateInfo(
+        id: '${j['id'] ?? ''}',
+        name: '${j['name'] ?? ''}',
+        description: '${j['description'] ?? ''}',
+        params: [
+          for (final p in (j['params'] is List ? j['params'] as List : const []))
+            if (p is Map) TemplateParam.fromJson(Map<String, dynamic>.from(p)),
+        ],
+        secrets: [for (final s in (j['secrets'] is List ? j['secrets'] as List : const [])) '$s'],
+      );
+
+  final String id;
+  final String name;
+  final String description;
+  final List<TemplateParam> params;
+  final List<String> secrets;
+
+  /// Per-parameter problems for [values] (parameter name to text); empty when the form can be sent.
+  Map<String, String> problems(Map<String, String> values) => {
+        for (final p in params)
+          if (!p.isFlag && p.problem(values[p.name] ?? p.defaultValue ?? '') != null) p.name: p.problem(values[p.name] ?? p.defaultValue ?? '')!,
+      };
+
+  /// The request parameters: values that differ from the default, plus every required one. Blank optional text is left out so the
+  /// server's default applies.
+  Map<String, String> request(Map<String, String> values) => {
+        for (final p in params)
+          if (p.required || ((values[p.name] ?? '').trim().isNotEmpty && values[p.name]!.trim() != (p.defaultValue ?? '')))
+            p.name: (values[p.name] ?? '').trim(),
+      };
+}
