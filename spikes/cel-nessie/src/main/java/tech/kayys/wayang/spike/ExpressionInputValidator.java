@@ -41,7 +41,11 @@ public final class ExpressionInputValidator {
         IdentityHashMap<Object, Boolean> path = new IdentityHashMap<>();
         for (Map.Entry<String, ?> entry : variables.entrySet()) {
             String key = Objects.requireNonNull(entry.getKey(), "variable name");
-            addBytes(budget, utf8Length(key));
+            int keyBytes = utf8Length(key);
+            if (keyBytes > limits.maxStringBytes()) {
+                throw new ExpressionInputLimitException("VARIABLE_NAME_BYTES_LIMIT");
+            }
+            addBytes(budget, keyBytes);
             visit(entry.getValue(), 1, budget, path);
         }
         enforceTotal(budget);
