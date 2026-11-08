@@ -61,9 +61,9 @@ public final class NodeCatalog {
     public static List<String> validateConfig(ElementType t, Map<String, Object> config) {
         Map<String, Object> c = config == null ? Map.of() : config;
         List<String> problems = JsonSchemaLite.validate(entry(t).configSchema(), c);
-        if (t == ElementType.SERVICE_TASK && c.get("wayang.component.id") instanceof String id && !id.isBlank()) {
-            // a node bound to a catalogue component is dispatched by that id, so it needs no connector name
-            problems = problems.stream().filter(x -> !x.contains("'connector' is required")).toList();
+        if (c.get("wayang.component.id") instanceof String id && !id.isBlank()) {
+            // a node bound to a catalogue component is dispatched by that id, so the legacy required keys (connector, decision, ...) do not apply
+            problems = problems.stream().filter(x -> !x.matches("\\$: '[^']+' is required")).toList();
         }
         return problems;
     }
