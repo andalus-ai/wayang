@@ -14,6 +14,7 @@ import tech.kayys.wayang.bpmn.ElementType;
 import tech.kayys.wayang.embed.ReleaseBundle;
 import tech.kayys.wayang.runtime.ComponentDescriptor;
 import tech.kayys.wayang.runtime.ComponentRegistry;
+import tech.kayys.wayang.runtime.ComponentIdentity;
 import tech.kayys.wayang.runtime.ComponentRequirements;
 import tech.kayys.wayang.runtime.Extensions;
 import tech.kayys.wayang.runtime.Profile;
@@ -39,6 +40,7 @@ final class ComponentLockfile {
                 throw new IllegalArgumentException("Process '" + definition.id() + "' has no element list for component resolution");
             }
             List<ElementType> types = new ArrayList<>();
+            List<String> explicitComponentIds = new ArrayList<>();
             for (Object raw : elements) {
                 if (!(raw instanceof Map<?, ?> element) || !(element.get("type") instanceof String type)) {
                     throw new IllegalArgumentException("Process '" + definition.id() + "' contains a malformed element");
@@ -48,8 +50,20 @@ final class ComponentLockfile {
                 } catch (IllegalArgumentException e) {
                     throw new IllegalArgumentException("Process '" + definition.id() + "' uses unsupported element type '" + type + "'");
                 }
+                Object rawConfig = element.get("config");
+                if (rawConfig instanceof Map<?, ?> config) {
+                    Map<String, Object> normalized = new LinkedHashMap<>();
+                    config.forEach((key, value) -> normalized.put(String.valueOf(key), value));
+                    try {
+                        ComponentIdentity identity = ComponentIdentity.fromConfiguration(normalized);
+                        if (identity != null) explicitComponentIds.add(identity.id());
+                    } catch (IllegalArgumentException e) {
+                        throw new IllegalArgumentException("Process '" + definition.id()
+                                + "' has an invalid component binding: " + e.getMessage(), e);
+                    }
+                }
             }
-            roots.addAll(ComponentRequirements.componentIds(types));
+            roots.addAll(ComponentRequirements.componentIds(types, explicitComponentIds));
         }
         if (connectorNames != null && !connectorNames.isEmpty()) {
             roots.add("wayang.service.connector");

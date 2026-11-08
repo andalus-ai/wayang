@@ -13,12 +13,16 @@ import tech.kayys.wayang.runtime.ComponentExecutionCapabilities;
 import tech.kayys.wayang.runtime.ComponentExecutionMode;
 import tech.kayys.wayang.runtime.ComponentStateModel;
 import tech.kayys.wayang.runtime.PluginManifest;
+import tech.kayys.wayang.runtime.Profile;
 
 class WayangCoreMetadataMapperTest {
     private final WayangCoreMetadataMapper mapper = new WayangCoreMetadataMapper();
 
     @Test
     void projectsManifestAndPreservesWayangSpecificFields() {
+        var execution = execution(ComponentStateModel.AFFINE, "session",
+                Set.of("gpu", "media.decode"), Map.of("memory", "2Gi", "cpu", "2"));
+        var result = mapper.map(manifest(), List.of(descriptor()), List.of(execution));
         var manifest = manifest();
         var descriptor = descriptor();
         var execution = execution(ComponentStateModel.AFFINE, "session", Set.of("gpu", "media.decode"),

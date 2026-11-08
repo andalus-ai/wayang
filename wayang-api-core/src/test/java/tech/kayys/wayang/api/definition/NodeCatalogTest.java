@@ -23,6 +23,19 @@ class NodeCatalogTest {
     }
 
     @Test
+    void componentIdentityKeysAreAcceptedForEveryElementType() {
+        Map<String, Object> binding = Map.of(
+                "wayang.component.id", "acme.connector.http",
+                "wayang.component.version", "1.2.3",
+                "wayang.component.operation", "request");
+        for (ElementType type : ElementType.values()) {
+            assertTrue(NodeCatalog.validateConfig(type, binding).isEmpty(), type.toString());
+        }
+        assertFalse(NodeCatalog.validateConfig(ElementType.START_EVENT,
+                Map.of("wayang.component.id", "Invalid ID")).isEmpty());
+    }
+
+    @Test
     void validConfigsPass() {
         assertTrue(NodeCatalog.validateConfig(ElementType.SERVICE_TASK, Map.of("connector", "http", "retries", 3, "retryDelay", "PT2S",
                 "retryBackoff", 1.5, "onError", "continue", "inputs", Map.of("a", "x + 1"))).isEmpty());

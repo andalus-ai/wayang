@@ -33,6 +33,16 @@ public final class ComponentExecutorCatalog {
      * Resolve roots and bind executors. Extra bindings are rejected rather than
      * silently making profile-disabled or unselected code executable.
      */
+    /**
+     * Resolve and activate the selected component closure from profile-enabled extensions.
+     * Extensions outside the active profile are never consulted.
+     */
+    public static ComponentExecutorCatalog resolve(ComponentRegistry registry,
+            Collection<String> requestedComponentIds, Extensions extensions) {
+        Objects.requireNonNull(extensions, "extensions");
+        return resolve(registry, requestedComponentIds, extensions.componentExecutors());
+    }
+
     public static ComponentExecutorCatalog resolve(ComponentRegistry registry,
             Collection<String> requestedComponentIds,
             Collection<ComponentExecutorBinding> bindings) {

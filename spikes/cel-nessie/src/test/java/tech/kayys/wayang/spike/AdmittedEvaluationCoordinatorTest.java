@@ -165,4 +165,110 @@ class AdmittedEvaluationCoordinatorTest {
             admission.close();
         }
     }
+
+    @Test
+    void orderlyShutdownDrainsAcceptedQueuedTasksAndRejectsNewSubmissions() throws Exception {
+        var admission = new EvaluationAdmissionController(
+                new EvaluationAdmissionPolicy(3, 0, 3, 0, Duration.ZERO));
+        var coordinator = new AdmittedEvaluationCoordinator(admission,
+                new EvaluationExecutionPolicy(1, 1, Duration.ofMillis(50)));
+        var firstStarted = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+        var secondCalled = new CountDownLatch(1);
+        var first = new Thread(() -> coordinator.execute(req -> {
+            firstStarted.countDown();
+            try { releaseFirst.await(); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return new EvaluationExecutionOutcome.Completed("first");
+        }, new EvaluationExecutionRequest(request("a"), null)));
+        var second = new Thread(() -> coordinator.execute(req -> {
+            secondCalled.countDown();
+            return new EvaluationExecutionOutcome.Completed("second");
+        }, new EvaluationExecutionRequest(request("b"), null)));
+        try {
+            first.start();
+            assertTrue(firstStarted.await(1, TimeUnit.SECONDS));
+            second.start();
+            long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
+            while (coordinator.queuedTasks() != 1 && System.nanoTime() < until) Thread.yield();
+            assertEquals(1, coordinator.queuedTasks());
+            coordinator.close();
+            assertTrue(coordinator.isShutdown());
+            assertFalse(coordinator.awaitTermination(Duration.ZERO));
+            var rejected = coordinator.execute(req -> {
+                fail("submission after shutdown must not invoke provider");
+                return new EvaluationExecutionOutcome.Completed(null);
+            }, new EvaluationExecutionRequest(request("c"), null));
+            assertInstanceOf(EvaluationExecutionOutcome.Rejected.class, rejected);
+            releaseFirst.countDown();
+            first.join(2000);
+            second.join(2000);
+            assertTrue(secondCalled.await(1, TimeUnit.SECONDS));
+            assertTrue(coordinator.awaitTermination(Duration.ofSeconds(1)));
+            assertTrue(coordinator.isTerminated());
+            assertEquals(0, admission.snapshot().active());
+        } finally {
+            releaseFirst.countDown();
+            coordinator.close();
+            admission.close();
+        }
+    }
+
+    @Test
+    void awaitTerminationReportsHungProviderWithoutReleasingItsLease() throws Exception {
+        var admission = new EvaluationAdmissionController(
+                new EvaluationAdmissionPolicy(1, 0, 1, 0, Duration.ZERO));
+        var coordinator = new AdmittedEvaluationCoordinator(admission,
+                new EvaluationExecutionPolicy(1, 0, Duration.ofMillis(20)));
+        var started = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        try {
+            var outcome = coordinator.execute(req -> {
+                started.countDown();
+                try { release.await(); }
+                catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                return new EvaluationExecutionOutcome.Completed("released");
+            }, new EvaluationExecutionRequest(request("tenant"), null));
+            assertInstanceOf(EvaluationExecutionOutcome.Unknown.class, outcome);
+            assertTrue(started.await(1, TimeUnit.SECONDS));
+            coordinator.close();
+            assertFalse(coordinator.awaitTermination(Duration.ofMillis(20)));
+            assertEquals(1, admission.snapshot().active());
+            release.countDown();
+            assertTrue(coordinator.awaitTermination(Duration.ofSeconds(1)));
+            assertEquals(0, admission.snapshot().active());
+        } finally {
+            release.countDown();
+            coordinator.close();
+            admission.close();
+        }
+    }
+
+    @Test
+    void completionIsPublishedOnlyAfterAdmissionLeaseIsReleased() {
+        var admission = new EvaluationAdmissionController(
+                new EvaluationAdmissionPolicy(1, 0, 1, 0, Duration.ZERO));
+        try (var coordinator = new AdmittedEvaluationCoordinator(admission,
+                new EvaluationExecutionPolicy(1, 0, Duration.ofSeconds(1)))) {
+            var outcome = coordinator.execute(req -> new EvaluationExecutionOutcome.Completed("ok"),
+                    new EvaluationExecutionRequest(request("tenant"), null));
+            assertInstanceOf(EvaluationExecutionOutcome.Completed.class, outcome);
+            assertEquals(0, admission.snapshot().active());
+        } finally {
+            admission.close();
+        }
+    }
+
+    @Test
+    void awaitTerminationRejectsNegativeTimeout() throws Exception {
+        var admission = new EvaluationAdmissionController(
+                new EvaluationAdmissionPolicy(1, 0, 1, 0, Duration.ZERO));
+        try (var coordinator = new AdmittedEvaluationCoordinator(admission,
+                new EvaluationExecutionPolicy(1, 0, Duration.ofSeconds(1)))) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> coordinator.awaitTermination(Duration.ofNanos(-1)));
+        } finally {
+            admission.close();
+        }
+    }
 }
