@@ -212,10 +212,19 @@ public final class WayangApi {
             switch (kind) {
                 case PROCESS -> {
                     ProcessModel m = ProcessMaps.fromMap(doc);
+                    List<String> explicitComponentIds = new ArrayList<>();
+                    for (var element : m.elements().values()) {
+                        try {
+                            ComponentIdentity identity = ComponentIdentity.fromConfiguration(element.config());
+                            if (identity != null) explicitComponentIds.add(identity.id());
+                        } catch (IllegalArgumentException ex) {
+                            items.add(new ValidationReport.Item("ERROR", element.id(), "component binding: " + ex.getMessage()));
+                        }
+                    }
                     try {
                         ComponentRequirements.resolve(
                                 m.elements().values().stream().map(e -> e.type()).toList(),
-                                componentRegistry());
+                                explicitComponentIds, componentRegistry());
                     } catch (ComponentRegistry.ComponentResolutionException e) {
                         items.add(new ValidationReport.Item("ERROR", null, "component requirements: " + e.getMessage()));
                     }
