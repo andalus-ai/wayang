@@ -6,10 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.EnvOption;
-import org.projectnessie.cel.ProgramOption;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.BoolT;
-import org.projectnessie.cel.interpreter.functions.Overload;
 
 class GovernedCelLibraryTest {
 
@@ -22,11 +20,19 @@ class GovernedCelLibraryTest {
                 "1.0.0");
     }
 
+    private static CelFunctionBinding binding(FunctionDescriptor descriptor) {
+        return CelFunctionBinding.unary(
+                descriptor,
+                EnvOption.declarations(Decls.newFunction(
+                        descriptor.functionName(),
+                        Decls.newOverload(descriptor.overloadId(), List.of(Decls.Int), Decls.Bool))),
+                value -> BoolT.True);
+    }
+
     @Test
     void libraryRequiresOneBindingForEveryRegistryEntry() {
-        FunctionDescriptor descriptor = descriptor("wayang_is_even_int");
-        FunctionRegistry registry = FunctionRegistry.builder().register(descriptor).build();
-
+        FunctionRegistry registry = FunctionRegistry.builder()
+                .register(descriptor("wayang_is_even_int")).build();
         assertThrows(IllegalArgumentException.class,
                 () -> new GovernedCelLibrary(registry, List.of()));
     }
@@ -41,43 +47,27 @@ class GovernedCelLibraryTest {
         FunctionRegistry registry = FunctionRegistry.builder().register(registered).build();
 
         assertThrows(IllegalArgumentException.class,
-                () -> new GovernedCelLibrary(registry, List.of(
-                        new CelFunctionBinding(differentVersion,
-                                registered.overloadId(),
-                                EnvOption.declarations(),
-                                ProgramOption.functions(Overload.function(
-                                        registered.overloadId(), values -> BoolT.True))))));
+                () -> new GovernedCelLibrary(registry, List.of(binding(differentVersion))));
     }
 
     @Test
-    void bindingRejectsRuntimeDispatcherKeyThatDiffersFromDescriptor() {
-        FunctionDescriptor descriptor = descriptor("wayang_is_even_int");
+    void unaryFactoryRejectsWrongDeclaredArity() {
+        FunctionDescriptor binary = new FunctionDescriptor(
+                "wayang.math", "wayang_add", "1.0.0", "wayang_add_int_int",
+                List.of("int", "int"), "int", FunctionDescriptor.Effect.PURE,
+                FunctionDescriptor.Determinism.DETERMINISTIC, "1.0.0");
         assertThrows(IllegalArgumentException.class,
-                () -> new CelFunctionBinding(
-                        descriptor,
-                        "wayang_is_even",
-                        EnvOption.declarations(),
-                        ProgramOption.functions(Overload.function(
-                                descriptor.overloadId(), values -> BoolT.True))));
+                () -> CelFunctionBinding.unary(binary, EnvOption.declarations(), value -> BoolT.True));
     }
 
     @Test
-    void libraryExposesOnlyTheOptionsFromGovernedBindings() {
+    void libraryExposesOnlyOptionsFromGovernedTypedBindings() {
         FunctionDescriptor descriptor = descriptor("wayang_is_even_int");
         FunctionRegistry registry = FunctionRegistry.builder().register(descriptor).build();
-        CelFunctionBinding binding = new CelFunctionBinding(
-                descriptor,
-                descriptor.overloadId(),
-                EnvOption.declarations(Decls.newFunction(
-                        descriptor.functionName(),
-                        Decls.newOverload(descriptor.overloadId(),
-                                List.of(Decls.Int), Decls.Bool))),
-                ProgramOption.functions(Overload.function(
-                        descriptor.overloadId(), values -> BoolT.True)));
-
-        GovernedCelLibrary library = new GovernedCelLibrary(registry, List.of(binding));
+        GovernedCelLibrary library = new GovernedCelLibrary(registry, List.of(binding(descriptor)));
 
         assertEquals(1, library.getCompileOptions().size());
         assertEquals(1, library.getProgramOptions().size());
+        assertEquals(descriptor.overloadId(), binding(descriptor).runtimeOverloadId());
     }
 }
