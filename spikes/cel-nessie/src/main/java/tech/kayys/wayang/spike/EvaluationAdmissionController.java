@@ -3,9 +3,7 @@ package tech.kayys.wayang.spike;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
@@ -163,11 +161,7 @@ public final class EvaluationAdmissionController implements AutoCloseable {
     public Snapshot snapshot() {
         lock.lock();
         try {
-            Map<String, Integer> queuedByTenant = new HashMap<>();
-            for (Waiter waiter : queue) {
-                queuedByTenant.merge(waiter.tenantId, 1, Integer::sum);
-            }
-            return new Snapshot(active, queue.size(), Map.copyOf(activeByTenant), Map.copyOf(queuedByTenant), closed);
+            return new Snapshot(active, queue.size(), closed);
         } finally {
             lock.unlock();
         }
@@ -193,12 +187,8 @@ public final class EvaluationAdmissionController implements AutoCloseable {
 
     private record Waiter(String tenantId) { }
 
-    public record Snapshot(
-            int active,
-            int queued,
-            Map<String, Integer> activeByTenant,
-            Map<String, Integer> queuedByTenant,
-            boolean closed) { }
+    /** Aggregate-only diagnostics; tenant identifiers are never exposed here. */
+    public record Snapshot(int active, int queued, boolean closed) { }
 
     public static final class Lease implements AutoCloseable {
         private final EvaluationAdmissionController owner;
