@@ -23,7 +23,7 @@ class NodeRunnerComponentDispatchTest {
 
     private PlanNode node(String componentId) {
         Map<String, Object> config = componentId == null ? Map.of()
-                : Map.of("wayang.component.id", componentId);
+                : Map.of(ComponentIdentity.ID_KEY, componentId);
         return new PlanNode("node-1", "Node", ElementType.SERVICE_TASK, "test-service",
                 config, List.of(), List.of());
     }
@@ -92,6 +92,33 @@ class NodeRunnerComponentDispatchTest {
 
         assertInstanceOf(NodeOutcome.Completed.class, outcome);
         assertEquals(true, ((NodeOutcome.Completed) outcome).outputs().get("legacy"));
+    }
+
+
+    @Test
+    void passesExplicitOperationAndRejectsVersionMismatch() {
+        ComponentExecutor executor = new ComponentExecutor() {
+            @Override public String executorId() { return "test-service"; }
+            @Override public ComponentExecutionResult execute(ExecutionRequest request) {
+                assertEquals("inspect", request.operation());
+                return new ComponentExecutionResult.Completed(Map.of("ok", true));
+            }
+        };
+        NodeRunner runner = new NodeRunner(List.of()).withProfile(Profile.FULL)
+                .withComponentCatalog(catalog(executor));
+        PlanNode operationNode = new PlanNode("node-1", "Node", ElementType.SERVICE_TASK, "test-service",
+                Map.of(ComponentIdentity.ID_KEY, COMPONENT,
+                        ComponentIdentity.VERSION_KEY, "1.0",
+                        ComponentIdentity.OPERATION_KEY, "inspect"), List.of(), List.of());
+        NodeOutcome operationOutcome = runner.run("run-1", operationNode, Map.of());
+        assertInstanceOf(NodeOutcome.Completed.class, operationOutcome);
+
+        PlanNode mismatchedVersion = new PlanNode("node-1", "Node", ElementType.SERVICE_TASK, "test-service",
+                Map.of(ComponentIdentity.ID_KEY, COMPONENT, ComponentIdentity.VERSION_KEY, "2.0"),
+                List.of(), List.of());
+        NodeOutcome mismatch = runner.run("run-1", mismatchedVersion, Map.of());
+        assertInstanceOf(NodeOutcome.Failed.class, mismatch);
+        assertTrue(((NodeOutcome.Failed) mismatch).error().contains("Component version mismatch"));
     }
 
     @Test
