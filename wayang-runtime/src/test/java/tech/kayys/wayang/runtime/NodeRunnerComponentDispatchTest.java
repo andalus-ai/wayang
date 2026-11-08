@@ -58,7 +58,7 @@ class NodeRunnerComponentDispatchTest {
         assertTrue(((NodeOutcome.Failed) missingCatalog).error().contains("no component catalog"));
 
         ComponentExecutor other = new ComponentExecutor() {
-            @Override public String executorId() { return "test-other"; }
+            @Override public String executorId() { return "test-service"; } // the catalog requires the descriptor's executor family; what is missing below is the component id
             @Override public ComponentExecutionResult execute(ExecutionRequest request) {
                 return new ComponentExecutionResult.Completed(Map.of());
             }
