@@ -149,13 +149,13 @@ public final class NodeRunner {
                 effective = withResolvedSecrets(runId, node, tenant, process, used);
             }
             NodeOutcome o;
-            Object requestedComponent = effective.config().get("wayang.component.id");
-            if (requestedComponent instanceof String componentId && !componentId.isBlank()) {
+            ComponentIdentity identity = ComponentIdentity.fromConfiguration(effective.config());
+            if (identity != null) {
                 if (componentCatalog == null) {
                     return new NodeOutcome.Failed("Node " + node.id()
-                            + " declares component '" + componentId + "' but no component catalog is configured", false);
+                            + " declares component '" + identity.id() + "' but no component catalog is configured", false);
                 }
-                o = executeComponent(runId, effective, vars, componentId);
+                o = executeComponent(runId, effective, vars, identity);
             } else {
                 if (h == null) {
                     if (!profile.allowsExecutor(node.executorType())) {
@@ -184,18 +184,22 @@ public final class NodeRunner {
     }
 
     private NodeOutcome executeComponent(String runId, PlanNode node, Map<String, Object> vars,
-            String componentId) {
+            ComponentIdentity identity) {
         ComponentDescriptor descriptor = componentCatalog.components().stream()
-                .filter(candidate -> candidate.id().equals(componentId))
+                .filter(candidate -> candidate.id().equals(identity.id()))
                 .findFirst().orElse(null);
         if (descriptor == null) {
-            return new NodeOutcome.Failed("Component '" + componentId
+            return new NodeOutcome.Failed("Component '" + identity.id()
                     + "' is not part of the resolved runtime catalog", false);
+        }
+        if (identity.version() != null && !descriptor.version().equals(identity.version())) {
+            return new NodeOutcome.Failed("Component version mismatch for '" + identity.id()
+                    + "': requested=" + identity.version() + ", resolved=" + descriptor.version(), false);
         }
         Map<String, Object> configuration = new java.util.LinkedHashMap<>();
         configuration.put("wayang.planNode", node.toConfiguration());
         configuration.put("componentConfig", node.config());
-        ExecutionRequest request = new ExecutionRequest(runId, componentId, descriptor.version(), "execute",
+        ExecutionRequest request = new ExecutionRequest(runId, identity.id(), descriptor.version(), identity.operation(),
                 vars, configuration, ExecutionMetadata.empty());
         ComponentExecutionResult result = componentCatalog.executors().execute(request);
         if (result instanceof ComponentExecutionResult.Completed completed) {
