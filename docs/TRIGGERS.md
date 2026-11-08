@@ -81,6 +81,11 @@ Templates `daily-brief-telegram` and `daily-brief-slack`: params `chatId` / `cha
 and the optional lookup fields. An agent `writer` (no tools unless a lookup is given, cannot act) writes the brief and the process sends it to the one chat or channel you named;
 there is no approval step because nothing but its own text can go out, only to you. Created switched off.
 
+Templates `webhook-alert-telegram` and `webhook-alert-slack` need **no agent** (they are the integration profile's starters): a secret webhook whose JSON body field `message` is
+sent as `Alert: <message>` (at most 1000 characters) to the one chat or channel you named. The destination is a literal in the process, never read from the body, so a caller
+holding the secret can choose the text but not the place. The webhook secret is shown once in the creation report; the trigger starts disabled with `rateLimit` 60 per hour and 500 per day.
+One of each kind per tenant (fixed ids). Not verified: a real delivery to Telegram or Slack.
+
 Verified: cron semantics and DST by unit tests with mutation checks; server and release schedule logic against a fake clock; templates through the real importer; trigger store contract
 (in-memory and on PostgreSQL 16). Not verified: a real run at a real wall-clock time, a real Telegram/Slack send, Studio compile (parse-checked only), Quarkus scheduler wiring.
 
