@@ -86,14 +86,12 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
       _selectedIndex = null;
       _selectedNestedPath = null;
     } else if (_selectedNestedPath != null) {
-      final document = _document();
       if (document == null || stepAtAddress(document, _selectedNestedPath!) == null) {
         _selectedNestedPath = null;
       }
     }
     while (_graphStack.isNotEmpty && (document == null || stepSequenceAtAddress(document, _activeSequenceAddress) == null)) {
       _graphStack.removeLast();
-    }
     }
     setState(() {});
   }
