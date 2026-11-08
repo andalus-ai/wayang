@@ -34,6 +34,20 @@ The current Java classes are a qualification spike, not yet a public Wayang API.
 Do not wire them into the parent reactor or production runtime until the adapter,
 compatibility, resource, and recovery gates are qualified.
 
+## Evaluation boundary and artifact compatibility
+
+See [EVALUATION-BOUNDARY-AND-ARTIFACTS.md](EVALUATION-BOUNDARY-AND-ARTIFACTS.md)
+for typed function bindings, descriptor-derived multi-overload declarations,
+source/activation/result admission limits, the versioned compiled-expression
+compatibility envelope, and remaining recovery/resource gates.
+
+New probes cover:
+- Typed unary/binary registration without caller-supplied ProgramOption objects.
+- Multiple typed overloads sharing one CEL source-level function name.
+- Exact artifact compatibility across provider, registry, environment, schema,
+  compile-options, semantic profile, and policy versions.
+- Bounded source, activation and result structures; cycle and unsupported-host-value rejection.
+
 ## Explicitly not proven
 
 The spike does not prove:
