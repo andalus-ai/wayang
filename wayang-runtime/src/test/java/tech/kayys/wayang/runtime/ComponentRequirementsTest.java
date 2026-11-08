@@ -26,6 +26,14 @@ class ComponentRequirementsTest {
     }
 
     @Test
+    void explicitBindingsAreIncludedInDeterministicRoots() {
+        assertEquals(List.of("acme.connector.http", "wayang.bpmn.control-flow", "wayang.service.connector"),
+                ComponentRequirements.componentIds(
+                        List.of(ElementType.SERVICE_TASK, ElementType.START_EVENT),
+                        List.of("acme.connector.http", "wayang.service.connector", "acme.connector.http")));
+    }
+
+    @Test
     void resolvesOnlyComponentsAvailableInTheSelectedProfile() {
         var full = ComponentRegistry.standard(Profile.FULL);
         var automation = ComponentRegistry.standard(Profile.AUTOMATION);
