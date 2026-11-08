@@ -3,8 +3,10 @@ package tech.kayys.wayang.spike;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -22,9 +24,11 @@ public final class AdmittedEvaluationCoordinator implements AutoCloseable {
             EvaluationAdmissionController admission, EvaluationExecutionPolicy policy) {
         this.admission = Objects.requireNonNull(admission, "admission");
         this.policy = Objects.requireNonNull(policy, "policy");
+        BlockingQueue<Runnable> queue = policy.maxQueuedTasks() == 0
+                ? new SynchronousQueue<>()
+                : new ArrayBlockingQueue<>(policy.maxQueuedTasks());
         workers = new ThreadPoolExecutor(policy.maxWorkers(), policy.maxWorkers(),
-                0L, TimeUnit.MILLISECONDS,
-                new ArrayBlockingQueue<>(Math.max(1, policy.maxQueuedTasks())),
+                0L, TimeUnit.MILLISECONDS, queue,
                 runnable -> {
                     Thread thread = new Thread(runnable, "cel-admitted-provider");
                     thread.setDaemon(true);
@@ -67,7 +71,12 @@ public final class AdmittedEvaluationCoordinator implements AutoCloseable {
 
     public int activeWorkers() { return workers.getActiveCount(); }
     public int queuedTasks() { return workers.getQueue().size(); }
+    public boolean isShutdown() { return workers.isShutdown(); }
 
+    /**
+     * Stops accepting work but drains already accepted tasks. A running provider
+     * is not interrupted and its lease remains held until it actually returns.
+     */
     @Override
     public void close() { workers.shutdown(); }
 
@@ -82,8 +91,8 @@ public final class AdmittedEvaluationCoordinator implements AutoCloseable {
         private Task(EvaluationProviderExecutor provider, EvaluationExecutionRequest request,
                 EvaluationAdmissionController.Lease lease) {
             this.provider = provider;
-                this.request = request;
-                this.lease = lease;
+            this.request = request;
+            this.lease = lease;
         }
 
         @Override
