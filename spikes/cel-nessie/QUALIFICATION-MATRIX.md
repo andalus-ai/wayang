@@ -208,3 +208,27 @@ review. If a mandatory guarantee cannot be demonstrated with CEL-Java plus a ver
 host mechanism, mark it **Blocked** and reject production promotion.
 
 CEL remains additive and opt-in. FEEL behavior and Andalus core remain unchanged.
+
+
+## Phase 4J — Resource governance and admission probes
+
+| Gate | Current status | Scope and limitation |
+|---|---|---|
+| Global active admission | Probe added | Process-local cap; CI pending |
+| Per-tenant active admission | Probe added | Tenant ID must come from trusted server context; CI pending |
+| Bounded global/per-tenant queue | Probe added | In-memory FIFO queue; CI pending |
+| Queue timeout | Probe added | Bounds admission wait only; CI pending |
+| Request deadline | Probe added | Checked while waiting; not a provider execution deadline |
+| Admission cancellation | Probe added | Cancels/removes queued waiter; does not stop a running CEL Program |
+| Lease release | Probe added | Idempotent AutoCloseable lease; caller must scope it around provider call |
+| Tenant diagnostic privacy | Implemented | Public snapshot exposes aggregate counts only |
+| Distributed quota | Not implemented | Local counters are not cluster-wide limits |
+| Hard CPU/instruction/heap budget | Blocked | Requires independently verified isolation/preemption |
+| Provider thread safety | Not tested | Env/Program concurrent sharing is not qualified |
+| Running evaluation cancellation | Blocked | CEL-Java Program.eval has no demonstrated cancellation contract |
+
+The Phase 4J tests cover global and tenant active limits, queue admission,
+cross-tenant progress, timeout, deadline, pre-cancelled and queued cancellation,
+controller shutdown, and idempotent lease release. CI evidence is pending for
+this branch. Do not promote these local admission controls as hard resource
+governance or distributed tenant quotas.
