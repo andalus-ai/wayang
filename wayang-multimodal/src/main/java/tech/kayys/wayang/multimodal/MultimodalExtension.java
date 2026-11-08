@@ -29,7 +29,7 @@ public final class MultimodalExtension implements WayangExtension {
         UrlGuard guard = new UrlGuard("true".equalsIgnoreCase(System.getenv("WAYANG_CONNECTORS_ALLOW_PRIVATE")), hosts());
         MediaStore store = MediaStore.fromEnvironment();
         return Map.of("image-generate", new ImageGenerate(guard, store), "comfyui", new ComfyUi(guard, store), "transcribe", new Transcribe(guard, store),
-                "speak", new Speak(guard, store));
+                "speak", new Speak(guard, store), "describe", new Describe(guard, store));
     }
 
     @Override
@@ -38,7 +38,8 @@ public final class MultimodalExtension implements WayangExtension {
                 component("wayang.multimodal.image-generate", "Generate an image from a prompt", "media.image.generate"),
                 component("wayang.multimodal.comfyui", "Submit a workflow to a ComfyUI endpoint", "media.workflow.execute"),
                 component("wayang.multimodal.transcribe", "Transcribe audio to text", "media.audio.transcribe"),
-                component("wayang.multimodal.speak", "Synthesize speech from text", "media.audio.synthesize"));
+                component("wayang.multimodal.speak", "Synthesize speech from text", "media.audio.synthesize"),
+                component("wayang.multimodal.describe", "Describe an image as text", "media.image.describe"));
     }
 
     private static ComponentDescriptor component(String id, String description, String capability) {

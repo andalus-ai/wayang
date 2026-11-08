@@ -163,7 +163,7 @@ public final class NodeCatalog {
                         "language", Map.of("type", "string", "description", "script: ces (default), javascript or python (the last two only when the operator enabled them; not a sandbox). transcribe: ISO 639-1 code such as id or en"),
                         "code", Map.of("type", "string", "description", "script: the code, fixed in the definition; inputs are bound as 'input'"),
                         "engine", Map.of("type", "string", "description", "script (javascript/python): the JSR-223 engine name to use"),
-                        "model", Map.of("type", "string", "description", "transcribe (default whisper-1), speak (default tts-1), image-generate: the model name"),
+                        "model", Map.of("type", "string", "description", "transcribe (default whisper-1), speak (default tts-1), describe (default gpt-4o-mini), image-generate: the model name"),
                         "voice", Map.of("type", "string", "description", "speak: the voice name (default alloy)"),
                         "format", Map.of("type", "string", "enum", List.of("opus", "mp3", "wav"), "description", "speak: audio format (opus shows as a voice note in Telegram)")), true)));
         l.add(new Entry("BUSINESS_RULE_TASK", "Business rule (DMN)", "Tasks", "Evaluates a published decision", false, Integer.MAX_VALUE, 1,

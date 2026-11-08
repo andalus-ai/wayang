@@ -301,7 +301,7 @@ public final class Publisher {
                                     <version>${wayang.version}</version>
                                 </dependency>
                         """;
-    static final Set<String> MULTIMODAL_CONNECTORS = Set.of("image-generate", "comfyui", "transcribe", "speak");
+    static final Set<String> MULTIMODAL_CONNECTORS = Set.of("image-generate", "comfyui", "transcribe", "speak", "describe");
 
     /** The connectors, poll sources and webhook providers this release uses, built from the environment. Shared by every target. */
     private static String wiring(ReleaseOptions o, Set<String> used, Set<String> pollSources, Set<String> providers) {

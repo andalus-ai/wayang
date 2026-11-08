@@ -44,7 +44,8 @@ final class ReleaseArtifactCatalog {
             Map.entry("wayang.multimodal.image-generate", List.of("wayang-multimodal")),
             Map.entry("wayang.multimodal.comfyui", List.of("wayang-multimodal")),
             Map.entry("wayang.multimodal.transcribe", List.of("wayang-multimodal")),
-            Map.entry("wayang.multimodal.speak", List.of("wayang-multimodal"))
+            Map.entry("wayang.multimodal.speak", List.of("wayang-multimodal")),
+            Map.entry("wayang.multimodal.describe", List.of("wayang-multimodal"))
     );
 
     private static final Map<String, List<String>> MODULE_DEPENDENCIES = Map.ofEntries(

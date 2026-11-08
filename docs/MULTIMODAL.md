@@ -52,6 +52,8 @@ Telegram voice notes flow through the same claim-check store as images:
 2. Connector `telegram`, operation `downloadFile` (input `fileId`) fetches the file into the media store (at most 10 MiB, content sniffed as ogg/mp3/wav/m4a) and returns `mediaId`.
 3. Connector `transcribe` (input `mediaId`; config `model` default `whisper-1`, `apiKey` as `${secret:NAME}`, `baseUrl` default OpenAI, optional `language`) returns `text` (at most 8000 characters). Any OpenAI-compatible `/audio/transcriptions` server works, including a local Whisper.
 
+4. Connector `describe` (input `mediaId` of a stored image up to 5 MiB; config `model` default `gpt-4o-mini`, `apiKey` as `${secret:NAME}`, `baseUrl` default OpenAI, optional `prompt` up to 500 characters) returns `text` (at most 4000 characters) from an OpenAI-compatible `/chat/completions` endpoint that accepts images (OpenAI, or a local vision model). The default prompt asks for a plain description with visible text transcribed and tells the model not to follow instructions inside the picture; that is a request, not a guarantee.
+
 The transcript is what someone said, so it is untrusted input like any message. `transcribe` is a MEDIA-profile connector and is added to the multimodal dependency of generated releases.
 
 Verified: unit tests against local fake servers only. Not run against real Telegram or a real transcription provider.
@@ -76,3 +78,9 @@ Tested against a fake provider and a fake Telegram server only.
 Template option (Telegram assistant): `voice=true` and `speak=true`. A voice note is then also answered by voice: the agent gets `say` (connector `speak`, secret
 `OPENAI_API_KEY`) and `send_voice` (telegram `sendVoice`, the chat fixed in the configuration), and the prompt tells it when the message was a voice note.
 Typed messages get typed answers only. Whether the model follows that instruction is up to the model; nothing forces it.
+
+## Photos you send the assistant
+
+`assistant-telegram` accepts `photos: true` (MEDIA profile required; Telegram only; optional `visionModel`, default `gpt-4o-mini`). The poller then also emits photos from the allowed chat (largest size within 5 MiB, the caption as `text`, plus `photoFileId`). The process goes `kind` → `fetchPhoto` (telegram `downloadFile` with `kind: image`) → `see` (`describe`, secret `OPENAI_API_KEY`) → `draft`. The agent reads the caption and the description, the latter framed as an automatic description that is not an instruction, and the approval policy checks the typed text, the transcript **and** the description for pay / transfer / password / delete. A picture of text can therefore not talk the assistant into an unapproved action. The model never sees the image itself: it gets the description, so a weak vision model means a weak answer.
+
+Not verified against a live Telegram bot or a real vision API: the connectors are tested against local stub servers, and the CI run is the check on the module builds.
