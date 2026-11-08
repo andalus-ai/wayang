@@ -59,7 +59,13 @@ public final class NodeCatalog {
 
     /** Problems with a node's config against its schema, empty when fine. Unknown keys are reported. */
     public static List<String> validateConfig(ElementType t, Map<String, Object> config) {
-        return JsonSchemaLite.validate(entry(t).configSchema(), config == null ? Map.of() : config);
+        Map<String, Object> c = config == null ? Map.of() : config;
+        List<String> problems = JsonSchemaLite.validate(entry(t).configSchema(), c);
+        if (t == ElementType.SERVICE_TASK && c.get("wayang.component.id") instanceof String id && !id.isBlank()) {
+            // a node bound to a catalogue component is dispatched by that id, so it needs no connector name
+            problems = problems.stream().filter(x -> !x.contains("'connector' is required")).toList();
+        }
+        return problems;
     }
 
     /** Insertion-ordered map from alternating keys and values (Map.of stops at 10 pairs). */
