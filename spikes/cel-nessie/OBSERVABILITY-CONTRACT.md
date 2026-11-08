@@ -24,7 +24,8 @@ or user-provided values as metric labels.
 
 The observer is optional; existing constructors use a no-op observer. Observer
 RuntimeExceptions are isolated and do not change admission, execution, result,
-or lease semantics. Implementations should remain non-blocking.
+or lease semantics. Callbacks may run concurrently on caller and provider threads, so
+implementations must be thread-safe and remain non-blocking.
 
 ## Adapter guidance
 
