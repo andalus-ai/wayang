@@ -119,4 +119,13 @@ class TelegramPhotoInputTest {
         assertNull(Telegram.largestPhoto(List.of(Map.of("file_id", "bad id", "width", 1, "height", 1))));
         assertNull(Telegram.largestPhoto(List.of("junk", Map.of("file_id", "valid_AAAAAAAA"))));
     }
+
+    @Test
+    void chatActionSendsTypingToTheConfiguredChatOnly() throws Exception {
+        Map<String, Object> out = sender.call(cfg("operation", "chatAction", "chatId", 42), Map.of("chatId", 7));
+        assertEquals("typing", out.get("action"));
+        assertTrue(paths.stream().anyMatch(p -> p.endsWith("/sendChatAction")), paths.toString());
+        assertThrows(ServiceHandler.ConnectorException.class, () -> sender.call(cfg("operation", "chatAction", "chatId", 42, "action", "rm -rf"), Map.of()));
+        assertThrows(ServiceHandler.ConnectorException.class, () -> sender.call(cfg("operation", "chatAction"), Map.of()));
+    }
 }
