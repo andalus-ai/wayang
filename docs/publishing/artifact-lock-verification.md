@@ -28,3 +28,9 @@ This digest protects the lock document, not the bytes downloaded from a Maven re
 `MavenArtifactLocationResolver` converts validated Maven coordinates into the conventional repository layout for POM, JAR, and SHA-256 sidecar locations. It returns one location set per configured repository, preserving repository priority, and checks every generated URL against `RepositoryPolicy`.
 
 This stage is intentionally a pure URL planner: it does not make HTTP requests, download artifacts, follow redirects, or trust checksum sidecars. The next fetch/install stage must revalidate every redirect target, impose connection/read/size limits, verify downloaded bytes against a trusted digest or signature policy, and only then expose artifacts to packaging. A sidecar served by the same repository is useful for transport-integrity checks but is not an independent trust anchor.
+
+## Verified artifact cache
+
+`VerifiedArtifactCache` is the byte-fetch stage for callers that already possess an authenticated expected SHA-256 digest. It checks the repository allow-list before transport, uses a JDK HTTP client configured not to follow redirects, applies a request timeout and maximum byte count, and verifies the downloaded bytes before atomically publishing them into a content-addressed cache.
+
+Cache entries are re-hashed before reuse. Failed downloads and digest mismatches do not become visible cache entries. The expected digest must come from a separately authenticated release manifest or equivalent trust source; this class intentionally does not trust a checksum sidecar fetched from the same repository. The cache does not yet provide signature verification, cross-process locking, eviction, or a complete Maven dependency resolver.
