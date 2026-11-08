@@ -43,6 +43,27 @@ jobs:
           WAYANG_TEST_JDBC_URL: jdbc:postgresql://localhost/wayang?user=postgres&password=pw
         run: mvn -B verify
 
+  wayang-core-adapter:
+    # Core contracts are intentionally a separate repository and are installed before building the opt-in Wayang adapter.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      - name: Wayang Core contracts
+        uses: actions/checkout@v4
+        with:
+          repository: andalus-ai/wayang-core
+          path: deps/wayang-core
+      - name: Install Wayang Core model
+        run: mvn -B -q -f deps/wayang-core/pom.xml install -DskipTests -pl wayang-core-model -am
+      - name: Build and test the Wayang Core adapter
+        run: mvn -B -Pwayang-core -pl wayang-adapter-core -am verify
+
   andalus:
     # The adapter compiles against andalus-framework (engine + plugin SPI). Kept separate so a framework problem is visible on its own.
     runs-on: ubuntu-latest
