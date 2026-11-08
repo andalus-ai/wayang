@@ -147,7 +147,7 @@ class _ComponentBindingSection extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 DropdownButtonFormField<String>(
-                  value: selectedId != null && ids.contains(selectedId) ? selectedId : null,
+                  value: selectedId,
                   isExpanded: true,
                   decoration: const InputDecoration(isDense: true, hintText: 'Use default node handler'),
                   items: [
@@ -168,7 +168,10 @@ class _ComponentBindingSection extends ConsumerWidget {
                       next.remove('wayang.component.version');
                       next.remove('wayang.component.operation');
                     } else {
-                      final component = components.where((item) => item.id == value).firstOrNull;
+                      ComponentCatalogEntry? component;
+                      for (final item in components) {
+                        if (item.id == value) component = item;
+                      }
                       next['wayang.component.id'] = value;
                       if (component != null) next['wayang.component.version'] = component.version;
                     }
