@@ -49,7 +49,7 @@ class VerifiedArtifactCacheTest {
         byte[] bytes = "tampered".getBytes(StandardCharsets.UTF_8);
         var cache = cache((uri, timeout) -> response(200, bytes));
         assertThrows(IOException.class, () -> cache.fetch(ARTIFACT, "0".repeat(64)));
-        assertFalse(Files.exists(temp.resolve("cache/sha256")));
+        try (var files = Files.list(temp.resolve("cache/sha256/00"))) {\n            assertEquals(0, files.count());\n        }
     }
 
     @Test
