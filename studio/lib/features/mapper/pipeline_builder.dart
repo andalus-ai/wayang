@@ -239,6 +239,19 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
     )));
   }
 
+  Widget _activeAddButton(Map<String, dynamic> document, List<StepKind> kinds, List<Map<String, dynamic>> steps) {
+    if (_graphStack.isEmpty) return _addButton(kinds, steps);
+    return PopupMenuButton<StepKind>(
+      tooltip: 'Add step to current lane',
+      onSelected: (kind) {
+        final updated = insertStepAtAddress(document, _activeSequenceAddress, steps.length, kind.instantiate());
+        if (updated != null) _writeNested(updated, _activeSequenceAddress.at(steps.length));
+      },
+      itemBuilder: (_) => [for (final kind in kinds) PopupMenuItem(value: kind, child: Text(kind.label))],
+      child: const Chip(avatar: Icon(Icons.add_rounded, size: 17), label: Text('Add step')),
+    );
+  }
+
   Widget _addButton(List<StepKind> kinds, List<Map<String, dynamic>> steps) {
     return PopupMenuButton<StepKind>(
       tooltip: 'Add a step from the catalog',
@@ -515,7 +528,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
             Text(_activeSequenceLabel + ' · ' + steps.length.toString() + (steps.length == 1 ? ' step' : ' steps'),
               style: Theme.of(context).textTheme.labelLarge),
             const Spacer(),
-            if (_graphStack.isEmpty) _addButton(kinds, steps) else PopupMenuButton<StepKind>(tooltip: 'Add step to current lane', onSelected: (kind) { final updated = insertStepAtAddress(document, _activeSequenceAddress, steps.length, kind.instantiate()); if (updated != null) _writeNested(updated, _activeSequenceAddress.at(steps.length)); }, itemBuilder: (_) => [for (final kind in kinds) PopupMenuItem(value: kind, child: Text(kind.label))], child: const Chip(avatar: Icon(Icons.add_rounded, size: 17), label: Text('Add step'))),
+            _activeAddButton(document, kinds, steps),
           ]),
           const SizedBox(height: 10),
           Expanded(child: steps.isEmpty
@@ -531,7 +544,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
                   const Text('Add the first integration step to begin composing the pipeline.',
                     textAlign: TextAlign.center),
                   const SizedBox(height: 12),
-                  _addButton(kinds, steps),
+                  _activeAddButton(document, kinds, steps),
                 ]),
               ))
             : LayoutBuilder(builder: (context, constraints) {
