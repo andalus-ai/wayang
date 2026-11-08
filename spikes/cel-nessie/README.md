@@ -85,3 +85,11 @@ Keep the provider isolated until mandatory resource governance, exact artifact
 compatibility, concurrency isolation, and security review have executable evidence.
 A successful `mvn verify` validates only this spike; it does not qualify a
 production provider.
+
+
+## Phase 4Q observability probes
+
+See [OBSERVABILITY-CONTRACT.md](OBSERVABILITY-CONTRACT.md) for the provider-neutral,
+low-cardinality event contract, admission/execution duration observations,
+caller-timeout semantics, and telemetry adapter guidance. Existing coordinator
+construction remains source-compatible and defaults to a no-op observer.
