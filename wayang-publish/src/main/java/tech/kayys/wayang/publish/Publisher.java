@@ -79,6 +79,8 @@ public final class Publisher {
         }
         ComponentLockfile.Result componentLock = ComponentLockfile.create(bundle, profile, extensions, used);
         ReleaseArtifactLockfile.Result artifactLock = ReleaseArtifactLockfile.create(componentLock.componentIds(), o.wayangVersion(), o.target() == ReleaseOptions.Target.GAMELAN);
+        // Fail closed if the generated coordinate graph is inconsistent before packaging it.
+        ReleaseArtifactResolver.verify(artifactLock.json());
         Set<String> pollSources = new TreeSet<>();
         Set<String> providers = new TreeSet<>();
         for (ReleaseBundle.Trigger t : bundle.triggers()) {
