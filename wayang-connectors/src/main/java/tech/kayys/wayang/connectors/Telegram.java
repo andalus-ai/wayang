@@ -21,7 +21,8 @@ import tech.kayys.wayang.runtime.ServiceHandler;
  * optional {@code allowedUserIds} (only these senders count inside an allowed chat: a group lets every member write), optional {@code baseUrl}, {@code limit}. Anyone can message a bot, so updates from chats not on the list are dropped
  * (the cursor still advances past them) and never start a run. Each event: {@code updateId, chatId, chatType, fromId,
  * fromUsername, messageId, text, date}; with {@code voice: true} a voice note of at most 5 minutes from an allowed chat is an event with an
- * empty {@code text} plus {@code voiceFileId} and {@code voiceSeconds} (fetch it with {@code downloadFile}).
+ * empty {@code text} plus {@code voiceFileId} and {@code voiceSeconds} (fetch it with {@code downloadFile}); with {@code photo: true} a photo from an allowed chat is an event whose
+ * {@code text} is the caption plus {@code photoFileId} (the largest size within {@link #MAX_PHOTO}; fetch it with {@code downloadFile} and {@code kind: image}).
  */
 public final class Telegram {
 
@@ -95,17 +96,22 @@ public final class Telegram {
             if (fileId == null || !fileId.matches("[A-Za-z0-9_-]{10,200}")) {
                 throw new ServiceHandler.ConnectorException("telegram downloadFile needs a valid 'fileId'", false);
             }
+            boolean image = "image".equals(inputs.get("kind"));
+            if (inputs.get("kind") != null && !image && !"audio".equals(inputs.get("kind"))) {
+                throw new ServiceHandler.ConnectorException("telegram downloadFile 'kind' is audio or image", false);
+            }
+            long limit = image ? MAX_PHOTO : MAX_AUDIO;
             Map<String, Object> info = api(http, config, "getFile", "GET", null, Map.of("file_id", fileId));
             String path = info.get("result") instanceof Map<?, ?> r && r.get("file_path") instanceof String p ? p : null;
             if (path == null || !path.matches("[A-Za-z0-9_./-]{1,200}") || path.contains("..") || path.startsWith("/")) {
                 throw new ServiceHandler.ConnectorException("Telegram returned no usable file path", false);
             }
-            if (info.get("result") instanceof Map<?, ?> r && r.get("file_size") instanceof Number n && n.longValue() > MAX_AUDIO) {
-                throw new ServiceHandler.ConnectorException("The audio is larger than " + (MAX_AUDIO >> 20) + " MiB", false);
+            if (info.get("result") instanceof Map<?, ?> r && r.get("file_size") instanceof Number n && n.longValue() > limit) {
+                throw new ServiceHandler.ConnectorException("The " + (image ? "image" : "audio") + " is larger than " + (limit >> 20) + " MiB", false);
             }
             String base = config.get("baseUrl") instanceof String b && !b.isBlank() ? b.replaceAll("/+$", "") : DEFAULT_BASE;
-            byte[] bytes = raw.getBytes(raw.uri(base, "/file/bot" + config.get("botToken") + "/" + path), Map.of(), 60_000, MAX_AUDIO);
-            return media.saveAudio(bytes);
+            byte[] bytes = raw.getBytes(raw.uri(base, "/file/bot" + config.get("botToken") + "/" + path), Map.of(), 60_000, limit);
+            return image ? media.save(bytes) : media.saveAudio(bytes);
         }
 
         private Map<String, Object> sendPhoto(Map<String, Object> config, Map<String, Object> inputs) throws Exception {
@@ -163,6 +169,7 @@ public final class Telegram {
 
     private static final int MAX_CAPTION = 1024;
     static final long MAX_AUDIO = 10L << 20;
+    static final long MAX_PHOTO = 5L << 20;
     static final long MAX_VOICE_SECONDS = 300;
 
     /**
@@ -314,10 +321,15 @@ public final class Telegram {
                         voiceId = fid;
                         voiceSeconds = dur.longValue();
                     }
-                    if (voiceId == null && !(msg.get("text") instanceof String)) {
-                        continue; // not a text message (and no accepted voice note)
+                    String photoId = null;
+                    if (voiceId == null && !(msg.get("text") instanceof String) && Boolean.TRUE.equals(config.get("photo"))
+                            && msg.get("photo") instanceof List<?> sizes) {
+                        photoId = largestPhoto(sizes);
                     }
-                    String text = msg.get("text") instanceof String tx ? tx : "";
+                    if (voiceId == null && photoId == null && !(msg.get("text") instanceof String)) {
+                        continue; // not a text message (and no accepted voice note or photo)
+                    }
+                    String text = msg.get("text") instanceof String tx ? tx : photoId != null && msg.get("caption") instanceof String cap ? cap : "";
                     Map<String, Object> e = new LinkedHashMap<>();
                     e.put("updateId", id.longValue());
                     e.put("chatId", chat.get("id"));
@@ -332,11 +344,32 @@ public final class Telegram {
                         e.put("voiceFileId", voiceId);
                         e.put("voiceSeconds", voiceSeconds);
                     }
+                    if (photoId != null) {
+                        e.put("photoFileId", photoId);
+                    }
                     e.put("date", msg.get("date"));
                     events.add(e);
                 }
             }
             return new Result(events, max < 0 ? null : Long.toString(max + 1));
         }
+    }
+
+    /** The file id of the largest photo size within {@link #MAX_PHOTO} (Telegram sends several sizes of one picture), or null. */
+    static String largestPhoto(List<?> sizes) {
+        String best = null;
+        long bestPixels = -1;
+        for (Object o : sizes) {
+            if (o instanceof Map<?, ?> m && m.get("file_id") instanceof String id && id.matches("[A-Za-z0-9_-]{10,200}")
+                    && m.get("width") instanceof Number w && m.get("height") instanceof Number h) {
+                long size = m.get("file_size") instanceof Number n ? n.longValue() : 0;
+                long pixels = w.longValue() * h.longValue();
+                if (size <= MAX_PHOTO && pixels > bestPixels) {
+                    best = id;
+                    bestPixels = pixels;
+                }
+            }
+        }
+        return best;
     }
 }
