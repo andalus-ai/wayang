@@ -1,5 +1,6 @@
 package tech.kayys.wayang.spike;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -72,13 +73,35 @@ public final class AdmittedEvaluationCoordinator implements AutoCloseable {
     public int activeWorkers() { return workers.getActiveCount(); }
     public int queuedTasks() { return workers.getQueue().size(); }
     public boolean isShutdown() { return workers.isShutdown(); }
+    public boolean isTerminated() { return workers.isTerminated(); }
 
     /**
      * Stops accepting work but drains already accepted tasks. A running provider
-     * is not interrupted and its lease remains held until it actually returns.
+     * is not interrupted and its admission lease remains held until it returns.
      */
     @Override
     public void close() { workers.shutdown(); }
+
+    /**
+     * Waits for orderly shutdown to finish. This method never interrupts a
+     * provider or force-releases its admission lease.
+     *
+     * @param timeout maximum time to wait; zero performs a non-blocking check
+     * @return true only when every accepted task has terminated
+     */
+    public boolean awaitTermination(Duration timeout) throws InterruptedException {
+        Objects.requireNonNull(timeout, "timeout");
+        if (timeout.isNegative()) {
+            throw new IllegalArgumentException("timeout must not be negative");
+        }
+        long nanos;
+        try {
+            nanos = timeout.toNanos();
+        } catch (ArithmeticException overflow) {
+            nanos = Long.MAX_VALUE;
+        }
+        return workers.awaitTermination(nanos, TimeUnit.NANOSECONDS);
+    }
 
     private final class Task implements Runnable {
         private enum State { QUEUED, RUNNING, CANCELLED, FINISHED }
@@ -98,36 +121,41 @@ public final class AdmittedEvaluationCoordinator implements AutoCloseable {
         @Override
         public void run() {
             if (!state.compareAndSet(State.QUEUED, State.RUNNING)) return;
+            EvaluationExecutionOutcome outcome = null;
             try {
                 var context = request.requestContext();
                 if (context.cancellationToken().isCancelled()) {
-                    result.complete(new EvaluationExecutionOutcome.CancelledBeforeStart());
-                    return;
-                }
-                Instant deadline = context.deadline();
-                if (deadline != null && !Instant.now().isBefore(deadline)) {
-                    result.complete(new EvaluationExecutionOutcome.DeadlineBeforeStart());
-                    return;
-                }
-                try {
-                    EvaluationExecutionOutcome outcome = provider.execute(request);
-                    result.complete(outcome == null
-                            ? new EvaluationExecutionOutcome.Failed("PROVIDER_RETURNED_NULL_OUTCOME")
-                            : outcome);
-                } catch (Throwable failure) {
-                    result.complete(new EvaluationExecutionOutcome.Failed("PROVIDER_EXECUTION_FAILED"));
+                    outcome = new EvaluationExecutionOutcome.CancelledBeforeStart();
+                } else {
+                    Instant deadline = context.deadline();
+                    if (deadline != null && !Instant.now().isBefore(deadline)) {
+                        outcome = new EvaluationExecutionOutcome.DeadlineBeforeStart();
+                    } else {
+                        try {
+                            outcome = provider.execute(request);
+                            if (outcome == null) {
+                                outcome = new EvaluationExecutionOutcome.Failed(
+                                        "PROVIDER_RETURNED_NULL_OUTCOME");
+                            }
+                        } catch (RuntimeException failure) {
+                            outcome = new EvaluationExecutionOutcome.Failed(
+                                    "PROVIDER_EXECUTION_FAILED");
+                        }
+                    }
                 }
             } finally {
                 state.set(State.FINISHED);
                 lease.close();
             }
+            // Publish completion only after lease accounting reflects task termination.
+            result.complete(outcome);
         }
 
         private boolean cancelBeforeStart() {
             if (!state.compareAndSet(State.QUEUED, State.CANCELLED)) return false;
             workers.remove(this);
-            result.complete(new EvaluationExecutionOutcome.CancelledBeforeStart());
             lease.close();
+            result.complete(new EvaluationExecutionOutcome.CancelledBeforeStart());
             return true;
         }
     }
