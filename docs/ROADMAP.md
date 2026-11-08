@@ -431,3 +431,13 @@ Immediate next work should be Phase 0 followed by Phase 1. Do not create all pro
 - [x] Add tests for semantic-version syntax, duplicate/self dependencies, permissions, and manifest-to-component inventory consistency.
 
 **Remaining:** implement a parser/serializer, semantic version-range evaluation, signature and artifact provenance verification, and package installation policy. The current model does not authenticate publishers or execute/install plugin code.
+
+
+## Shared Core extraction (cross-repository)
+- [ ] Characterize existing component/plugin descriptors, manifest schema and execution-capability contracts with golden fixtures.
+- [ ] Extract stable shared model/schema into released wayang-core artifacts.
+- [ ] Keep ComponentRegistry, profile filtering, execution routing and local plugin lifecycle implementation in Wayang.
+- [ ] Move canonical management/worker protocol sources to Core only after compatibility fixtures exist.
+- [ ] Verify Wayang and Console against the same released Core compatibility matrix.
+
+See [Shared Core boundary](SHARED-CORE.md) and https://github.com/andalus-ai/wayang-core.
