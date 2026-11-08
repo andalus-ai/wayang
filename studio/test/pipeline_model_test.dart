@@ -165,6 +165,34 @@ void main() {
     expect(groups.single.address, isNull);
   });
 
+
+  test('recursive graph projection composes addresses at arbitrary depth', () {
+    final grandchildAddress = StepAddress.root(0)
+        .field('branches').at(1).field('steps').at(2);
+    final nestedStep = {
+      'type': 'switch',
+      'cases': {
+        'gold': [{'type': 'label', 'name': 'gold'}],
+      },
+      'default': [
+        {'type': 'choice', 'branches': [
+          {'when': 'nested', 'steps': [{'type': 'label', 'name': 'deep'}]},
+        ]},
+      ],
+    };
+    final groups = nestedStepGroups(nestedStep, parentAddress: grandchildAddress);
+    expect(groups.first.address,
+        grandchildAddress.field('cases').field('gold'));
+    expect(groups.last.address,
+        grandchildAddress.field('default'));
+
+    final deeper = nestedStepGroups(groups.last.steps.single,
+        parentAddress: groups.last.address!.at(0));
+    expect(deeper.single.address,
+        grandchildAddress.field('default').at(0)
+            .field('branches').at(0).field('steps'));
+  });
+
   test('routeSummaries projects router destinations and conditions', () {
     expect(routeSummaries({
       'type': 'router',
