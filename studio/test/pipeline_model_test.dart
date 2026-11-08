@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wayang_studio/data/pipeline_model.dart';
+import 'package:wayang_studio/data/step_address.dart';
 
 // Not run in the environment that produced it (no Dart SDK there). The catalog itself is checked by a Java test that builds
 // every template with the real pipeline loader.
@@ -113,6 +114,55 @@ void main() {
       'steps': [{'type': 'call'}],
       'fallback': [{'type': 'label'}],
     }).map((g) => g.label), ['Main steps', 'Fallback']);
+  });
+
+  test('nested lane projections carry typed addresses for editable branches and cases', () {
+    final choice = {
+      'type': 'choice',
+      'branches': [
+        {'when': 'vip', 'steps': [{'type': 'label', 'name': 'vip'}]},
+      ],
+      'otherwise': [{'type': 'label', 'name': 'other'}],
+    };
+    final groups = nestedStepGroups(choice, parentAddress: StepAddress.root(3));
+    expect(groups[0].address, StepAddress.root(3).field('branches').at(0).field('steps'));
+    expect(groups[1].address, StepAddress.root(3).field('otherwise'));
+
+    final switchStep = {
+      'type': 'switch',
+      'cases': {'paid': [{'type': 'label'}]},
+      'default': <Map<String, dynamic>>[],
+    };
+    final switchGroups = nestedStepGroups(switchStep, parentAddress: StepAddress.root(0));
+    expect(switchGroups[0].address, StepAddress.root(0).field('cases').field('paid'));
+    expect(switchGroups[1].address, StepAddress.root(0).field('default'));
+    expect(switchGroups[1].steps, isEmpty);
+  });
+
+  test('map-based branch, multicast, target and stage lanes are addressable', () {
+    final step = {
+      'type': 'multicast',
+      'branches': {'left': [{'type': 'label', 'name': 'left'}]},
+      'targets': {'primary': [{'type': 'label', 'name': 'primary'}]},
+      'stages': {'prepare': [{'type': 'label', 'name': 'prepare'}]},
+    };
+    final root = StepAddress.root(2);
+    final groups = nestedStepGroups(step, parentAddress: root);
+    expect(groups.map((group) => group.label),
+      ['Branch · left', 'Target · primary', 'Stage · prepare']);
+    expect(groups[0].address, root.field('branches').field('left'));
+    expect(groups[1].address, root.field('targets').field('primary'));
+    expect(groups[2].address, root.field('stages').field('prepare'));
+  });
+
+  test('malformed nested lane elements are not assigned misleading indices', () {
+    final groups = nestedStepGroups({
+      'type': 'guard',
+      'steps': [{'type': 'label'}, 42, {'type': 'label'}],
+    }, parentAddress: StepAddress.root(0));
+    expect(groups, hasLength(1));
+    expect(groups.single.steps, isEmpty);
+    expect(groups.single.address, isNull);
   });
 
   test('routeSummaries projects router destinations and conditions', () {

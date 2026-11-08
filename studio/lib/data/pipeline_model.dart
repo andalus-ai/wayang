@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+import 'json_copy.dart';
+import 'step_address.dart';
+
 /// One kind of pipeline step the builder can add. The catalog is `assets/pipeline_steps.json`; a Java test builds every
 /// template with the real pipeline loader, so a template here is always a step the server accepts.
 class StepKind {
@@ -35,11 +38,7 @@ class StepKind {
 List<StepKind> parseCatalog(String json) =>
     [for (final e in jsonDecode(json) as List) StepKind.fromJson(Map<String, dynamic>.from(e as Map))];
 
-Object? deepCopy(Object? v) {
-  if (v is Map) return {for (final e in v.entries) e.key as String: deepCopy(e.value)};
-  if (v is List) return [for (final e in v) deepCopy(e)];
-  return v;
-}
+Object? deepCopy(Object? value) => deepCopyJson(value);
 
 /// The steps of a pipeline document `{"steps": [...]}`, or null when [text] is not one (bad JSON, no list, a non-object step).
 /// The builder then shows a hint instead of guessing, and the JSON view stays the source of truth.
@@ -82,45 +81,48 @@ class NestedStepGroup {
     required this.label,
     required this.steps,
     this.condition,
+    this.address,
   });
 
   final String label;
   final List<Map<String, dynamic>> steps;
   final String? condition;
+  final StepAddress? address;
 }
 
 List<Map<String, dynamic>> _stepObjects(Object? value) {
   if (value is! List) return const [];
-  return [
-    for (final item in value)
-      if (item is Map) Map<String, dynamic>.from(item),
-  ];
+  if (value.any((item) => item is! Map)) return const [];
+  return [for (final item in value) Map<String, dynamic>.from(item as Map)];
 }
 
-/// Projects known nested EIP structures into display-only lanes.
+/// Projects known nested EIP structures into addressable execution lanes.
 ///
 /// Supports the actual catalog shapes: choice.branches/otherwise,
 /// switch.cases/default, multicast.branches, loadBalance.targets,
 /// routingSlip.stages, and steps/fallback wrappers (guard, retry, loop,
 /// circuitBreaker). It does not mutate or normalize the source JSON.
-List<NestedStepGroup> nestedStepGroups(Map<String, dynamic> step) {
+List<NestedStepGroup> nestedStepGroups(
+  Map<String, dynamic> step, {StepAddress? parentAddress}) {
   final groups = <NestedStepGroup>[];
 
-  void addList(String label, Object? value, {String? condition}) {
+  void addList(String label, Object? value, {String? condition, StepAddress? address}) {
     final children = _stepObjects(value);
-    if (children.isNotEmpty) {
+    if (value is List) {
       groups.add(NestedStepGroup(
         label: label,
         steps: children,
         condition: condition,
+        address: value.every((item) => item is Map) ? address : null,
       ));
     }
   }
 
-  void addMap(String label, Object? value) {
+  void addMap(String label, Object? value, String field) {
     if (value is! Map) return;
     for (final entry in value.entries) {
-      addList('$label · ${entry.key}', entry.value);
+      addList('$label · ${entry.key}', entry.value,
+        address: parentAddress?.field(field).field(entry.key));
     }
   }
 
@@ -134,27 +136,28 @@ List<NestedStepGroup> nestedStepGroups(Map<String, dynamic> step) {
           'Branch $index',
           branch['steps'],
           condition: branch['when']?.toString(),
+          address: parentAddress?.field('branches').at(index - 1).field('steps'),
         );
       }
     }
   } else if (branches is Map) {
-    addMap('Branch', branches);
+    addMap('Branch', branches, 'branches');
   }
 
   final cases = step['cases'];
-  if (cases is Map) addMap('Case', cases);
+  if (cases is Map) addMap('Case', cases, 'cases');
 
   final targets = step['targets'];
-  if (targets is Map) addMap('Target', targets);
+  if (targets is Map) addMap('Target', targets, 'targets');
 
   final stages = step['stages'];
-  if (stages is Map) addMap('Stage', stages);
+  if (stages is Map) addMap('Stage', stages, 'stages');
 
   // These keys represent independent nested sequences in the catalog.
-  addList('Otherwise', step['otherwise']);
-  addList('Default', step['default']);
-  addList('Main steps', step['steps']);
-  addList('Fallback', step['fallback']);
+  addList('Otherwise', step['otherwise'], address: parentAddress?.field('otherwise'));
+  addList('Default', step['default'], address: parentAddress?.field('default'));
+  addList('Main steps', step['steps'], address: parentAddress?.field('steps'));
+  addList('Fallback', step['fallback'], address: parentAddress?.field('fallback'));
 
   return groups;
 }

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
 import '../../data/pipeline_model.dart';
-import '../../data/nested_step_path.dart';
+import '../../data/step_address.dart';
 
 const _mono = TextStyle(fontFamily: 'monospace', fontSize: 12);
 
@@ -40,7 +40,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
   late final Future<List<StepKind>> _kinds =
       rootBundle.loadString('assets/pipeline_steps.json').then(parseCatalog);
   int? _selectedIndex;
-  StepPath? _selectedNestedPath;
+  StepAddress? _selectedNestedPath;
 
   @override
   void initState() {
@@ -73,7 +73,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
       _selectedNestedPath = null;
     } else if (_selectedNestedPath != null) {
       final document = _document();
-      if (document == null || stepAtPath(document, _selectedNestedPath!) == null) {
+      if (document == null || stepAtAddress(document, _selectedNestedPath!) == null) {
         _selectedNestedPath = null;
       }
     }
@@ -138,12 +138,12 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
     on FormatException { return null; }
   }
 
-  void _writeNested(Map<String, dynamic> document, StepPath path) {
+  void _writeNested(Map<String, dynamic> document, StepAddress path) {
     widget.controller.text = const JsonEncoder.withIndent('  ').convert(document);
-    setState(() { _selectedNestedPath = path; _selectedIndex = path.indices.first; });
+    setState(() { _selectedNestedPath = path; _selectedIndex = path.segments.firstWhere((segment) => segment.isIndex).index; });
   }
 
-  Future<void> _editNested(StepPath path, Map<String, dynamic> step) async {
+  Future<void> _editNested(StepAddress path, Map<String, dynamic> step) async {
     final editor = TextEditingController(text: const JsonEncoder.withIndent('  ').convert(step));
     String? error;
     final result = await showDialog<Map<String, dynamic>>(context: context, builder: (dialogContext) => StatefulBuilder(
@@ -164,42 +164,57 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
     if (!mounted || result == null) return;
     final document = _document();
     if (document == null) return;
-    final updated = replaceStepAtPath(document, path, result);
+    final updated = replaceStepAtAddress(document, path, result);
     if (updated != null) _writeNested(updated, path);
   }
 
-  Widget _nestedInspector() {
+  Widget _nestedInspector(List<StepKind> kinds) {
     final path = _selectedNestedPath;
-    if (path == null || path.indices.length != 2) return const SizedBox.shrink();
+    if (path == null || path.segments.isEmpty || !path.segments.last.isIndex) return const SizedBox.shrink();
     final document = _document();
-    final step = document == null ? null : stepAtPath(document, path);
+    final step = document == null ? null : stepAtAddress(document, path);
     if (document == null || step == null) return const SizedBox.shrink();
-    final parentIndex = path.indices[0];
-    final childIndex = path.indices[1];
-    final siblings = (stepAtPath(document, StepPath([parentIndex]))?['steps'] as List?) ?? const [];
+    final childIndex = path.segments.last.index!;
+    final sequenceAddress = StepAddress(path.segments.take(path.segments.length - 1));
+    final siblings = stepSequenceAtAddress(document, sequenceAddress) ?? const <Map<String, dynamic>>[];
     final colors = Theme.of(context).colorScheme;
     return Card(margin: EdgeInsets.zero, child: Padding(padding: const EdgeInsets.all(16), child: Column(
       crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [Icon(Icons.subdirectory_arrow_right, color: colors.primary), const SizedBox(width: 8),
-          Expanded(child: Text('Nested step · parent ${parentIndex + 1} · child ${childIndex + 1}',
+          Expanded(child: Text('Nested step · ${path.toString()}',
             style: const TextStyle(fontWeight: FontWeight.w700))),
+          TextButton.icon(onPressed: () => setState(() => _selectedNestedPath = null),
+            icon: const Icon(Icons.arrow_upward, size: 15), label: const Text('Parent')),
           IconButton(tooltip: 'Move nested step up', onPressed: childIndex == 0 ? null : () {
-            final updated = moveStepAtPath(document, path, -1);
-            if (updated != null) _writeNested(updated, StepPath([parentIndex, childIndex - 1]));
+            final updated = moveStepAtAddress(document, path, -1);
+            if (updated != null) _writeNested(updated, StepAddress(path.segments.take(path.segments.length - 1).followedBy([StepAddressSegment.index(childIndex - 1)])));
           }, icon: const Icon(Icons.arrow_upward)),
           IconButton(tooltip: 'Move nested step down', onPressed: childIndex >= siblings.length - 1 ? null : () {
-            final updated = moveStepAtPath(document, path, 1);
-            if (updated != null) _writeNested(updated, StepPath([parentIndex, childIndex + 1]));
+            final updated = moveStepAtAddress(document, path, 1);
+            if (updated != null) _writeNested(updated, StepAddress(path.segments.take(path.segments.length - 1).followedBy([StepAddressSegment.index(childIndex + 1)])));
           }, icon: const Icon(Icons.arrow_downward)),
           IconButton(tooltip: 'Edit nested step JSON', onPressed: () => _editNested(path, step), icon: const Icon(Icons.edit_outlined)),
           IconButton(tooltip: 'Remove nested step', onPressed: () {
-            final updated = removeStepAtPath(document, path);
+            final updated = removeStepAtAddress(document, path);
             if (updated == null) return;
             widget.controller.text = const JsonEncoder.withIndent('  ').convert(updated);
-            final remaining = (stepAtPath(updated, StepPath([parentIndex]))?['steps'] as List?) ?? const [];
-            setState(() => _selectedNestedPath = remaining.isEmpty ? null : StepPath([parentIndex, childIndex >= remaining.length ? remaining.length - 1 : childIndex]));
+            final remaining = stepSequenceAtAddress(updated, sequenceAddress) ?? const <Map<String, dynamic>>[];
+            setState(() => _selectedNestedPath = remaining.isEmpty ? null : StepAddress(sequenceAddress.segments.followedBy([StepAddressSegment.index(childIndex >= remaining.length ? remaining.length - 1 : childIndex)])));
           }, icon: Icon(Icons.delete_outline, color: colors.error)),
         ]),
+        const SizedBox(height: 8),
+          PopupMenuButton<StepKind>(
+            tooltip: 'Add a nested step',
+            onSelected: (kind) {
+              final updated = insertStepAtAddress(document, sequenceAddress, siblings.length, kind.instantiate());
+              if (updated != null) _writeNested(updated, sequenceAddress.at(siblings.length));
+            },
+            itemBuilder: (_) => [
+              for (final kind in kinds) PopupMenuItem<StepKind>(
+                value: kind, child: Text(kind.label)),
+            ],
+            child: const Chip(avatar: Icon(Icons.add, size: 16), label: Text('Add nested step')),
+          ),
         const SizedBox(height: 8),
         Container(width: double.infinity, padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(color: colors.surfaceContainerHighest.withOpacity(0.45), borderRadius: BorderRadius.circular(8)),
@@ -238,12 +253,12 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
     );
   }
 
-  Widget _node(int index, Map<String, dynamic> step, Map<String, StepKind> byType) {
+  Widget _node(int index, Map<String, dynamic> step, Map<String, StepKind> byType, List<StepKind> kinds) {
     final colors = Theme.of(context).colorScheme;
     final kind = byType[step['type']];
     final selected = _selectedIndex == index;
     final summary = describeStep(step);
-    final nestedGroups = nestedStepGroups(step);
+    final nestedGroups = nestedStepGroups(step, parentAddress: StepAddress.root(index));
     final routeInfo = routeSummaries(step);
     return SizedBox(width: nestedGroups.isEmpty && routeInfo.isEmpty ? 224 : 300, child: Material(
       color: selected ? colors.secondaryContainer : colors.surface,
@@ -299,12 +314,27 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
                     ]),
                     const SizedBox(height: 7),
                     for (final group in nestedGroups) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4, bottom: 3),
-                        child: Text(group.label,
-                          style: const TextStyle(fontSize: 11,
-                            fontWeight: FontWeight.w700)),
-                      ),
+                      Row(children: [
+                        Expanded(child: Padding(
+                          padding: const EdgeInsets.only(top: 4, bottom: 3),
+                          child: Text(group.label,
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                        )),
+                        if (group.address != null)
+                          PopupMenuButton<StepKind>(
+                            tooltip: 'Add nested step',
+                            padding: EdgeInsets.zero, iconSize: 17,
+                            onSelected: (kind) {
+                              final document = _document();
+                              if (document == null) return;
+                              final current = stepSequenceAtAddress(document, group.address!) ?? const <Map<String, dynamic>>[];
+                              final updated = insertStepAtAddress(document, group.address!, current.length, kind.instantiate());
+                              if (updated != null) _writeNested(updated, group.address!.at(current.length));
+                            },
+                            itemBuilder: (_) => [for (final kind in kinds) PopupMenuItem<StepKind>(value: kind, child: Text(kind.label))],
+                            icon: const Icon(Icons.add_circle_outline),
+                          ),
+                      ]),
                       if (group.condition != null)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 4),
@@ -331,7 +361,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
                                 stepIcons[byType[group.steps[childIndex]['type']]?.icon] ??
                                   Icons.extension,
                                 size: 13),
-                              onPressed: group.label == 'Main steps' ? () => setState(() { _selectedIndex = index; _selectedNestedPath = StepPath([index, childIndex]); }) : null,
+                              onPressed: group.address == null ? null : () => setState(() { _selectedIndex = index; _selectedNestedPath = group.address!.at(childIndex); }),
                             ),
                         ],
                       ),
@@ -481,7 +511,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
                 final vertical = constraints.maxWidth < 620;
                 final nodes = <Widget>[];
                 for (var i = 0; i < steps.length; i++) {
-                  nodes.add(_node(i, steps[i], byType));
+                  nodes.add(_node(i, steps[i], byType, kinds));
                   if (i < steps.length - 1) nodes.add(_connector(vertical));
                 }
                 if (vertical) return ListView(
@@ -495,7 +525,7 @@ class _PipelineBuilderState extends State<PipelineBuilder> {
           const SizedBox(height: 10),
           _inspector(steps, byType),
           const SizedBox(height: 8),
-          _nestedInspector(),
+          _nestedInspector(kinds),
         ]);
       },
     );
