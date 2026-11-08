@@ -796,6 +796,8 @@ public final class TemplateService {
      */
     static ProcessModel process(boolean slack, boolean voice, String visionModel) {
         boolean photos = visionModel != null;
+        // Telegram shows "typing..." while the agent works; a failure of that step never fails the run
+        String intoDraft = slack ? "draft" : "typing";
         ProcessModel.Builder b = ProcessModel.builder("personal-assistant").name("Personal assistant").start("received");
         if (voice || photos) {
             b.exclusive("kind");
@@ -840,7 +842,7 @@ public final class TemplateService {
                         : Map.of("connector", "telegram", "botToken", "${secret:TELEGRAM_TOKEN}",
                                 "inputs", Map.of("chatId", "event.chatId", "text", "draft.output")))
                 .end("sent").end("dropped")
-                .flow("received", voice || photos ? "kind" : "command").flow("command", "forget", "event.text = \"/forget\" or event.text = \"forget me\"").defaultFlow("command", "draft")
+                .flow("received", voice || photos ? "kind" : "command").flow("command", "forget", "event.text = \"/forget\" or event.text = \"forget me\"").defaultFlow("command", intoDraft)
                 .flow("forget", "confirm").flow("confirm", "forgotten")
                 .flow("draft", "policy").flow("policy", "route")
                 .flow("route", "ask", "policy.result = \"approve\"").flow("ask", "approve").defaultFlow("route", "join")
@@ -848,13 +850,17 @@ public final class TemplateService {
                 .flow("decision", "join", "approve.approved = true").defaultFlow("decision", "dropped")
                 .flow("join", "actions").flow("actions", "send").flow("send", "sent");
         if (voice) {
-            b.flow("kind", "fetch", "event.voiceFileId != null").flow("fetch", "hear").flow("hear", "draft");
+            b.flow("kind", "fetch", "event.voiceFileId != null").flow("fetch", "hear").flow("hear", intoDraft);
         }
         if (photos) {
-            b.flow("kind", "fetchPhoto", "event.photoFileId != null").flow("fetchPhoto", "see").flow("see", "draft");
+            b.flow("kind", "fetchPhoto", "event.photoFileId != null").flow("fetchPhoto", "see").flow("see", intoDraft);
         }
         if (voice || photos) {
             b.defaultFlow("kind", "command");
+        }
+        if (!slack) {
+            b.task("typing", ElementType.SERVICE_TASK, Map.of("connector", "telegram", "operation", "chatAction", "botToken", "${secret:TELEGRAM_TOKEN}",
+                    "onError", "continue", "inputs", Map.of("chatId", "event.chatId"))).flow("typing", "draft");
         }
         return b.build();
     }

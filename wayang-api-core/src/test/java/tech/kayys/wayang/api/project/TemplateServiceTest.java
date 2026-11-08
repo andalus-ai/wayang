@@ -247,7 +247,7 @@ class TemplateServiceTest {
         assertEquals(Boolean.TRUE, triggers.list(acme).get(0).config().get("approvals"), "answers come back through the same chat");
         List<Map<String, Object>> sent = new java.util.ArrayList<>();
         var connectors = Map.<String, tech.kayys.wayang.runtime.ServiceHandler.Connector>of("telegram", in -> {
-            sent.add(in);
+            if (in.containsKey("text")) { sent.add(in); } // the "typing" action carries no text
             return Map.of("ok", true);
         });
         var eng = new ReferenceRunEngine(store, waits, connectors, (spec, in) -> Map.of("output", "See https://example.com for details"), bus, clock);
@@ -313,7 +313,7 @@ class TemplateServiceTest {
         List<Map<String, Object>> gcalCalls = new java.util.ArrayList<>();
         Map<String, tech.kayys.wayang.runtime.ServiceHandler.Connector> connectors = Map.of(
                 "telegram", in -> {
-                    sent.add(in);
+                    if (in.containsKey("text")) { sent.add(in); }
                     return Map.of("ok", true);
                 },
                 "gcal", new tech.kayys.wayang.runtime.ServiceHandler.Connector() {
@@ -463,7 +463,7 @@ class TemplateServiceTest {
         assertTrue(r.ok(), r.problems().toString());
         List<Map<String, Object>> sent = new java.util.ArrayList<>();
         var connectors = Map.<String, tech.kayys.wayang.runtime.ServiceHandler.Connector>of("telegram", in -> {
-            sent.add(in);
+            if (in.containsKey("text")) { sent.add(in); }
             return Map.of("ok", true);
         });
         List<List<?>> histories = new java.util.ArrayList<>();

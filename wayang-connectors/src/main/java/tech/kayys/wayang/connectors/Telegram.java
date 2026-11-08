@@ -13,7 +13,7 @@ import tech.kayys.wayang.runtime.ServiceHandler;
 /**
  * Telegram Bot API on top of {@link HttpConnector} (so the SSRF guard, size and time limits apply).
  *
- * <p>Connector {@code telegram} (operations {@code sendMessage} and {@code sendPhoto}, the latter uploading a stored image by {@code mediaId}): config {@code botToken} (use
+ * <p>Connector {@code telegram} (operations {@code sendMessage}, {@code chatAction} (shows "typing" and the like; config or input {@code action}) and {@code sendPhoto}, the latter uploading a stored image by {@code mediaId}): config {@code botToken} (use
  * {@code ${secret:TELEGRAM_TOKEN}}), optional {@code baseUrl}; inputs {@code chatId}, {@code text},
  * optional {@code replyTo}. Output {@code messageId}, {@code chatId}.
  *
@@ -135,6 +135,18 @@ public final class Telegram {
             if (op.equals("downloadFile")) {
                 return download(config, inputs);
             }
+            if (op.equals("chatAction")) {
+                Object chat = config.get("chatId") != null ? config.get("chatId") : inputs.get("chatId");
+                String action = String.valueOf(config.getOrDefault("action", inputs.getOrDefault("action", "typing")));
+                if (!(chat instanceof Number) && !(chat instanceof String c && !c.isBlank())) {
+                    throw new ServiceHandler.ConnectorException("telegram chatAction needs 'chatId'", false);
+                }
+                if (!CHAT_ACTIONS.contains(action)) {
+                    throw new ServiceHandler.ConnectorException("telegram chatAction 'action' is one of " + CHAT_ACTIONS, false);
+                }
+                api(http, config, "sendChatAction", "POST", Map.of("chat_id", chat, "action", action), null);
+                return Map.of("action", action);
+            }
             if (!op.equals("sendMessage")) {
                 throw new ServiceHandler.ConnectorException("Unsupported telegram operation '" + op + "'", false);
             }
@@ -170,6 +182,7 @@ public final class Telegram {
     private static final int MAX_CAPTION = 1024;
     static final long MAX_AUDIO = 10L << 20;
     static final long MAX_PHOTO = 5L << 20;
+    static final java.util.Set<String> CHAT_ACTIONS = new java.util.TreeSet<>(java.util.List.of("typing", "upload_photo", "record_voice", "upload_voice"));
     static final long MAX_VOICE_SECONDS = 300;
 
     /**
