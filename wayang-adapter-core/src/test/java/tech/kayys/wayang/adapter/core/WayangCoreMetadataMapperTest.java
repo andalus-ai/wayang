@@ -23,6 +23,11 @@ class WayangCoreMetadataMapperTest {
         var execution = execution(ComponentStateModel.AFFINE, "session",
                 Set.of("gpu", "media.decode"), Map.of("memory", "2Gi", "cpu", "2"));
         var result = mapper.map(manifest(), List.of(descriptor()), List.of(execution));
+        var manifest = manifest();
+        var descriptor = descriptor();
+        var execution = execution(ComponentStateModel.AFFINE, "session", Set.of("gpu", "media.decode"),
+                Map.of("memory", "2Gi", "cpu", "2"));
+        var result = mapper.map(manifest, List.of(descriptor), List.of(execution));
         var component = result.descriptor().components().get(0);
 
         assertEquals("acme.media", result.descriptor().id().toString());
@@ -73,7 +78,7 @@ class WayangCoreMetadataMapperTest {
 
     private static ComponentDescriptor descriptor() {
         return new ComponentDescriptor("acme.media.fetch", "1.2.3", ComponentDescriptor.Kind.NODE,
-                "http", "Fetch", Set.of(Profile.Feature.MEDIA), List.of(),
+                "http", "Fetch", Set.of(tech.kayys.wayang.runtime.Profile.Feature.MEDIA), List.of(),
                 ComponentDescriptor.IsolationLevel.IN_PROCESS, Set.of("media.fetch"),
                 "Fetch", "media", "download",
                 Map.of("type", "object", "properties", Map.of("url", Map.of("type", "string"))),
