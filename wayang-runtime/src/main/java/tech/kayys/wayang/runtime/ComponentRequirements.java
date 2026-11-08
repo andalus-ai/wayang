@@ -41,8 +41,25 @@ public final class ComponentRequirements {
         return List.copyOf(ids);
     }
 
-    /** Resolve component roots plus their exact dependency closure for this profile. */
+    /** Unique component roots, including explicit per-node bindings, sorted for reproducibility. */
+    public static List<String> componentIds(Collection<ElementType> elementTypes, Collection<String> explicitComponentIds) {
+        Set<String> ids = new TreeSet<>(componentIds(elementTypes));
+        if (explicitComponentIds != null) {
+            for (String id : explicitComponentIds) {
+                if (id != null && !id.isBlank()) ids.add(id.trim());
+            }
+        }
+        return List.copyOf(ids);
+    }
+
+    /** Resolve built-in roots and explicit per-node component bindings plus exact dependency closure. */
+    public static List<ComponentDescriptor> resolve(Collection<ElementType> elementTypes,
+            Collection<String> explicitComponentIds, ComponentRegistry registry) {
+        return registry.resolve(componentIds(elementTypes, explicitComponentIds));
+    }
+
+    /** Backward-compatible overload for callers that only have element types. */
     public static List<ComponentDescriptor> resolve(Collection<ElementType> elementTypes, ComponentRegistry registry) {
-        return registry.resolve(componentIds(elementTypes));
+        return resolve(elementTypes, List.of(), registry);
     }
 }

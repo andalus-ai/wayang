@@ -65,3 +65,16 @@ These instructions apply to the entire `andalus-ai/wayang` repository. Follow th
 - Keep examples consistent with actual supported schemas and APIs. Label illustrative manifests and pseudocode as examples.
 - When changing a public contract, update its documentation and compatibility/conformance fixtures.
 - Keep root README concise and link to focused documents such as `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, and `docs/PROFILES.md`.
+
+
+## Shared Wayang Core boundary
+
+- Shared, versioned contracts intended for both Wayang and Wayang Console belong in `andalus-ai/wayang-core`.
+- Wayang and Console depend on Core; Core must never depend on either application.
+- Before introducing a shared DTO, enum, plugin descriptor, manifest, protocol message, or compatibility utility, check Core first and avoid creating a second source of truth.
+- Keep workflow semantics, compiler, runtime execution, placement router, local plugin manager, Quarkus integration, and Management Agent implementation in this repository.
+- Keep Console persistence, fleet registry, approval/distribution services, command orchestration, audit, and Console UI in `andalus-ai/wayang-console`.
+- Do not move application services, JPA entities, REST resources, Quarkus bootstrap, or execution engine implementations into Core.
+- Extract existing public types incrementally. Add characterization/serialization tests and compatibility facades before changing package names or wire formats.
+- The Core repository's roadmap is a plan, not proof that artifacts or APIs are already implemented/released. Do not add Core dependencies until the relevant artifact has been published and compatibility is verified.
+- Canonical management and worker protocol sources should eventually live in Core; server and runtime adapters remain in their owning repositories.

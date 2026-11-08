@@ -1,21 +1,24 @@
 package tech.kayys.wayang.spike;
 
+import com.google.api.expr.v1alpha1.Type;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.projectnessie.cel.EnvOption;
 import org.projectnessie.cel.Library;
 import org.projectnessie.cel.ProgramOption;
+import org.projectnessie.cel.checker.Decls;
 
 /**
  * Immutable CEL-Java adapter assembled from one exact, expression-safe registry.
  *
- * <p>Every registry descriptor must have exactly one provider binding, and every
- * binding must refer to the exact descriptor in that registry. This prevents
- * accidental partial registration and ungoverned runtime additions.
+ * <p>Checker declarations are generated from the governed descriptors, grouping
+ * overloads that share one CEL function name. Runtime dispatch options are
+ * constructed only by typed CelFunctionBinding factories.
  */
 public final class GovernedCelLibrary implements Library {
 
@@ -55,16 +58,45 @@ public final class GovernedCelLibrary implements Library {
             throw new IllegalArgumentException("Missing provider bindings for overloads: " + missing);
         }
 
-        List<EnvOption> compile = new ArrayList<>();
+        Map<String, List<com.google.api.expr.v1alpha1.Decl.FunctionDecl.Overload>> declarations =
+                new LinkedHashMap<>();
         List<ProgramOption> programs = new ArrayList<>();
         registry.descriptors().stream()
-                .map(descriptor -> byOverload.get(descriptor.overloadId()))
-                .forEach(binding -> {
-                    compile.add(binding.declaration());
-                    programs.add(binding.implementation());
+                .sorted(java.util.Comparator.comparing(FunctionDescriptor::functionName)
+                        .thenComparing(FunctionDescriptor::overloadId))
+                .forEach(descriptor -> {
+                    List<Type> argumentTypes = descriptor.argumentTypes().stream()
+                            .map(GovernedCelLibrary::celType)
+                            .toList();
+                    Type resultType = celType(descriptor.resultType());
+                    declarations.computeIfAbsent(descriptor.functionName(), ignored -> new ArrayList<>())
+                            .add(Decls.newOverload(descriptor.overloadId(), argumentTypes, resultType));
+                    programs.add(byOverload.get(descriptor.overloadId()).implementation());
                 });
-        this.compileOptions = List.copyOf(compile);
+
+        List<com.google.api.expr.v1alpha1.Decl> functionDeclarations = declarations.entrySet().stream()
+                .map(entry -> Decls.newFunction(entry.getKey(),
+                        entry.getValue().toArray(com.google.api.expr.v1alpha1.Decl.FunctionDecl.Overload[]::new)))
+                .toList();
+
+        this.compileOptions = List.of(EnvOption.declarations(
+                functionDeclarations.toArray(com.google.api.expr.v1alpha1.Decl[]::new)));
         this.programOptions = List.copyOf(programs);
+    }
+
+    private static Type celType(String name) {
+        return switch (name) {
+            case "bool" -> Decls.Bool;
+            case "bytes" -> Decls.Bytes;
+            case "double" -> Decls.Double;
+            case "int" -> Decls.Int;
+            case "null" -> Decls.Null;
+            case "string" -> Decls.String;
+            case "uint" -> Decls.Uint;
+            case "dyn" -> Decls.Dyn;
+            default -> throw new IllegalArgumentException(
+                    "Unsupported CEL primitive type in qualification adapter: " + name);
+        };
     }
 
     @Override

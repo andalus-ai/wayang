@@ -9,6 +9,8 @@ import '../../data/api_client.dart';
 import '../../data/workspace_model.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
+import 'report_view.dart';
+import 'template_gallery.dart';
 
 /// Move a project between environments: export it as a bundle (definitions, triggers, settings; never a secret value), and
 /// import one with a dry run first. Importing never starts anything: triggers arrive disabled.
@@ -181,6 +183,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           const SizedBox(height: 12),
           _templateCard(),
           const SizedBox(height: 12),
+          TemplateGallery(onCreated: () => ref.invalidate(projectsProvider)),
+          const SizedBox(height: 12),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -222,7 +226,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   const SizedBox(width: 8),
                   ElevatedButton(onPressed: _busy || !_canApply ? null : () => _run(dry: false), child: const Text('Apply')),
                 ]),
-                if (_report != null) ...[const SizedBox(height: 12), _ReportView(report: _report!)],
+                if (_report != null) ...[const SizedBox(height: 12), ReportView(report: _report!)],
               ]),
             ),
           ),
@@ -432,7 +436,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             const SizedBox(width: 8),
             ElevatedButton(onPressed: _busy || !ok || _tplChat.text.trim().isEmpty ? null : () => _createFromTemplate(dry: false), child: const Text('Create project')),
           ]),
-          if (_tplReport != null) ...[const SizedBox(height: 12), _ReportView(report: _tplReport!)],
+          if (_tplReport != null) ...[const SizedBox(height: 12), ReportView(report: _tplReport!)],
         ]),
       ),
     );
@@ -528,48 +532,4 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         Checkbox(value: value, onChanged: (v) => setState(() => set(v ?? false))),
         Text(label),
       ]);
-}
-
-class _ReportView extends StatelessWidget {
-  const _ReportView({required this.report});
-  final ImportReport report;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    Widget lines(String title, List<String> xs, {Color? color}) => xs.isEmpty
-        ? const SizedBox.shrink()
-        : Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: TextStyle(fontWeight: FontWeight.w700, color: color)),
-              for (final x in xs) Text('• $x', style: const TextStyle(fontSize: 12)),
-            ]),
-          );
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(
-        report.ok ? (report.dryRun ? 'Looks fine. Nothing was written.' : 'Done.') : (report.dryRun ? 'Problems found. Nothing was written.' : 'Stopped.'),
-        style: TextStyle(fontWeight: FontWeight.w700, color: report.ok ? Colors.green : scheme.error),
-      ),
-      lines('Problems', report.problems, color: scheme.error),
-      lines('Warnings', report.warnings),
-      if (report.needsSetup) ...[
-        lines(report.secretsChecked ? 'Secrets missing here' : 'Secrets this needs (could not check)', report.missingSecrets),
-        lines('Settings missing here', report.missingConfig),
-        lines('Connected accounts to set up', report.oauthConnections),
-      ],
-      if (report.webhookSecrets.isNotEmpty) ...[
-        const SizedBox(height: 8),
-        const Text('New webhook secrets (shown once)', style: TextStyle(fontWeight: FontWeight.w700)),
-        for (final e in report.webhookSecrets.entries) SelectableText('${e.key}: ${e.value}', style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
-      ],
-      const SizedBox(height: 8),
-      for (final i in report.items)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 1),
-          child: Text('${i.status == 'error' ? '✗' : '✓'} ${i.type} ${i.id}: ${i.action}${i.message.isEmpty ? '' : ' (${i.message})'}',
-              style: TextStyle(fontSize: 12, color: i.isError ? scheme.error : null)),
-        ),
-    ]);
-  }
 }

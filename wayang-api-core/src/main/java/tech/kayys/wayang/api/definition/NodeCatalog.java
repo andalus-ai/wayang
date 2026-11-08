@@ -76,6 +76,15 @@ public final class NodeCatalog {
         if (withPolicy) {
             all.putAll(POLICY);
         }
+        // Reserved component binding metadata is part of every node's config contract.
+        // The runtime validates the values against the active profile's component registry.
+        all.put("wayang.component.id", Map.of("type", "string", "minLength", 1,
+                "pattern", "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$",
+                "description", "Optional explicit runtime component ID from the Component Catalog"));
+        all.put("wayang.component.version", Map.of("type", "string", "minLength", 1,
+                "description", "Optional exact component version pin"));
+        all.put("wayang.component.operation", Map.of("type", "string", "minLength", 1, "maxLength", 128,
+                "description", "Optional component operation; defaults to execute"));
         Map<String, Object> s = new LinkedHashMap<>();
         s.put("type", "object");
         s.put("properties", all);

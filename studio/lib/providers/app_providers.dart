@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/api_client.dart';
 import '../data/wayang_repository.dart';
+import '../data/workspace_model.dart';
 import '../models/wayang.dart';
 
 /// Where the API lives. Build with `--dart-define=WAYANG_API=https://wayang.example.com` to preset it; the token
@@ -23,6 +24,8 @@ final nodeCatalogProvider = FutureProvider<List<NodeCatalogEntry>>((ref) {
 
 /// Optional project filter for the explorers (null = all).
 final activeProjectIdProvider = StateProvider<String?>((ref) => null);
+
+final templatesProvider = FutureProvider.autoDispose<List<TemplateInfo>>((ref) => ref.watch(repositoryProvider).listTemplates());
 
 final projectsProvider = FutureProvider.autoDispose<List<Project>>((ref) {
   return ref.watch(repositoryProvider).listProjects();

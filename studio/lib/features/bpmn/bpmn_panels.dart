@@ -101,6 +101,111 @@ class _PaletteItem extends StatelessWidget {
   }
 }
 
+// Component identity is rendered in its own catalog-backed control rather than as
+// three free-form JSON-schema fields.
+Map<String, dynamic> _withoutComponentBinding(Map<String, dynamic> schema) {
+  final copy = Map<String, dynamic>.from(schema);
+  final properties = Map<String, dynamic>.from(asMap(schema['properties']));
+  properties.remove('wayang.component.id');
+  properties.remove('wayang.component.version');
+  properties.remove('wayang.component.operation');
+  copy['properties'] = properties;
+  final required = asList(schema['required']).where((key) =>
+      key != 'wayang.component.id' && key != 'wayang.component.version' && key != 'wayang.component.operation').toList();
+  if (required.isEmpty) {
+    copy.remove('required');
+  } else {
+    copy['required'] = required;
+  }
+  return copy;
+}
+
+class _ComponentBindingSection extends ConsumerWidget {
+  const _ComponentBindingSection({super.key, required this.node, required this.onChanged});
+
+  final BpmnNode node;
+  final ValueChanged<Map<String, dynamic>> onChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final catalog = ref.watch(componentCatalogProvider);
+    final selectedId = node.properties['wayang.component.id'] as String?;
+    final selectedVersion = node.properties['wayang.component.version'] as String?;
+    final operation = node.properties['wayang.component.operation'] as String? ?? 'execute';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const PanelSectionLabel('Runtime component'),
+        catalog.when(
+          loading: () => const LinearProgressIndicator(minHeight: 2),
+          error: (error, _) => Text('Component catalog unavailable: $error',
+              style: const TextStyle(fontSize: 11, color: AppColors.danger)),
+          data: (components) {
+            final ids = components.map((component) => component.id).toSet();
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DropdownButtonFormField<String>(
+                  value: selectedId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(isDense: true, hintText: 'Use default node handler'),
+                  items: [
+                    const DropdownMenuItem<String>(value: '', child: Text('Default node handler')),
+                    for (final component in components)
+                      DropdownMenuItem<String>(
+                        value: component.id,
+                        child: Text('${component.displayName} · ${component.version}',
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                    if (selectedId != null && !ids.contains(selectedId))
+                      DropdownMenuItem<String>(value: selectedId, child: Text('$selectedId (unavailable)')),
+                  ],
+                  onChanged: (value) {
+                    final next = Map<String, dynamic>.from(node.properties);
+                    if (value == null || value.isEmpty) {
+                      next.remove('wayang.component.id');
+                      next.remove('wayang.component.version');
+                      next.remove('wayang.component.operation');
+                    } else {
+                      ComponentCatalogEntry? component;
+                      for (final item in components) {
+                        if (item.id == value) component = item;
+                      }
+                      next['wayang.component.id'] = value;
+                      if (component != null) next['wayang.component.version'] = component.version;
+                    }
+                    onChanged(next);
+                  },
+                ),
+                if (selectedId != null && selectedId.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text('Component ID: $selectedId',
+                      style: const TextStyle(fontSize: 10.5, color: AppColors.textMutedDark, fontFamily: 'monospace')),
+                  if (selectedVersion != null)
+                    Text('Pinned version: $selectedVersion',
+                        style: const TextStyle(fontSize: 10.5, color: AppColors.textMutedDark)),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    key: ValueKey('component-operation-${node.id}-$operation'),
+                    initialValue: operation,
+                    decoration: const InputDecoration(isDense: true, labelText: 'Operation', hintText: 'execute'),
+                    onFieldSubmitted: (value) {
+                      final next = Map<String, dynamic>.from(node.properties);
+                      next['wayang.component.operation'] = value.trim().isEmpty ? 'execute' : value.trim();
+                      onChanged(next);
+                    },
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Inspector (right panel)
 // ---------------------------------------------------------------------------
@@ -251,6 +356,14 @@ class _NodeInspectorState extends ConsumerState<_NodeInspector> {
             },
           ),
         ],
+        if (node.type.isTask) ...[
+          const SizedBox(height: 16),
+          _ComponentBindingSection(
+            key: ValueKey('component-binding-${node.id}'),
+            node: node,
+            onChanged: (props) => controller.updateNodeProperties(node.id, props),
+          ),
+        ],
         const SizedBox(height: 16),
         const PanelSectionLabel('Configuration'),
         if (entry == null)
@@ -263,7 +376,7 @@ class _NodeInspectorState extends ConsumerState<_NodeInspector> {
         else
           SchemaForm(
             identity: node.id,
-            schema: entry.configSchema,
+            schema: _withoutComponentBinding(entry.configSchema),
             value: node.properties,
             advancedKeys: _policyKeys,
             overrides: {

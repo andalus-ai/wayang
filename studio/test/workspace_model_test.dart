@@ -206,4 +206,39 @@ void main() {
     expect(assistantFieldProblem('lookupSecret', ''), isNull);
     expect(assistantFieldProblem('lookupSecret', 'a-b'), isNotNull);
   });
+
+  group('template catalogue', () {
+    final info = TemplateInfo.fromJson({
+      'id': 'assistant-telegram',
+      'name': 'Personal assistant',
+      'description': 'd',
+      'secrets': ['TELEGRAM_TOKEN'],
+      'params': [
+        {'name': 'chatId', 'description': 'chat', 'required': true},
+        {'name': 'model', 'description': 'm', 'required': false, 'defaultValue': 'openai/gpt-4o-mini'},
+        {'name': 'notes', 'description': 'n', 'required': false, 'defaultValue': 'false'},
+        {'name': 'persona', 'description': 'p', 'required': false, 'defaultValue': ''},
+      ],
+    });
+
+    test('reads the server description and tells switches from text', () {
+      expect(info.secrets, ['TELEGRAM_TOKEN']);
+      expect(info.params.map((p) => p.isFlag), [false, false, true, false]);
+      expect(TemplateInfo.fromJson({'id': 'x'}).params, isEmpty, reason: 'missing lists are tolerated');
+    });
+
+    test('problems: required is flagged, known fields reuse the Studio rules, switches are never text-checked', () {
+      expect(info.problems({'chatId': ''}).keys, contains('chatId'));
+      expect(info.problems({'chatId': '123'}), isEmpty);
+      expect(info.problems({'chatId': 'abc'}).keys, contains('chatId'));
+      expect(info.problems({'chatId': '1', 'model': 'nonsense'}).keys, contains('model'));
+      expect(info.problems({'chatId': '1', 'notes': 'banana'}), isEmpty);
+    });
+
+    test('request sends required values and changes from the default only', () {
+      expect(info.request({'chatId': ' 42 ', 'model': 'openai/gpt-4o-mini', 'notes': 'false', 'persona': ''}), {'chatId': '42'});
+      expect(info.request({'chatId': '42', 'model': 'ollama/llama3.1', 'notes': 'true', 'persona': 'terse'}),
+          {'chatId': '42', 'model': 'ollama/llama3.1', 'notes': 'true', 'persona': 'terse'});
+    });
+  });
 }
