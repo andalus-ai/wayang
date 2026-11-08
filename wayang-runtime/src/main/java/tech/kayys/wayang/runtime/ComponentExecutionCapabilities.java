@@ -30,7 +30,7 @@ public record ComponentExecutionCapabilities(
         }
         componentVersion = requireText(componentVersion, "componentVersion");
         Objects.requireNonNull(supportedModes, "supportedModes");
-        if (supportedModes.isEmpty() || supportedModes.contains(null)) {
+        if (supportedModes.isEmpty() || supportedModes.stream().anyMatch(Objects::isNull)) {
             throw new IllegalArgumentException("supportedModes must contain at least one non-null mode");
         }
         supportedModes = Collections.unmodifiableSet(new LinkedHashSet<>(supportedModes));
@@ -49,8 +49,7 @@ public record ComponentExecutionCapabilities(
         }
         requiredCapabilities = requiredCapabilities == null
                 ? Set.of() : Collections.unmodifiableSet(new LinkedHashSet<>(requiredCapabilities));
-        if (requiredCapabilities.contains(null)
-                || requiredCapabilities.stream().anyMatch(value -> value.isBlank())) {
+        if (requiredCapabilities.stream().anyMatch(value -> value == null || value.isBlank())) {
             throw new IllegalArgumentException("requiredCapabilities must not contain blank values");
         }
         Map<String, String> hints = new LinkedHashMap<>();
