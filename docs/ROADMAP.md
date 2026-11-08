@@ -421,3 +421,13 @@ Immediate next work should be Phase 0 followed by Phase 1. Do not create all pro
 **Remaining Phase 1 work:** define and validate the versioned plugin manifest/package contract, compatibility ranges, dependency metadata, publisher/signature metadata, and conformance fixtures. Execution capability declarations are metadata only; no placement router, worker transport, dynamic loader, or hot-upgrade behavior is implemented by this increment.
 
 **Verification note:** source and documentation changes are committed in the implementation PR. Tests have been added but have not been executed in this environment. Run `mvn -pl wayang-runtime -am test` with JDK 21 and resolvable reactor dependencies before treating this increment as verified.
+
+
+### Phase 1 — plugin manifest model (second increment)
+
+- [x] Add an immutable in-memory `PluginManifest` with plugin identity, semantic version, plugin API version, publisher, runtime compatibility expression, provided component inventory, dependencies, permissions, and license metadata.
+- [x] Add component inventory validation against contributed `ComponentDescriptor` instances.
+- [x] Add an initial JSON Schema for the plugin manifest interchange shape.
+- [x] Add tests for semantic-version syntax, duplicate/self dependencies, permissions, and manifest-to-component inventory consistency.
+
+**Remaining:** implement a parser/serializer, semantic version-range evaluation, signature and artifact provenance verification, and package installation policy. The current model does not authenticate publishers or execute/install plugin code.
