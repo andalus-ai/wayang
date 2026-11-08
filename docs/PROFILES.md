@@ -21,6 +21,8 @@ A typo is an error, never "everything enabled".
   "needs wayang-agent, which the 'automation' profile does not enable".
 - The Gamelan worker and the design-time engine apply the same profile to their runner.
 - Extensions that `requires()` a disabled feature are not loaded.
+- Component execution capability declarations contributed by loaded extensions are exposed separately from
+  component metadata and can be validated against exact component IDs and versions.
 
 - Release generation takes `profile` in the options (`{"profile":"integration"}`): a bundle needing a disabled feature
   is refused up front, and the generated Dockerfile sets `WAYANG_PROFILE`.
@@ -49,10 +51,23 @@ Implement `tech.kayys.wayang.runtime.WayangExtension` and list the class in
 
 - connectors (usable from SERVICE_TASK / EIP / agent tools),
 - trigger pollers and webhook providers,
-- handlers for custom executor types (a SERVICE_TASK with `executorType: x-...`).
+- handlers for custom executor types (a SERVICE_TASK with `executorType: x-...`),
+- component descriptors and optional execution-capability declarations.
 
 Names cannot collide with built-ins or each other (start-up error). Connectors receive resolved inputs exactly
 like built-ins; secrets stay `${secret:NAME}` references in definitions and bundles.
+
+### Execution capability metadata
+
+`ComponentExecutionCapabilities` declares the modes a component implementation supports: `EMBEDDED`,
+`ISOLATED_LOCAL`, `REMOTE`, or `CLOUD_NATIVE`. It also declares state behavior (`STATELESS`,
+`EXTERNALIZED`, or `AFFINE`), payload portability, cancellation/idempotency declarations, required worker
+capabilities, and resource hints. Remote modes require portable payloads; affine state requires an affinity key.
+
+`ComponentExecutionCapabilityRegistry` validates that declarations refer to an available component at the exact
+component version and rejects duplicate declarations. Components without metadata do not implicitly gain remote
+execution support. These types are a contract foundation only: there is not yet a placement router, worker protocol,
+or dynamic plugin installer.
 
 This is the intended seam for future multimodal and graph-style (ComfyUI-like) nodes: an image/audio/model
 node is a handler for its own executor type, with its own feature flag and its own worker pool, so a GPU

@@ -78,6 +78,18 @@ public final class Extensions {
         return List.copyOf(out);
     }
 
+    /**
+     * All deployment capability declarations contributed by profile-enabled extensions.
+     * Duplicate IDs are rejected when declarations are validated against the component registry.
+     */
+    public List<ComponentExecutionCapabilities> executionCapabilities() {
+        List<ComponentExecutionCapabilities> out = new ArrayList<>();
+        for (WayangExtension extension : loaded) {
+            out.addAll(extension.executionCapabilities());
+        }
+        return List.copyOf(out);
+    }
+
     private <V> Map<String, V> merge(Map<String, V> base, String what,
             java.util.function.Function<WayangExtension, Map<String, V>> get) {
         Map<String, V> m = new LinkedHashMap<>(base);

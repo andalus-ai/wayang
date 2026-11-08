@@ -44,4 +44,13 @@ public interface WayangExtension {
     default List<ComponentDescriptor> components() {
         return List.of();
     }
+
+    /**
+     * Optional deployment capabilities for the exact component versions contributed
+     * by this extension. Existing extensions remain source-compatible and default to
+     * embedded-only behavior until they explicitly declare capabilities.
+     */
+    default List<ComponentExecutionCapabilities> executionCapabilities() {
+        return List.of();
+    }
 }
