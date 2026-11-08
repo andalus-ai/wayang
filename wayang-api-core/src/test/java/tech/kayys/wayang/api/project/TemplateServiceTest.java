@@ -454,7 +454,7 @@ class TemplateServiceTest {
         assertNull(opts.get("memory"));
         var t = templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "123456"), false);
         assertTrue(t.ok(), t.problems().toString());
-        assertEquals(Map.of("perHour", 60), triggers.list(acme).get(0).config().get("rateLimit"));
+        assertEquals(Map.of("perHour", 60, "perDay", 300), triggers.list(acme).get(0).config().get("rateLimit"));
     }
 
     @Test
