@@ -12,12 +12,10 @@ import org.projectnessie.cel.Env;
 import org.projectnessie.cel.EnvOption;
 import org.projectnessie.cel.Library;
 import org.projectnessie.cel.Program;
-import org.projectnessie.cel.ProgramOption;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.ref.TypeEnum;
-import org.projectnessie.cel.interpreter.functions.Overload;
 
 /** Executable probes for explicit, governed custom CEL function registration. */
 class NessieCustomFunctionTest {
@@ -87,18 +85,14 @@ class NessieCustomFunctionTest {
                 .build()
                 .requireExpressionSafe();
 
-        CelFunctionBinding binding = new CelFunctionBinding(
+        CelFunctionBinding binding = CelFunctionBinding.unary(
                 descriptor,
-                OVERLOAD_ID,
-                EnvOption.declarations(Decls.newFunction(
-                        FUNCTION,
-                        Decls.newOverload(OVERLOAD_ID, List.of(Decls.Int), Decls.Bool))),
-                ProgramOption.functions(Overload.unary(OVERLOAD_ID, value -> {
+                value -> {
                     if (!(value instanceof IntT integer)) {
                         return Err.newErr("invalid argument for %s", FUNCTION);
                     }
                     return boolOf(integer.intValue() % 2L == 0L);
-                })));
+                });
 
         return new GovernedCelLibrary(registry, List.of(binding));
     }
