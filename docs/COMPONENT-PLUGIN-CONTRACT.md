@@ -63,3 +63,18 @@ Runtime installation, hot upgrade, and hot uninstall require a separate lifecycl
 Before remote execution, define versioned language-neutral serialization, invocation/run/correlation identifiers and trace context, deadlines, cancellation, bounded payload size, idempotency and duplicate-delivery behavior, error taxonomy and retry safety, worker registration/health/capability negotiation, graceful drain, state externalization or affinity, authentication, authorization, encryption, and audit.
 
 Component routing must not become a second workflow engine. Gamelan (or the selected engine) remains responsible for durable workflow lifecycle, retries, and run state.
+
+
+## Shared contract source and migration
+
+The canonical shared-contract target is now [Wayang Core](https://github.com/andalus-ai/wayang-core). This repository remains the implementation owner for runtime discovery, profile filtering, dependency resolution, and execution.
+
+Current types in this repository are the compatibility baseline. Do not duplicate or independently redesign their public shapes in Console. The extraction is staged:
+
+1. Characterize current descriptor, manifest and capability serialization with fixtures.
+2. Extract stable value contracts and portable schemas into Core.
+3. Keep Wayang-specific registry and execution implementations here.
+4. Keep Console persistence, approval and distribution services in Console.
+5. Retain compatibility facades until both consumers use released Core artifacts.
+
+The current JSON Schema and Java model are not yet a published Core artifact. Until migration is completed, the schema under wayang-runtime resources remains the current implementation source. See [Shared Core boundary](SHARED-CORE.md).

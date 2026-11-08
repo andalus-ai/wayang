@@ -71,3 +71,8 @@ the Maven build has not been executed.
 mvn -q verify
 ```
 (Requires JDK 21+. Gamelan 0.1.1 and Andalus 0.0.1 artifacts must be resolvable.)
+
+
+## Shared contracts
+
+The shared, versioned contracts for Wayang and the standalone Wayang Console are being established in [Wayang Core](https://github.com/andalus-ai/wayang-core). Workflow semantics, compilation, runtime execution and local plugin lifecycle remain in this repository; Console fleet management and central plugin governance remain in [wayang-console](https://github.com/andalus-ai/wayang-console). See [the shared Core boundary](docs/SHARED-CORE.md). Existing contracts remain authoritative until the documented compatibility-preserving migration is completed.
