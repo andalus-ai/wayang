@@ -39,6 +39,7 @@ import tech.kayys.wayang.eip.IdempotencyStore;
 import tech.kayys.wayang.expression.Expressions;
 import tech.kayys.wayang.runtime.WaitRegistry;
 import tech.kayys.wayang.runtime.ComponentRegistry;
+import tech.kayys.wayang.runtime.ComponentDescriptor;
 import tech.kayys.wayang.runtime.ComponentIdentity;
 import tech.kayys.wayang.runtime.ComponentRequirements;
 import tech.kayys.wayang.runtime.Extensions;
