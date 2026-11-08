@@ -20,9 +20,6 @@ class WayangCoreMetadataMapperTest {
 
     @Test
     void projectsManifestAndPreservesWayangSpecificFields() {
-        var execution = execution(ComponentStateModel.AFFINE, "session",
-                Set.of("gpu", "media.decode"), Map.of("memory", "2Gi", "cpu", "2"));
-        var result = mapper.map(manifest(), List.of(descriptor()), List.of(execution));
         var manifest = manifest();
         var descriptor = descriptor();
         var execution = execution(ComponentStateModel.AFFINE, "session", Set.of("gpu", "media.decode"),
