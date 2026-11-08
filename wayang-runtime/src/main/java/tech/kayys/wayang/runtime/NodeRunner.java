@@ -61,7 +61,7 @@ public final class NodeRunner {
 
     /** Drops handlers the profile does not serve; nodes needing them then fail with a clear message. */
     public NodeRunner withProfile(Profile profile) {
-        Objects.requireNonNull(profile, "profile");
+        java.util.Objects.requireNonNull(profile, "profile");
         if (componentCatalog != null && !componentCatalog.profile().name().equals(profile.name())) {
             throw new IllegalArgumentException("Component catalog profile '" + componentCatalog.profile().name()
                     + "' does not match requested NodeRunner profile '" + profile.name() + "'");
