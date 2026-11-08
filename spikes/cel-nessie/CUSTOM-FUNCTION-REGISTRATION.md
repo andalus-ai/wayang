@@ -23,8 +23,12 @@ The preferred composition boundary is CEL-Java's `Library` interface:
 - `Decls.newFunction(name, overloads...)` declares a function.
 - `Decls.newOverload(id, argumentTypes, resultType)` defines a global overload contract.
 - `ProgramOption.functions(Overload...)` installs runtime overloads.
-- `Overload.function(operator, FunctionOp)` creates a runtime implementation;
-  `FunctionOp.invoke(Val... values)` is its invocation boundary.
+- `Overload.unary(overloadId, UnaryOp)`, `Overload.binary(overloadId, BinaryOp)`,
+  and the corresponding arity-specific factories register fixed-arity functions.
+  `Overload.function(overloadId, FunctionOp)` is the generic varargs form. The
+  dispatcher key is the checker overload ID, not the source-level function name.
+  For a one-argument function, use `Overload.unary`; registering it as
+  `Overload.function` does not satisfy the planner's unary dispatch path.
 
 The lower-level declaration and runtime APIs remain available, but a reusable Wayang
 function bundle should implement `Library` so compile-time and runtime halves cannot
