@@ -46,6 +46,15 @@ public interface WayangExtension {
     }
 
     /**
+     * Executable bindings for components contributed by this extension.
+     * Each binding must match a descriptor returned by {@link #components()}.
+     * The runtime validates exact version and executor family before activation.
+     */
+    default List<ComponentExecutorCatalog.ComponentExecutorBinding> componentExecutors() {
+        return List.of();
+    }
+
+    /**
      * Optional deployment capabilities for the exact component versions contributed
      * by this extension. Existing extensions remain source-compatible and default to
      * embedded-only behavior until they explicitly declare capabilities.
