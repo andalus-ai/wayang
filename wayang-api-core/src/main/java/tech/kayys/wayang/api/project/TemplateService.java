@@ -452,7 +452,7 @@ public final class TemplateService {
         trigger.put("kind", "POLL");
         trigger.put("processId", "personal-assistant");
         trigger.put("enabled", false);
-        Map<String, Object> tc = new LinkedHashMap<>(Map.of("source", "telegram", "botToken", "${secret:TELEGRAM_TOKEN}", "allowedChatIds", List.of(chatId), "everySeconds", 10, "approvals", true, "rateLimit", Map.of("perHour", 60)));
+        Map<String, Object> tc = new LinkedHashMap<>(Map.of("source", "telegram", "botToken", "${secret:TELEGRAM_TOKEN}", "allowedChatIds", List.of(chatId), "everySeconds", 10, "approvals", true, "rateLimit", Map.of("perHour", 60, "perDay", 300)));
         if (voice) {
             tc.put("voice", true);
         }
@@ -498,7 +498,7 @@ public final class TemplateService {
         trigger.put("kind", "WEBHOOK");
         trigger.put("processId", "personal-assistant");
         trigger.put("enabled", false);
-        trigger.put("config", Map.of("auth", "slack", "signingSecret", "${secret:SLACK_SIGNING_SECRET}", "allowedChannels", List.of(channelId), "approvals", true, "rateLimit", Map.of("perHour", 60)));
+        trigger.put("config", Map.of("auth", "slack", "signingSecret", "${secret:SLACK_SIGNING_SECRET}", "allowedChannels", List.of(channelId), "approvals", true, "rateLimit", Map.of("perHour", 60, "perDay", 300)));
         return bundle(projectName, "Slack assistant with an approval policy (from a template)", model, persona, lookupUrl, lookupDesc, lookupSecret, "{{ event.channel }}", memoryTurns, calendar, webSearch, email, notes, images == null ? null : new Images(images.model(), 0, channelId), process(true), trigger);
     }
 
