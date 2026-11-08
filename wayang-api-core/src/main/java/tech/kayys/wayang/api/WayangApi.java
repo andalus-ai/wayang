@@ -39,6 +39,7 @@ import tech.kayys.wayang.eip.IdempotencyStore;
 import tech.kayys.wayang.expression.Expressions;
 import tech.kayys.wayang.runtime.WaitRegistry;
 import tech.kayys.wayang.runtime.ComponentRegistry;
+import tech.kayys.wayang.runtime.ComponentIdentity;
 import tech.kayys.wayang.runtime.ComponentRequirements;
 import tech.kayys.wayang.runtime.Extensions;
 import tech.kayys.wayang.runtime.json.Json;
@@ -226,6 +227,22 @@ public final class WayangApi {
                         }
                         for (String problem : NodeCatalog.validateConfig(e.type(), e.config())) {
                             items.add(new ValidationReport.Item("ERROR", e.id(), "config " + problem));
+                        }
+                        try {
+                            ComponentIdentity identity = ComponentIdentity.fromConfiguration(e.config());
+                            if (identity != null) {
+                                ComponentDescriptor descriptor = componentRegistry().find(identity.id());
+                                if (descriptor == null) {
+                                    items.add(new ValidationReport.Item("ERROR", e.id(),
+                                            "component '" + identity.id() + "' is not available in profile '" + profile.name() + "'"));
+                                } else if (identity.version() != null && !descriptor.version().equals(identity.version())) {
+                                    items.add(new ValidationReport.Item("ERROR", e.id(),
+                                            "component version mismatch for '" + identity.id() + "': requested="
+                                                    + identity.version() + ", available=" + descriptor.version()));
+                                }
+                            }
+                        } catch (IllegalArgumentException ex) {
+                            items.add(new ValidationReport.Item("ERROR", e.id(), "component binding: " + ex.getMessage()));
                         }
                     }
                     if (items.stream().noneMatch(i -> i.severity().equals("ERROR"))) {
