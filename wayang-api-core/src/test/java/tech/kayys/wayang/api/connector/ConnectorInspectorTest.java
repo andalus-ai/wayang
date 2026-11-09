@@ -112,7 +112,7 @@ class ConnectorInspectorTest {
             seen.set(cfg);
             return Map.of("operations", List.of(Map.of("name", "getPet")));
         };
-        var inspector = new ConnectorInspector(Map.of("openapi", fake));
+        var inspector = new ConnectorInspector(Map.<String, tech.kayys.wayang.runtime.ServiceHandler.Connector>of("openapi", fake));
         Map<String, Object> cfg = new java.util.LinkedHashMap<>();
         cfg.put("specUrl", "https://x.example/openapi.json");
         cfg.put("includeTags", List.of("pets"));
@@ -129,7 +129,8 @@ class ConnectorInspectorTest {
 
     @Test
     void openapiNeedsExactlyOneOfSpecAndSpecUrl() {
-        var inspector = new ConnectorInspector(Map.of("openapi", (cfg, in) -> Map.of()));
+        tech.kayys.wayang.runtime.ServiceHandler.Connector empty = (cfg, in) -> Map.of();
+        var inspector = new ConnectorInspector(Map.<String, tech.kayys.wayang.runtime.ServiceHandler.Connector>of("openapi", empty));
         assertThrows(ApiException.class, () -> inspector.describe(designer, Map.of("connector", "openapi", "config", Map.of())));
         assertThrows(ApiException.class,
                 () -> inspector.describe(designer, Map.of("connector", "openapi", "config", Map.of("spec", "{}", "specUrl", "https://x/y"))));
