@@ -27,6 +27,8 @@ a guarantee: it errs on the side of masking, and the form tells people not to pa
 * When the app catches an error itself (`FlutterError.onError`, `PlatformDispatcher.onError`) it is only remembered; the button turns into
   a warning and opens an error report pre-filled with the message and, if the person leaves it on, the stack trace. It is never sent
   automatically, and a successful send clears it.
+* The **Feedback** section lists what was sent (newest first, filter by kind; expand a row for its details and stack). Reading needs the
+  ADMIN role, so anyone else sees the server's refusal there but can still use Send feedback.
 * A failed run has "Report this error": it sends the run's error text and its run id, process id and version, never its variables or outputs.
 
 Server-side failures are already visible in the audit log (`outcome: FAILED`) and the run's own error; this is for the person's
@@ -35,7 +37,6 @@ view of what went wrong and why it mattered.
 ## Not done
 
 * Thumbs up/down under assistant replies in Telegram and Slack (needs inline buttons and callback handling in the pollers).
-* A Studio screen for admins to read the feedback (the API lists it today).
 * Retention, status (open/done) and export.
 
 ## Verification
