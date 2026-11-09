@@ -29,7 +29,7 @@ class ReleaseArtifactDigestManifestTest {
         var verified = ReleaseArtifactDigestManifest.verify(json, lock, signer.getPublic());
 
         assertEquals(lock.sha256(), verified.lockSha256());
-        assertEquals(lock.artifacts().size(), verified.digests().size());
+        assertEquals(lock.artifacts().size(), verified.artifacts().size());
         for (var artifact : lock.artifacts()) {
             assertEquals("a".repeat(64), verified.pomSha256(artifact.coordinate()));
             assertEquals("b".repeat(64), verified.jarSha256(artifact.coordinate()));
