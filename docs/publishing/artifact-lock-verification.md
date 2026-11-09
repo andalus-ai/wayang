@@ -34,3 +34,12 @@ This stage is intentionally a pure URL planner: it does not make HTTP requests, 
 `VerifiedArtifactCache` is the byte-fetch stage for callers that already possess an authenticated expected SHA-256 digest. It checks the repository allow-list before transport, uses a JDK HTTP client configured not to follow redirects, applies a request timeout and maximum byte count, and verifies the downloaded bytes before atomically publishing them into a content-addressed cache.
 
 Cache entries are re-hashed before reuse. Failed downloads and digest mismatches do not become visible cache entries. The expected digest must come from a separately authenticated release manifest or equivalent trust source; this class intentionally does not trust a checksum sidecar fetched from the same repository. The cache does not yet provide signature verification, cross-process locking, eviction, or a complete Maven dependency resolver.
+
+
+## Signed artifact digest manifest
+
+The lockfile deliberately contains coordinates and dependency edges, not binary hashes. A release publisher or trusted signing service emits a separate `wayang.artifact-digests` manifest after the exact POM and JAR bytes have been finalized. Each entry contains the Maven coordinate plus independent `pomSha256` and `jarSha256` values. The manifest includes the verified lock's SHA-256 and a detached Ed25519 signature over canonical JSON with the signature field omitted.
+
+Runtime tooling must verify the lock first, then verify the manifest with a configured trusted Ed25519 public key. Verification rejects a mismatched lock digest, invalid signature, duplicate or extra coordinates, missing locked coordinates, unsupported scopes, and malformed POM/JAR digests. The public key is an external trust input; a key embedded beside an unsigned manifest does not establish trust.
+
+`VerifiedArtifactFetcher` connects the verified manifest to Maven location planning and `VerifiedArtifactCache`. It fetches POM and JAR bytes only with their separately signed expected digests, preserves repository priority for failover, and relies on the cache to enforce the repository allow-list, size/time limits, no-redirect policy, and byte verification. It does not download or trust repository checksum sidecars. Signature/key rotation and key distribution remain responsibilities of the release trust configuration.
