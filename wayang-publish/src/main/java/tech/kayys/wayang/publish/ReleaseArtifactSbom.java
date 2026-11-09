@@ -41,7 +41,9 @@ public final class ReleaseArtifactSbom {
             component.put("version", coordinate.version());
             component.put("purl", ref);
             component.put("scope", "required");
-            component.put("hashes", List.of(hash("SHA-256", digest.jarSha256()), hash("SHA-256", digest.pomSha256())));
+            component.put("hashes", List.of(hash("SHA-256", digest.jarSha256())));
+            component.put("properties", List.of(Map.of(
+                    "name", "tech.kayys.wayang.pom.sha256", "value", digest.pomSha256())));
             components.add(component);
             Map<String, Object> dependency = new LinkedHashMap<>();
             dependency.put("ref", ref);
@@ -52,7 +54,7 @@ public final class ReleaseArtifactSbom {
         Map<String, Object> metadataComponent = new LinkedHashMap<>();
         metadataComponent.put("type", "application");
         metadataComponent.put("name", "Wayang release");
-        metadataComponent.put("version", "1");
+        metadataComponent.put("version", lock.artifacts().get(0).coordinate().version());
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("component", metadataComponent);
         metadata.put("properties", List.of(Map.of("name", "tech.kayys.wayang.release-lock.sha256", "value", lock.sha256())));
