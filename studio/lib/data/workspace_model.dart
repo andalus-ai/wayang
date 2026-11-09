@@ -241,6 +241,7 @@ class ReleaseForm {
     this.version = '1.0.0',
     this.packageName = '',
     this.port = 8080,
+    this.profile = 'full',
   });
 
   final String target; // SERVICE | STANDALONE | GAMELAN
@@ -249,16 +250,19 @@ class ReleaseForm {
   final String version;
   final String packageName; // empty: derived
   final int port;
+  final String profile; // full | automation | integration | agentic
 
+  static const profiles = ['full', 'automation', 'integration', 'agentic'];
   static const targets = ['SERVICE', 'STANDALONE', 'GAMELAN'];
 
-  ReleaseForm copyWith({String? target, String? groupId, String? artifactId, String? version, String? packageName, int? port}) => ReleaseForm(
+  ReleaseForm copyWith({String? target, String? groupId, String? artifactId, String? version, String? packageName, int? port, String? profile}) => ReleaseForm(
         target: target ?? this.target,
         groupId: groupId ?? this.groupId,
         artifactId: artifactId ?? this.artifactId,
         version: version ?? this.version,
         packageName: packageName ?? this.packageName,
         port: port ?? this.port,
+        profile: profile ?? this.profile,
       );
 
   Map<String, dynamic> toJson() => {
@@ -266,6 +270,7 @@ class ReleaseForm {
         'groupId': groupId,
         'version': version,
         'port': port,
+        'profile': profile,
         if (artifactId.isNotEmpty) 'artifactId': artifactId,
         if (packageName.isNotEmpty) 'package': packageName,
       };
@@ -312,6 +317,7 @@ class ReleasePlan {
     required this.artifactId,
     required this.version,
     required this.processes,
+    required this.components,
     required this.connectors,
     required this.usesAgents,
     required this.requiredSecrets,
@@ -325,6 +331,7 @@ class ReleasePlan {
   final String artifactId;
   final String version;
   final List<String> processes;
+  final List<String> components;
   final List<String> connectors;
   final bool usesAgents;
   final List<String> requiredSecrets;
@@ -340,6 +347,7 @@ class ReleasePlan {
         artifactId: '${j['artifactId'] ?? ''}',
         version: '${j['version'] ?? ''}',
         processes: _strings(j['processes']),
+        components: _strings(j['components']),
         connectors: _strings(j['connectors']),
         usesAgents: j['usesAgents'] == true,
         requiredSecrets: _strings(j['requiredSecrets']),
@@ -351,7 +359,7 @@ class ReleasePlan {
 
   /// One line for the card.
   String get summary =>
-      '${processes.length} process(es), ${connectors.isEmpty ? 'no connectors' : 'connectors: ${connectors.join(', ')}'}, '
+      '${processes.length} process(es), ${components.length} component(s), ${connectors.isEmpty ? 'no connectors' : 'connectors: ${connectors.join(', ')}'}, '
       '${requiredSecrets.length} secret(s), ${requiredConfig.length} setting(s)';
 
   String get zipName => '$artifactId-$version.zip';
@@ -393,10 +401,86 @@ String? assistantFieldProblem(String field, String value) {
           : 'Five fields, for example 0 8 * * 1-5';
     case 'timezone':
       return RegExp(r'^[A-Za-z][A-Za-z0-9_+/-]{0,60}$').hasMatch(v) ? null : 'A time zone such as Asia/Jakarta or UTC';
+    case 'memoryTurns':
+      {
+        final n = int.tryParse(v);
+        return n != null && n >= 0 && n <= 30 ? null : 'A whole number from 0 to 30 (0 = no memory)';
+      }
+    case 'imageModel':
+      return RegExp(r'^[A-Za-z0-9._:/-]{1,100}$').hasMatch(v) ? null : 'A model name: letters, digits and . _ : / -';
+    case 'emailRecipients':
+      {
+        if (v.isEmpty) return null;
+        final parts = v.split(',').map((a) => a.trim()).toList();
+        if (parts.length > 10) return 'At most 10 addresses';
+        return parts.every((a) => RegExp(r'^[^\s@,]{1,64}@[^\s@,]{1,200}\.[^\s@,]{2,}$').hasMatch(a)) ? null : 'Comma-separated email addresses';
+      }
     case 'persona':
       return v.length <= 1000 ? null : 'At most 1000 characters';
     case 'name':
       return v.isNotEmpty && v.length <= 80 ? null : '1 to 80 characters';
   }
   return null;
+}
+
+/// One parameter of a starter template, as `GET /api/v1/templates` describes it.
+class TemplateParam {
+  const TemplateParam({required this.name, required this.description, required this.required, this.defaultValue});
+
+  factory TemplateParam.fromJson(Map<String, dynamic> j) => TemplateParam(
+        name: '${j['name'] ?? ''}',
+        description: '${j['description'] ?? ''}',
+        required: j['required'] == true,
+        defaultValue: j['defaultValue'] as String?,
+      );
+
+  final String name;
+  final String description;
+  final bool required;
+  final String? defaultValue;
+
+  /// A switch (`true` / `false`) rather than free text.
+  bool get isFlag => defaultValue == 'true' || defaultValue == 'false';
+
+  /// What is wrong with [value], or null. Rules the Studio knows by name are reused; the server checks again.
+  String? problem(String value) {
+    if (value.trim().isEmpty) return required ? 'Required' : null;
+    return assistantFieldProblem(name, value);
+  }
+}
+
+/// A starter template: what it is, which secrets it needs, and the parameters to ask for.
+class TemplateInfo {
+  const TemplateInfo({required this.id, required this.name, required this.description, required this.params, required this.secrets});
+
+  factory TemplateInfo.fromJson(Map<String, dynamic> j) => TemplateInfo(
+        id: '${j['id'] ?? ''}',
+        name: '${j['name'] ?? ''}',
+        description: '${j['description'] ?? ''}',
+        params: [
+          for (final p in (j['params'] is List ? j['params'] as List : const []))
+            if (p is Map) TemplateParam.fromJson(Map<String, dynamic>.from(p)),
+        ],
+        secrets: [for (final s in (j['secrets'] is List ? j['secrets'] as List : const [])) '$s'],
+      );
+
+  final String id;
+  final String name;
+  final String description;
+  final List<TemplateParam> params;
+  final List<String> secrets;
+
+  /// Per-parameter problems for [values] (parameter name to text); empty when the form can be sent.
+  Map<String, String> problems(Map<String, String> values) => {
+        for (final p in params)
+          if (!p.isFlag && p.problem(values[p.name] ?? p.defaultValue ?? '') != null) p.name: p.problem(values[p.name] ?? p.defaultValue ?? '')!,
+      };
+
+  /// The request parameters: values that differ from the default, plus every required one. Blank optional text is left out so the
+  /// server's default applies.
+  Map<String, String> request(Map<String, String> values) => {
+        for (final p in params)
+          if (p.required || ((values[p.name] ?? '').trim().isNotEmpty && values[p.name]!.trim() != (p.defaultValue ?? '')))
+            p.name: (values[p.name] ?? '').trim(),
+      };
 }

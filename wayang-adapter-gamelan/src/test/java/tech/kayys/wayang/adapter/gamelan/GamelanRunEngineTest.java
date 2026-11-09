@@ -26,12 +26,12 @@ import tech.kayys.gamelan.sdk.client.WorkflowDefinitionClient;
 import tech.kayys.gamelan.sdk.client.WorkflowDefinitionOperations;
 import tech.kayys.gamelan.sdk.client.WorkflowRunClient;
 import tech.kayys.gamelan.sdk.client.WorkflowRunOperations;
-import tech.kayys.wayang.api.DefinitionKind;
-import tech.kayys.wayang.api.DefinitionStore;
-import tech.kayys.wayang.api.EventBus;
-import tech.kayys.wayang.api.RunEvent;
-import tech.kayys.wayang.api.RunStatus;
-import tech.kayys.wayang.api.RunView;
+import tech.kayys.wayang.api.definition.DefinitionKind;
+import tech.kayys.wayang.api.definition.DefinitionStore;
+import tech.kayys.wayang.api.run.EventBus;
+import tech.kayys.wayang.api.run.RunEvent;
+import tech.kayys.wayang.api.run.RunStatus;
+import tech.kayys.wayang.api.run.RunView;
 import tech.kayys.wayang.bpmn.ElementType;
 import tech.kayys.wayang.bpmn.ProcessCompiler;
 import tech.kayys.wayang.bpmn.ProcessModel;
@@ -202,22 +202,19 @@ class GamelanRunEngineTest {
                 return registry;
             }
         };
-        Instance<WayangComponents> inst = new Instance<>() {
-            @Override
-            public boolean isResolvable() {
-                return true;
-            }
-
-            @Override
-            public WayangComponents get() {
-                return c;
-            }
-
-            @Override
-            public java.util.Iterator<WayangComponents> iterator() {
-                return List.of(c).iterator();
-            }
-        };
+        // A dynamic proxy rather than an anonymous class: the abstract methods of Instance differ between CDI versions (4.1 added several).
+        @SuppressWarnings("unchecked")
+        Instance<WayangComponents> inst = (Instance<WayangComponents>) java.lang.reflect.Proxy.newProxyInstance(
+                Instance.class.getClassLoader(), new Class<?>[] {Instance.class}, (proxy, method, args) -> switch (method.getName()) {
+                    case "isResolvable" -> true;
+                    case "isUnsatisfied", "isAmbiguous" -> false;
+                    case "get" -> c;
+                    case "iterator" -> List.of(c).iterator();
+                    case "toString" -> "test Instance";
+                    case "hashCode" -> System.identityHashCode(proxy);
+                    case "equals" -> proxy == args[0];
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
         var f = WayangRuntime.class.getDeclaredField("components");
         f.setAccessible(true);
         f.set(runtime, inst);
@@ -259,15 +256,7 @@ class GamelanRunEngineTest {
                 node("review", NodeExecutionStatus.EXECUTING, Map.of())));
         registry.register(r.id(), new WaitTicket("tok1", "review", "human", Map.of("title", "Approve"), null, null, null));
         List<Object> done = new ArrayList<>();
-        runtime.waits().park("tok1", new PendingWaits.Pending(null, Map.of(), new io.smallrye.mutiny.subscription.UniEmitter<Object>() {
-            public void complete(Object o) {
-                done.add(o);
-            }
-
-            public void fail(Throwable t) {
-                done.add(t);
-            }
-        }, out -> null));
+        runtime.waits().park("tok1", new PendingWaits.Pending(null, Map.of(), emitter(done), out -> null));
         RunView v = engine.get("acme", r.id()).orElseThrow();
         assertEquals(RunStatus.WAITING, v.status());
         assertEquals("Approve", v.waiting().get(0).title());
@@ -298,15 +287,7 @@ class GamelanRunEngineTest {
         RunView r = engine.start("acme", "ann", "loan", 1, plan(), Map.of());
         registry.register(r.id(), new WaitTicket("tok2", "review", "human", Map.of(), null, null, null));
         List<Object> done = new ArrayList<>();
-        runtime.waits().park("tok2", new PendingWaits.Pending(null, Map.of(), new io.smallrye.mutiny.subscription.UniEmitter<Object>() {
-            public void complete(Object o) {
-                done.add(o);
-            }
-
-            public void fail(Throwable t) {
-                done.add(t);
-            }
-        }, out -> null));
+        runtime.waits().park("tok2", new PendingWaits.Pending(null, Map.of(), emitter(done), out -> null));
         assertTrue(engine.cancel("acme", r.id()));
         assertEquals(List.of(r.id()), root.cancelled);
         assertTrue(done.get(0) instanceof Throwable);
@@ -363,5 +344,30 @@ class GamelanRunEngineTest {
         assertNotNull(comps.decisionLookup().apply("acme/risk"));
         assertNull(comps.decisionLookup().apply("globex/risk"), "other tenants cannot resolve it");
         assertNull(comps.decisionLookup().apply("risk"));
+    }
+
+    /** Records what completes or fails it. A proxy, because UniEmitter gains abstract methods between Mutiny versions. */
+    @SuppressWarnings("unchecked")
+    private static io.smallrye.mutiny.subscription.UniEmitter<Object> emitter(List<Object> done) {
+        return (io.smallrye.mutiny.subscription.UniEmitter<Object>) java.lang.reflect.Proxy.newProxyInstance(
+                io.smallrye.mutiny.subscription.UniEmitter.class.getClassLoader(), new Class<?>[] {io.smallrye.mutiny.subscription.UniEmitter.class},
+                (proxy, method, args) -> {
+                    switch (method.getName()) {
+                        case "complete", "fail" -> done.add(args[0]);
+                        case "toString" -> {
+                            return "test emitter";
+                        }
+                        case "hashCode" -> {
+                            return System.identityHashCode(proxy);
+                        }
+                        case "equals" -> {
+                            return proxy == args[0];
+                        }
+                        default -> {
+                            // onTermination and friends: nothing to do
+                        }
+                    }
+                    return method.getReturnType() == io.smallrye.mutiny.subscription.UniEmitter.class ? proxy : null;
+                });
     }
 }

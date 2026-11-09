@@ -124,11 +124,12 @@ void main() {
   test('release form validates like the server and serialises only what is set', () {
     const f = ReleaseForm();
     expect(f.problem, isNull);
-    expect(f.toJson(), {'target': 'SERVICE', 'groupId': 'com.example', 'version': '1.0.0', 'port': 8080});
+    expect(f.toJson(), {'target': 'SERVICE', 'groupId': 'com.example', 'version': '1.0.0', 'port': 8080, 'profile': 'full'});
     final g = f.copyWith(artifactId: 'shop', packageName: 'com.shop.release', target: 'STANDALONE');
     expect(g.toJson()['artifactId'], 'shop');
     expect(g.toJson()['package'], 'com.shop.release');
     expect(g.toJson()['target'], 'STANDALONE');
+    expect(f.copyWith(profile: 'agentic').toJson()['profile'], 'agentic');
     expect(f.copyWith(groupId: 'Com.Acme').problem, contains('groupId'));
     expect(f.copyWith(artifactId: 'A B').problem, contains('artifactId'));
     expect(f.copyWith(version: '1<').problem, contains('version'));
@@ -144,6 +145,7 @@ void main() {
       'artifactId': 'shop',
       'version': '1.0.0',
       'processes': ['orders'],
+      'components': ['wayang.bpmn.control-flow', 'wayang.service.connector'],
       'connectors': ['slack'],
       'usesAgents': false,
       'requiredSecrets': ['SLACK'],
@@ -152,9 +154,10 @@ void main() {
       'notes': ['n1'],
       'bundleSha256': 'abc',
     });
-    expect(p.summary, '1 process(es), connectors: slack, 1 secret(s), 1 setting(s)');
+    expect(p.components, ['wayang.bpmn.control-flow', 'wayang.service.connector']);
+    expect(p.summary, '1 process(es), 2 component(s), connectors: slack, 1 secret(s), 1 setting(s)');
     expect(p.zipName, 'shop-1.0.0.zip');
-    expect(ReleasePlan.fromJson({}).summary, '0 process(es), no connectors, 0 secret(s), 0 setting(s)');
+    expect(ReleasePlan.fromJson({}).summary, '0 process(es), 0 component(s), no connectors, 0 secret(s), 0 setting(s)');
     final cmd = releaseDownloadCommand('https://w.example.com/', 'p1', const ReleaseForm(artifactId: "it's"), p.zipName);
     expect(cmd, contains("https://w.example.com/api/v1/projects/p1/release'"));
     expect(cmd, contains(r'Bearer $WAYANG_TOKEN'));
@@ -171,6 +174,17 @@ void main() {
     expect(assistantFieldProblem('model', 'openai/gpt-4o-mini'), isNull);
     expect(assistantFieldProblem('model', 'gpt4'), isNotNull);
     expect(assistantFieldProblem('persona', 'x' * 1001), isNotNull);
+    expect(assistantFieldProblem('imageModel', 'gpt-image-1'), isNull);
+    expect(assistantFieldProblem('imageModel', 'bad model'), isNotNull);
+    expect(assistantFieldProblem('emailRecipients', ''), isNull);
+    expect(assistantFieldProblem('emailRecipients', 'a@x.com, b@y.org'), isNull);
+    expect(assistantFieldProblem('emailRecipients', 'a@x.com b@y.org'), isNotNull);
+    expect(assistantFieldProblem('emailRecipients', 'nobody'), isNotNull);
+    expect(assistantFieldProblem('emailRecipients', List.generate(11, (i) => 'a$i@x.com').join(',')), isNotNull);
+    expect(assistantFieldProblem('memoryTurns', '0'), isNull);
+    expect(assistantFieldProblem('memoryTurns', '30'), isNull);
+    expect(assistantFieldProblem('memoryTurns', '31'), isNotNull);
+    expect(assistantFieldProblem('memoryTurns', 'ten'), isNotNull);
     expect(assistantFieldProblem('name', ' '), isNotNull);
     expect(assistantFieldProblem('lookupUrl', ''), isNull);
     expect(assistantFieldProblem('lookupUrl', 'https://api.example.com/v1/search'), isNull);
@@ -191,5 +205,40 @@ void main() {
     expect(assistantFieldProblem('lookupSecret', 'NOTES_TOKEN'), isNull);
     expect(assistantFieldProblem('lookupSecret', ''), isNull);
     expect(assistantFieldProblem('lookupSecret', 'a-b'), isNotNull);
+  });
+
+  group('template catalogue', () {
+    final info = TemplateInfo.fromJson({
+      'id': 'assistant-telegram',
+      'name': 'Personal assistant',
+      'description': 'd',
+      'secrets': ['TELEGRAM_TOKEN'],
+      'params': [
+        {'name': 'chatId', 'description': 'chat', 'required': true},
+        {'name': 'model', 'description': 'm', 'required': false, 'defaultValue': 'openai/gpt-4o-mini'},
+        {'name': 'notes', 'description': 'n', 'required': false, 'defaultValue': 'false'},
+        {'name': 'persona', 'description': 'p', 'required': false, 'defaultValue': ''},
+      ],
+    });
+
+    test('reads the server description and tells switches from text', () {
+      expect(info.secrets, ['TELEGRAM_TOKEN']);
+      expect(info.params.map((p) => p.isFlag), [false, false, true, false]);
+      expect(TemplateInfo.fromJson({'id': 'x'}).params, isEmpty, reason: 'missing lists are tolerated');
+    });
+
+    test('problems: required is flagged, known fields reuse the Studio rules, switches are never text-checked', () {
+      expect(info.problems({'chatId': ''}).keys, contains('chatId'));
+      expect(info.problems({'chatId': '123'}), isEmpty);
+      expect(info.problems({'chatId': 'abc'}).keys, contains('chatId'));
+      expect(info.problems({'chatId': '1', 'model': 'nonsense'}).keys, contains('model'));
+      expect(info.problems({'chatId': '1', 'notes': 'banana'}), isEmpty);
+    });
+
+    test('request sends required values and changes from the default only', () {
+      expect(info.request({'chatId': ' 42 ', 'model': 'openai/gpt-4o-mini', 'notes': 'false', 'persona': ''}), {'chatId': '42'});
+      expect(info.request({'chatId': '42', 'model': 'ollama/llama3.1', 'notes': 'true', 'persona': 'terse'}),
+          {'chatId': '42', 'model': 'ollama/llama3.1', 'notes': 'true', 'persona': 'terse'});
+    });
   });
 }

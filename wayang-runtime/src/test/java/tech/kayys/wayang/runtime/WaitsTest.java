@@ -84,6 +84,25 @@ class WaitsTest {
     }
 
     @Test
+    void messagesStayWithinTheirTenant() {
+        var eng = engine(Clock.systemUTC());
+        var svc = new TimerService(waits, (t, o) -> false, Clock.systemUTC());
+        assertEquals(TimerService.Delivery.BUFFERED, svc.deliver("acme", "paid", "A-1", Map.of("amount", 7)));
+        var globexRun = eng.start(ProcessCompiler.compile(messageProcess()),
+                Map.of("order", Map.of("id", "A-1"), SecretResolver.TENANT_VARIABLE, "globex"));
+        assertEquals(ReferenceEngine.Status.WAITING, globexRun.status(), "another tenant's buffered message is not consumed");
+        assertEquals("A-1", WaitRegistry.unscoped(globexRun.waitingOn().correlationKey()));
+        var acmeRun = eng.start(ProcessCompiler.compile(messageProcess()),
+                Map.of("order", Map.of("id", "A-1"), SecretResolver.TENANT_VARIABLE, "acme"));
+        assertEquals(ReferenceEngine.Status.COMPLETED, acmeRun.status());
+        assertEquals(7, acmeRun.variables().get("approval.amount"));
+        assertEquals("a\u001fb", WaitRegistry.scoped("a", "b"));
+        assertEquals("b", WaitRegistry.unscoped("a\u001fb"));
+        assertEquals("b", WaitRegistry.scoped("", "b"));
+        assertEquals("b", WaitRegistry.unscoped("b"));
+    }
+
+    @Test
     void earlyMessageIsNotLost() {
         var eng = engine(Clock.systemUTC());
         var svc = new TimerService(waits, (t, o) -> false, Clock.systemUTC());

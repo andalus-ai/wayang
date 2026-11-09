@@ -11,8 +11,8 @@ import jakarta.inject.Inject;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import tech.kayys.wayang.api.VaultClient;
-import tech.kayys.wayang.api.VaultSecretResolver;
+import tech.kayys.wayang.api.secret.cloud.VaultClient;
+import tech.kayys.wayang.api.secret.cloud.VaultSecretResolver;
 
 /**
  * HashiCorp Vault, optional. Two independent uses: the master keyring of the secret store can be fetched from it

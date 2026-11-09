@@ -1,5 +1,22 @@
 package tech.kayys.wayang.api;
 
+import tech.kayys.wayang.api.definition.AutoLayout;
+import tech.kayys.wayang.api.run.CollectSweepService;
+import tech.kayys.wayang.api.definition.DefinitionKind;
+import tech.kayys.wayang.api.definition.DefinitionStore;
+import tech.kayys.wayang.api.run.EventBus;
+import tech.kayys.wayang.api.project.Project;
+import tech.kayys.wayang.api.project.ProjectStore;
+import tech.kayys.wayang.api.run.ReferenceRunEngine;
+import tech.kayys.wayang.api.run.RunEngine;
+import tech.kayys.wayang.api.run.RunEvent;
+import tech.kayys.wayang.api.run.RunStatus;
+import tech.kayys.wayang.api.run.RunView;
+import tech.kayys.wayang.api.definition.StoredDefinition;
+import tech.kayys.wayang.api.definition.Studio;
+import tech.kayys.wayang.api.run.TaskView;
+import tech.kayys.wayang.api.run.WsSession;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.time.Clock;
@@ -137,6 +154,23 @@ class WayangApiTest {
     }
 
     @Test
+    void validationResolvesComponentsAgainstTheSelectedRuntimeProfile() {
+        api.withProfile(tech.kayys.wayang.runtime.Profile.AUTOMATION);
+        Map<String, Object> agentProcess = Map.of(
+                "id", "assistant",
+                "elements", List.of(
+                        Map.of("id", "s", "type", "START_EVENT"),
+                        Map.of("id", "agent", "type", "AGENT_TASK", "config", Map.of("agent", "helper")),
+                        Map.of("id", "e", "type", "END_EVENT")),
+                "flows", List.of(Map.of("id", "f1", "source", "s", "target", "agent"),
+                        Map.of("id", "f2", "source", "agent", "target", "e")));
+        var report = api.validate(acme, DefinitionKind.PROCESS, agentProcess);
+        assertFalse(report.valid());
+        assertTrue(report.items().stream().anyMatch(i -> i.message().contains("component requirements")
+                && i.message().contains("wayang.agent.invoke")), report.items().toString());
+    }
+
+    @Test
     void idMismatchAndBadIdsAreRejected() {
         assertThrows(ApiException.class, () -> api.saveDraft(acme, DefinitionKind.DECISION, "other", decision(), null));
         assertThrows(ApiException.class, () -> api.saveDraft(acme, DefinitionKind.DECISION, "../x", Map.of(), null));
@@ -168,6 +202,33 @@ class WayangApiTest {
         assertEquals("paid", api.getRun(acme, run.id()).waiting().get(0).messageName());
         assertEquals("BUFFERED", api.sendMessage(globex, "paid", "k1", Map.of())); // other tenant must not complete it
         assertEquals(RunStatus.WAITING, api.getRun(acme, run.id()).status());
+        assertEquals("k1", api.getRun(acme, run.id()).waiting().get(0).correlationKey(), "views show the key as written");
+        assertEquals("DELIVERED", api.sendMessage(acme, "paid", "k1", Map.of()));
+        assertEquals(RunStatus.COMPLETED, api.getRun(acme, run.id()).status());
+    }
+
+    @Test
+    void aMessageBufferedByOneTenantIsNeverConsumedByAnother() {
+        Map<String, Object> proc = Map.of("id", "w", "elements", List.of(
+                Map.of("id", "s", "type", "START_EVENT"),
+                Map.of("id", "m", "type", "MESSAGE_CATCH_EVENT", "config", Map.of("message", "paid", "correlation", "\"k1\"")),
+                Map.of("id", "e", "type", "END_EVENT")),
+                "flows", List.of(Map.of("id", "b", "source", "s", "target", "m"), Map.of("id", "c", "source", "m", "target", "e")));
+        for (Principal p : List.of(acme, globex)) {
+            api.saveDraft(p, DefinitionKind.PROCESS, "w", proc, null);
+            api.publish(p, DefinitionKind.PROCESS, "w");
+        }
+        // acme's message arrives first and is kept for acme's run; globex's run, waiting for the same name and key, must not take it
+        assertEquals("BUFFERED", api.sendMessage(acme, "paid", "k1", Map.of("who", "acme")));
+        RunView g = api.startRun(globex, "w", null, Map.of());
+        assertEquals(RunStatus.WAITING, g.status(), "globex's run did not consume acme's buffered message");
+        RunView a = api.startRun(acme, "w", null, Map.of());
+        assertEquals(RunStatus.COMPLETED, a.status(), "acme's own run did");
+        // both tenants waiting on the same name and key: each message reaches only its own tenant's run
+        RunView a2 = api.startRun(acme, "w", null, Map.of());
+        assertEquals("DELIVERED", api.sendMessage(globex, "paid", "k1", Map.of("who", "globex")));
+        assertEquals(RunStatus.COMPLETED, api.getRun(globex, g.id()).status());
+        assertEquals(RunStatus.WAITING, api.getRun(acme, a2.id()).status(), "globex's message did not reach acme's run");
     }
 
     @Test
@@ -325,6 +386,22 @@ class WayangApiTest {
         assertTrue(r.items().stream().anyMatch(i -> "t".equals(i.elementId()) && i.message().contains("connector")));
         assertEquals(tech.kayys.wayang.bpmn.ElementType.values().length, api.nodeCatalog(acme).size());
         assertNotNull(api.nodeCatalog(viewer));
+    }
+
+    @Test
+    void aProfileHidesAndRefusesTheFeaturesItDoesNotServe() {
+        Map<String, Object> doc = Map.of("id", "p", "elements", List.of(Map.of("id", "s", "type", "START_EVENT"),
+                Map.of("id", "a", "type", "AGENT_TASK", "config", Map.of("agent", "helper")), Map.of("id", "e", "type", "END_EVENT")),
+                "flows", List.of(Map.of("id", "f1", "source", "s", "target", "a"), Map.of("id", "f2", "source", "a", "target", "e")));
+        var restricted = new WayangApi(store, engine, waits, bus, clock).withProfile(tech.kayys.wayang.runtime.Profile.AUTOMATION);
+        var r = restricted.validate(acme, DefinitionKind.PROCESS, doc);
+        assertTrue(r.items().stream().anyMatch(i -> "a".equals(i.elementId()) && i.message().contains("'automation' profile")), String.valueOf(r.items()));
+        assertFalse(r.valid());
+        var types = restricted.nodeCatalog(acme).stream().map(m -> m.get("type")).toList();
+        assertFalse(types.contains("AGENT_TASK"));
+        assertFalse(types.contains("EIP_TASK"), "EIP is not in automation either");
+        assertTrue(types.contains("BUSINESS_RULE_TASK") && types.contains("START_EVENT"));
+        assertTrue(api.nodeCatalog(acme).size() == tech.kayys.wayang.bpmn.ElementType.values().length || System.getenv("WAYANG_PROFILE") != null);
     }
 
     private static Map<String, Object> gatherProcess() {

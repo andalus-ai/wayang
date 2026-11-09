@@ -12,7 +12,7 @@ import java.util.Optional;
 import javax.sql.DataSource;
 
 import tech.kayys.wayang.api.ConfigEntry;
-import tech.kayys.wayang.api.ConfigStore;
+import tech.kayys.wayang.api.config.ConfigStore;
 
 /** Plain settings in SQL; compare-and-set is a conditional INSERT or UPDATE so it holds across nodes. */
 public final class JdbcConfigStore implements ConfigStore {

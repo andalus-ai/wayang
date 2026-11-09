@@ -21,6 +21,16 @@ class WayangRepository {
     return [for (final e in asList(j)) NodeCatalogEntry.fromJson(asMap(e))];
   }
 
+  /// Profile-filtered reusable runtime capabilities and their configuration contracts.
+  Future<List<ComponentCatalogEntry>> componentCatalog() async {
+    final j = await _api.getJson('/api/v1/catalog/components');
+    return [for (final e in asList(j)) ComponentCatalogEntry.fromJson(asMap(e))];
+  }
+
+  /// Validates a component config; invalid input is returned by the API as HTTP 422.
+  Future<Map<String, dynamic>> validateComponentConfig(String id, Map<String, dynamic> config) async =>
+      asMap(await _api.sendJson('POST', '/api/v1/catalog/components/$id/validate', body: config));
+
   // ----------------------------------------------------------------- projects
 
   Future<List<Project>> listProjects() async =>
@@ -190,6 +200,11 @@ class WayangRepository {
   /// What a release of the project would contain (built from published versions only). Nothing is generated or stored.
   Future<ReleasePlan> planRelease(String projectId, ReleaseForm form) async =>
       ReleasePlan.fromJson(asMap(await _api.sendJson('POST', '/api/v1/projects/$projectId/release/plan', body: form.toJson())));
+
+  /// The starter templates this server offers (empty when its profile has none).
+  Future<List<TemplateInfo>> listTemplates() async => [
+        for (final t in asList(await _api.getJson('/api/v1/templates'))) if (t is Map) TemplateInfo.fromJson(asMap(t)),
+      ];
 
   /// Creates a starter project (`assistant-telegram`). A dry run unless [dryRun] is false; triggers are created disabled.
   Future<ImportReport> instantiateTemplate(String id, Map<String, String> params, {required bool dryRun}) async => ImportReport.fromJson(

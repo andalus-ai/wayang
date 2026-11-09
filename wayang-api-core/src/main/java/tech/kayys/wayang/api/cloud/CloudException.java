@@ -1,4 +1,4 @@
-package tech.kayys.wayang.api;
+package tech.kayys.wayang.api.secret.cloud;
 
 /** A failure talking to a cloud secret service. The message is safe to log: no credentials, no response bodies. */
 public final class CloudException extends RuntimeException {

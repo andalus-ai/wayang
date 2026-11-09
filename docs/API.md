@@ -29,14 +29,14 @@ All transports are thin shells over `WayangApi` (`wayang-api-core`). They authen
 | `GET /tasks`, `POST /tasks/{token}/complete` `{outputs}` | human task inbox |
 | `POST /messages` `{name, correlationKey, payload}` | `DELIVERED` or `BUFFERED` |
 | `POST /tools/expression`, `POST /tools/decision-test` | evaluate an expression / test a decision document |
-| `GET /catalog/nodes` | node palette: type, executor, config JSON-schema (drives the Studio property panel; the same schema is enforced by validate/publish) |
+| `GET /catalog/nodes` | BPMN node palette and process-document configuration JSON Schema |\n| `GET /catalog/components` | profile-filtered reusable runtime components, exact dependencies, isolation, capabilities, config schemas and renderer-neutral UI hints |\n| `POST /catalog/components/{id}/validate` | validate a component config against its catalog schema; invalid config returns 422 with path-specific violations |\n| `POST /catalog/components/{id}/validate` | validate a component config against its catalog schema; invalid config returns 422 with path-specific violations |
 | `GET/POST /projects`, `GET/PUT/DELETE /projects/{id}` | project grouping; `GET /definitions/{kind}?projectId=` filters; delete refused while definitions refer to it |
 | `GET /secrets`, `PUT /secrets/{name}` `{value}`, `DELETE /secrets/{name}`, `POST /secrets/rotate` | **write-only** secrets (metadata only is ever returned). Needs `wayang.secrets.key`, else 404. List: DESIGNER/ADMIN; write/delete/rotate: ADMIN. Use as `${secret:NAME}` in service/agent/EIP node config |
 | `GET /secrets/keys`, `POST /secrets/keys/reload`, `POST /secrets/archive/export|import` | key rotation status; reload a rotated keyring without a restart (admin); encrypted secrets archive (off unless `wayang.secrets.archive-enabled`, admin). See `docs/WORKSPACE.md` |
 | `GET /config`, `PUT|DELETE /config/{key}` (`?project=`) | plain settings for `${config:NAME}` |
 | `GET /projects/{id}/export`, `POST /workspace/import` `{bundle, options}` | workspace bundle, dry run by default |
 | `GET /templates`, `POST /templates/{id}/instantiate` `{params, dryRun}` | starter projects (`assistant-telegram`); a dry run unless `dryRun` is false; triggers are created disabled |
-| `POST /projects/{id}/release/plan`, `POST /projects/{id}/release` `{target, groupId, artifactId, version, package, port}` | what a release of the published versions would contain; download it as a Maven project zip (`docs/RELEASE.md`) |
+| `POST /projects/{id}/release/plan`, `POST /projects/{id}/release` `{target, groupId, artifactId, version, package, port, profile}` | release preview includes resolved component IDs; generated archive includes `wayang/component-lock.json` and its digest in `wayang/release.json` (`docs/RELEASE.md`) |
 | `POST /admin/timers/fire` | ADMIN; a ticker also does it every 5s |
 
 ## WebSocket `/ws/events`

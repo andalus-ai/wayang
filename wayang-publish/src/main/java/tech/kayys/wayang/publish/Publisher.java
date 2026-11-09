@@ -17,6 +17,7 @@ import tech.kayys.wayang.connectors.Connectors;
 import tech.kayys.wayang.embed.ReleaseBundle;
 import tech.kayys.wayang.embed.ReleaseSecrets;
 import tech.kayys.wayang.runtime.json.Json;
+import tech.kayys.wayang.runtime.Extensions;
 
 /**
  * Turns a published workspace bundle into the source of a release: a Maven project that depends only on what the workflows use
@@ -30,7 +31,7 @@ import tech.kayys.wayang.runtime.json.Json;
 public final class Publisher {
 
     /** The generated project: path to bytes, and what was found while analysing the bundle. */
-    public record Project(Map<String, byte[]> files, List<String> processes, List<String> connectors, boolean usesAgents, List<String> requiredSecrets,
+    public record Project(Map<String, byte[]> files, List<String> processes, List<String> components, List<String> connectors, boolean usesAgents, List<String> requiredSecrets,
             List<String> notes) {
     }
 
@@ -59,13 +60,27 @@ public final class Publisher {
         if (processes.isEmpty()) {
             throw new IllegalArgumentException("The bundle has no process to release");
         }
-        Set<String> known = Connectors.defaults().keySet();
-        addAgentToolConnectors(bundle, used);
+        tech.kayys.wayang.runtime.Profile profile = tech.kayys.wayang.runtime.Profile.parse(o.profile());
+        for (var plan : profile == tech.kayys.wayang.runtime.Profile.FULL ? List.<tech.kayys.wayang.bpmn.ExecutionPlan>of()
+                : new tech.kayys.wayang.embed.ReleaseDefinitions(bundle).plans().values()) {
+            List<String> bad = profile.violations(plan);
+            if (!bad.isEmpty()) {
+                throw new IllegalArgumentException("Process '" + plan.processId() + "' does not fit the '" + profile + "' profile: "
+                        + String.join("; ", bad));
+            }
+        }
+        Extensions extensions = Extensions.load(profile);
+        Set<String> known = Connectors.defaults(new tech.kayys.wayang.connectors.UrlGuard(false, Set.of()), extensions).keySet();
+        addAgentToolConnectors(bundle, used, known);
         used.remove(tech.kayys.wayang.embed.AgentActions.NAME); // built in: it only needs the other connectors and the secrets
         List<String> unknown = used.stream().filter(c -> !known.contains(c)).toList();
         if (!unknown.isEmpty()) {
             throw new IllegalArgumentException("These connectors are not available in a release: " + unknown);
         }
+        ComponentLockfile.Result componentLock = ComponentLockfile.create(bundle, profile, extensions, used);
+        ReleaseArtifactLockfile.Result artifactLock = ReleaseArtifactLockfile.create(componentLock.componentIds(), o.wayangVersion(), o.target() == ReleaseOptions.Target.GAMELAN);
+        // Fail closed if the generated coordinate graph is inconsistent before packaging it.
+        ReleaseArtifactResolver.verify(artifactLock.json());
         Set<String> pollSources = new TreeSet<>();
         Set<String> providers = new TreeSet<>();
         for (ReleaseBundle.Trigger t : bundle.triggers()) {
@@ -89,6 +104,7 @@ public final class Publisher {
         if (!unknownTriggers.isEmpty()) {
             throw new IllegalArgumentException("These trigger types are not available in a release: " + unknownTriggers);
         }
+        boolean multimodal = used.stream().anyMatch(MULTIMODAL_CONNECTORS::contains);
         boolean needsConnectors = !used.isEmpty() || !pollSources.isEmpty() || !providers.isEmpty();
         List<String> notes = new ArrayList<>();
         List<String> badSecrets = bundle.requiredSecrets().stream().filter(s -> !ReleaseSecrets.supported(s)).toList();
@@ -122,8 +138,10 @@ public final class Publisher {
         List<String> secrets = bundle.requiredSecrets().stream().distinct().sorted().toList();
         Map<String, byte[]> f = new TreeMap<>();
         String pkgPath = o.packageName().replace('.', '/');
-        f.put("pom.xml", (gamelan ? GamelanTemplates.pom(o, bundle, needsConnectors) : pom(o, bundle, needsConnectors)).getBytes(StandardCharsets.UTF_8));
+        f.put("pom.xml", (gamelan ? GamelanTemplates.pom(o, bundle, needsConnectors, multimodal) : pom(o, bundle, needsConnectors, multimodal)).getBytes(StandardCharsets.UTF_8));
         f.put("src/main/resources/wayang/bundle.json", bundleJson.getBytes(StandardCharsets.UTF_8));
+        f.put("src/main/resources/wayang/component-lock.json", componentLock.json().getBytes(StandardCharsets.UTF_8));
+        f.put("src/main/resources/wayang/artifact-lock.json", artifactLock.json().getBytes(StandardCharsets.UTF_8));
         f.put("src/main/java/" + pkgPath + "/Wiring.java", wiring(o, used, pollSources, providers).getBytes(StandardCharsets.UTF_8));
         if (gamelan) {
             f.put("src/main/java/" + pkgPath + "/ReleaseWiring.java", GamelanTemplates.wiringBean(o, agents).getBytes(StandardCharsets.UTF_8));
@@ -140,7 +158,7 @@ public final class Publisher {
         f.put(".dockerignore", "target\n.git\n.env\n".getBytes(StandardCharsets.UTF_8));
         f.put(".gitignore", "target/\n.env\n".getBytes(StandardCharsets.UTF_8));
         f.put(".env.example", envExample(o, bundle, secrets).getBytes(StandardCharsets.UTF_8));
-        f.put("README.md", readme(o, bundle, processes, used, agents, secrets, notes).getBytes(StandardCharsets.UTF_8));
+        f.put("README.md", readme(o, bundle, processes, componentLock.componentIds(), artifactLock.artifacts(), used, agents, secrets, notes).getBytes(StandardCharsets.UTF_8));
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("format", "wayang.release");
         meta.put("target", o.target().name());
@@ -152,6 +170,10 @@ public final class Publisher {
             meta.put("quarkusVersion", o.quarkusVersion());
         }
         meta.put("processes", processes);
+        meta.put("components", componentLock.componentIds());
+        meta.put("componentLockSha256", componentLock.sha256());
+        meta.put("artifacts", artifactLock.artifacts().stream().map(ReleaseArtifactCatalog.Artifact::artifactId).toList());
+        meta.put("artifactLockSha256", artifactLock.sha256());
         meta.put("connectors", new ArrayList<>(used));
         meta.put("triggers", bundle.triggers().stream().map(ReleaseBundle.Trigger::id).toList());
         f.put("src/main/resources/wayang/release.json", Json.write(meta).getBytes(StandardCharsets.UTF_8));
@@ -160,7 +182,7 @@ public final class Publisher {
         } else if (gamelan) {
             f.put("deploy/kubernetes.yaml", GamelanTemplates.kubernetes(o, secrets).getBytes(StandardCharsets.UTF_8));
         }
-        return new Project(f, List.copyOf(processes), List.copyOf(used), agents, secrets, List.copyOf(notes));
+        return new Project(f, List.copyOf(processes), componentLock.componentIds(), List.copyOf(used), agents, secrets, List.copyOf(notes));
     }
 
     /** A deterministic zip (sorted, fixed timestamps) of the project. */
@@ -198,7 +220,7 @@ public final class Publisher {
 
     // ------------------------------------------------------------------ templates
 
-    private static String pom(ReleaseOptions o, ReleaseBundle b, boolean connectors) {
+    private static String pom(ReleaseOptions o, ReleaseBundle b, boolean connectors, boolean multimodal) {
         return """
                 <?xml version="1.0" encoding="UTF-8"?>
                 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -263,14 +285,25 @@ public final class Publisher {
                     </build>
                 </project>
                 """.formatted(xml(o.groupId()), xml(o.artifactId()), xml(o.version()), xml(safe(b.name())), xml(o.wayangVersion()),
-                connectors ? """
+                (connectors ? CONNECTORS_DEP : "") + (multimodal ? MULTIMODAL_DEP : ""), o.packageName());
+    }
+
+    static final String CONNECTORS_DEP = """
                                 <dependency>
                                     <groupId>tech.kayys.wayang</groupId>
                                     <artifactId>wayang-connectors</artifactId>
                                     <version>${wayang.version}</version>
                                 </dependency>
-                        """ : "", o.packageName());
-    }
+                        """;
+    /** Needed only when a connector of the multimodal extension is used; the runtime finds the extension through ServiceLoader. */
+    static final String MULTIMODAL_DEP = """
+                                <dependency>
+                                    <groupId>tech.kayys.wayang</groupId>
+                                    <artifactId>wayang-multimodal</artifactId>
+                                    <version>${wayang.version}</version>
+                                </dependency>
+                        """;
+    static final Set<String> MULTIMODAL_CONNECTORS = Set.of("image-generate", "comfyui", "transcribe", "speak", "describe");
 
     /** The connectors, poll sources and webhook providers this release uses, built from the environment. Shared by every target. */
     private static String wiring(ReleaseOptions o, Set<String> used, Set<String> pollSources, Set<String> providers) {
@@ -489,8 +522,7 @@ public final class Publisher {
      * An agent's tools run through the connectors of the release too, so the ones it names must be wired in. A tool type with no
      * connector is not an error here: the agent is told, at call time, that it has no such tool.
      */
-    private static void addAgentToolConnectors(ReleaseBundle b, Set<String> used) {
-        Set<String> known = Connectors.defaults().keySet();
+    private static void addAgentToolConnectors(ReleaseBundle b, Set<String> used, Set<String> known) {
         for (ReleaseBundle.Definition d : b.definitions()) {
             if (d.kind().equals("AGENT") && d.document().get("tools") instanceof List<?> tl) {
                 for (Object t : tl) {
@@ -509,7 +541,8 @@ public final class Publisher {
                 collectConnectors(d.document().get("elements"), used);
             }
         }
-        addAgentToolConnectors(b, used);
+        addAgentToolConnectors(b, used, Connectors.defaults(new tech.kayys.wayang.connectors.UrlGuard(false, Set.of()),
+                tech.kayys.wayang.runtime.Extensions.load(tech.kayys.wayang.runtime.Profile.fromEnvironment())).keySet());
         used.remove(tech.kayys.wayang.embed.AgentActions.NAME);
         StringBuilder sb = new StringBuilder();
         for (String c : used) {
@@ -568,10 +601,10 @@ public final class Publisher {
                 COPY --from=build /src/target/app.jar app.jar
                 COPY --from=build /src/target/lib lib
                 USER 10001
-                ENV WAYANG_BIND=0.0.0.0 WAYANG_PORT=%2$d
+                ENV WAYANG_BIND=0.0.0.0 WAYANG_PORT=%2$d WAYANG_PROFILE=%3$s
                 EXPOSE %2$d
                 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "app.jar"]
-                """.formatted(o.artifactId(), o.port());
+                """.formatted(o.artifactId(), o.port(), o.profile());
     }
 
     private static String envExample(ReleaseOptions o, ReleaseBundle b, List<String> secrets) {
@@ -601,13 +634,15 @@ public final class Publisher {
         return sb.toString();
     }
 
-    private static String readme(ReleaseOptions o, ReleaseBundle b, List<String> processes, Set<String> connectors, boolean agents, List<String> secrets,
+    private static String readme(ReleaseOptions o, ReleaseBundle b, List<String> processes, List<String> components, List<ReleaseArtifactCatalog.Artifact> artifacts, Set<String> connectors, boolean agents, List<String> secrets,
             List<String> notes) {
         StringBuilder sb = new StringBuilder();
         sb.append("# ").append(safe(b.name())).append(" (Wayang release)\n\n");
         sb.append("Generated from a published Wayang bundle (sha256 `").append(b.sha256().isEmpty() ? "n/a" : b.sha256()).append("`). ");
         sb.append("Change the workflows in Wayang and release again; do not edit `src/main/resources/wayang/bundle.json`.\n\n");
         sb.append("Target: **").append(o.target()).append("**. Processes: ").append(String.join(", ", processes.stream().map(p -> "`" + p + "`").toList())).append(".\n\n");
+        sb.append("Resolved components: ").append(String.join(", ", components.stream().map(p -> "`" + p + "`").toList())).append(". See `src/main/resources/wayang/component-lock.json` for component contracts.\n\n");
+        sb.append("Resolved internal Maven artifacts: ").append(String.join(", ", artifacts.stream().map(a -> "`" + a.artifactId() + ":" + a.version() + "`").toList())).append(". See `src/main/resources/wayang/artifact-lock.json` for the catalogued internal artifact graph.\n\n");
         if (o.target() == ReleaseOptions.Target.GAMELAN) {
             sb.append("## Build and run\n\n```\nmvn -q package\njava -jar target/quarkus-app/quarkus-run.jar   # needs WAYANG_GAMELAN_ENDPOINT; see .env.example\n```\n\n");
             sb.append("Start runs with `POST /v1/processes/{id}/runs` (below). `GET /readyz` tells whether the workflows are deployed and the secrets present.\n\n");

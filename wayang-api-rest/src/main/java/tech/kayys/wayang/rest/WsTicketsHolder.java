@@ -5,7 +5,7 @@ import java.time.Clock;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import tech.kayys.wayang.api.WsTickets;
+import tech.kayys.wayang.api.run.WsTickets;
 
 /** The one in-memory ticket book of this node, shared by the ticket endpoint and the socket. */
 @ApplicationScoped

@@ -5,7 +5,7 @@ import java.util.regex.Pattern;
 
 /** What the generated project is called and what it is. Every field is validated: they end up in a pom and in Java source. */
 public record ReleaseOptions(Target target, String groupId, String artifactId, String version, String packageName, String wayangVersion, int port,
-        String gamelanVersion, String quarkusVersion) {
+        String gamelanVersion, String quarkusVersion, String profile) {
 
     /**
      * {@code STANDALONE}: a command-line program (run a process once, check, info). {@code SERVICE}: also serves HTTP, and starts that way by
@@ -18,6 +18,12 @@ public record ReleaseOptions(Target target, String groupId, String artifactId, S
 
     public static final String DEFAULT_GAMELAN_VERSION = "0.1.1";
     public static final String DEFAULT_QUARKUS_VERSION = "3.32.2";
+
+    /** Without an explicit profile: {@code full}. */
+    public ReleaseOptions(Target target, String groupId, String artifactId, String version, String packageName, String wayangVersion, int port,
+            String gamelanVersion, String quarkusVersion) {
+        this(target, groupId, artifactId, version, packageName, wayangVersion, port, gamelanVersion, quarkusVersion, "full");
+    }
 
     /** The usual form: Gamelan and Quarkus at the versions Wayang itself is built against. */
     public ReleaseOptions(Target target, String groupId, String artifactId, String version, String packageName, String wayangVersion, int port) {
@@ -52,6 +58,8 @@ public record ReleaseOptions(Target target, String groupId, String artifactId, S
         if (gamelanVersion == null || !VERSION.matcher(gamelanVersion).matches() || quarkusVersion == null || !VERSION.matcher(quarkusVersion).matches()) {
             throw new IllegalArgumentException("gamelanVersion and quarkusVersion must be letters, digits, '.', '_' or '-'");
         }
+        profile = profile == null || profile.isBlank() ? "full" : profile.trim().toLowerCase(java.util.Locale.ROOT);
+        tech.kayys.wayang.runtime.Profile.parse(profile); // rejects typos; the string ends up in a Dockerfile
         if (port < 1 || port > 65535) {
             throw new IllegalArgumentException("port must be 1..65535");
         }
@@ -80,7 +88,7 @@ public record ReleaseOptions(Target target, String groupId, String artifactId, S
         return new ReleaseOptions(t, str(o, "groupId", "com.example"), artifact, str(o, "version", "1.0.0"),
                 str(o, "package", "com.example." + artifact.replaceAll("[^a-z0-9]", "").replaceAll("^[0-9]+", "") + (artifact.replaceAll("[^a-z0-9]", "").isEmpty() ? "release" : "")),
                 str(o, "wayangVersion", wayangVersion), port, str(o, "gamelanVersion", DEFAULT_GAMELAN_VERSION),
-                str(o, "quarkusVersion", DEFAULT_QUARKUS_VERSION));
+                str(o, "quarkusVersion", DEFAULT_QUARKUS_VERSION), str(o, "profile", "full"));
     }
 
     private static String str(Map<String, Object> o, String k, String dflt) {

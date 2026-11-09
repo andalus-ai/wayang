@@ -4,12 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/utils.dart';
 import '../../core/widgets.dart';
 import '../../data/api_client.dart';
 import '../../data/workspace_model.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
+import 'report_view.dart';
+import 'template_gallery.dart';
 
 /// Move a project between environments: export it as a bundle (definitions, triggers, settings; never a secret value), and
 /// import one with a dry run first. Importing never starts anything: triggers arrive disabled.
@@ -182,6 +183,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           const SizedBox(height: 12),
           _templateCard(),
           const SizedBox(height: 12),
+          TemplateGallery(onCreated: () => ref.invalidate(projectsProvider)),
+          const SizedBox(height: 12),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -223,7 +226,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   const SizedBox(width: 8),
                   ElevatedButton(onPressed: _busy || !_canApply ? null : () => _run(dry: false), child: const Text('Apply')),
                 ]),
-                if (_report != null) ...[const SizedBox(height: 12), _ReportView(report: _report!)],
+                if (_report != null) ...[const SizedBox(height: 12), ReportView(report: _report!)],
               ]),
             ),
           ),
@@ -245,6 +248,14 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   bool _tplSlack = false;
   bool _tplBrief = false;
   bool _tplCalendar = false;
+  bool _tplWebSearch = false;
+  bool _tplNotes = false;
+  bool _tplImages = false;
+  bool _tplVoice = false;
+  bool _tplSpeak = false;
+  final _tplImageModel = TextEditingController(text: 'gpt-image-1');
+  final _tplEmail = TextEditingController();
+  final _tplMemory = TextEditingController(text: '10');
   final _tplCalConn = TextEditingController(text: 'google');
   ImportReport? _tplReport;
 
@@ -260,6 +271,12 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         'lookupSecret': _tplLookupSecret.text.trim(),
         'name': _tplName.text.trim(),
         if (!_tplBrief && _tplCalendar) ...{'calendar': 'true', 'calendarConnection': _tplCalConn.text.trim()},
+        if (!_tplBrief && _tplWebSearch) 'webSearch': 'true',
+        if (!_tplBrief && _tplNotes) 'notes': 'true',
+        if (!_tplBrief && _tplImages) ...{'images': 'true', 'imageModel': _tplImageModel.text.trim()},
+        if (!_tplBrief && !_tplSlack && _tplVoice) ...{'voice': 'true', if (_tplSpeak) 'speak': 'true'},
+        if (!_tplBrief && _tplEmail.text.trim().isNotEmpty) 'emailRecipients': _tplEmail.text.trim(),
+        if (!_tplBrief) 'memoryTurns': _tplMemory.text.trim(),
         if (_tplBrief) ...{'topic': _tplTopic.text.trim(), 'cron': _tplCron.text.trim(), 'timezone': _tplZone.text.trim()},
       }, dryRun: dry);
       if (!mounted) return;
@@ -268,9 +285,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         ref.invalidate(projectsProvider);
         if (r.ok && _tplBrief) {
           showToast(context, 'Created. The schedule is off: set ${_tplSlack ? 'SLACK_BOT_TOKEN' : 'TELEGRAM_TOKEN'} under Secrets, then enable it.');
-        } else if (r.ok) showToast(context, _tplSlack
-            ? 'Created. The Slack trigger is off: set SLACK_BOT_TOKEN and SLACK_SIGNING_SECRET under Secrets, then enable it.'
-            : 'Created. The Telegram trigger is off: set TELEGRAM_TOKEN under Secrets, then enable it.');
+        } else if (r.ok) {
+          showToast(context, _tplSlack
+              ? 'Created. The Slack trigger is off: set SLACK_BOT_TOKEN and SLACK_SIGNING_SECRET under Secrets, then enable it.'
+              : 'Created. The Telegram trigger is off: set TELEGRAM_TOKEN under Secrets, then enable it.');
+        }
       }
     } catch (e) {
       if (mounted) setState(() => _tplReport = null);
@@ -282,7 +301,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
 
   Widget _templateCard() {
     final idKey = _tplSlack ? 'channelId' : 'chatId';
-    final fields = {idKey: _tplChat, 'model': _tplModel, 'persona': _tplPersona, 'name': _tplName, 'lookupUrl': _tplLookup, 'lookupDescription': _tplLookupDesc, 'lookupSecret': _tplLookupSecret, if (_tplBrief) ...{'cron': _tplCron, 'timezone': _tplZone}, if (!_tplBrief && _tplCalendar) 'calendarConnection': _tplCalConn};
+    final fields = {idKey: _tplChat, 'model': _tplModel, 'persona': _tplPersona, 'name': _tplName, 'lookupUrl': _tplLookup, 'lookupDescription': _tplLookupDesc, 'lookupSecret': _tplLookupSecret, if (_tplBrief) ...{'cron': _tplCron, 'timezone': _tplZone}, if (!_tplBrief && _tplCalendar) 'calendarConnection': _tplCalConn, if (!_tplBrief && _tplImages) 'imageModel': _tplImageModel, if (!_tplBrief) ...{'memoryTurns': _tplMemory, 'emailRecipients': _tplEmail}};
     final ok = fields.entries.every((e) => assistantFieldProblem(e.key, e.value.text) == null) && (!_tplBrief || assistantFieldProblem('topic', _tplTopic.text) == null);
     Widget field(String key, String label, TextEditingController c, {int lines = 1}) => SizedBox(
           width: 260,
@@ -329,6 +348,64 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 _tplReport = null;
               }),
             ),
+          if (!_tplBrief)
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Web search (Brave Search API; needs the secret BRAVE_API_KEY; results are treated as untrusted)'),
+              value: _tplWebSearch,
+              onChanged: (v) => setState(() {
+                _tplWebSearch = v;
+                _tplReport = null;
+              }),
+            ),
+          if (!_tplBrief)
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Private notebook: save, list, search notes (delete only after you approve)'),
+              value: _tplNotes,
+              onChanged: (v) => setState(() {
+                _tplNotes = v;
+                _tplReport = null;
+
+              }),
+            ),
+          if (!_tplBrief)
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Draw pictures and send them to the chat (needs the secret IMAGE_API_KEY and the multimodal module)'),
+              value: _tplImages,
+              onChanged: (v) => setState(() {
+                _tplImages = v;
+                _tplReport = null;
+
+              }),
+            ),
+          if (!_tplBrief && !_tplSlack)
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Understand voice notes (needs the secret OPENAI_API_KEY and the multimodal module)'),
+              value: _tplVoice,
+              onChanged: (v) => setState(() {
+                _tplVoice = v;
+                _tplReport = null;
+                if (!v) _tplSpeak = false;
+              }),
+            ),
+          if (!_tplBrief && !_tplSlack && _tplVoice)
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Answer voice notes by voice (text to speech, secret OPENAI_API_KEY)'),
+              value: _tplSpeak,
+              onChanged: (v) => setState(() {
+                _tplSpeak = v;
+                _tplReport = null;
+              }),
+            ),
           const SizedBox(height: 4),
           Text(_tplBrief
               ? 'An agent writes a short brief on a cron schedule and sends it to you. A run missed while the release was down is skipped, not sent late. The schedule is created switched off.'
@@ -340,10 +417,13 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             field('model', 'Model (provider/model)', _tplModel),
             field('name', 'Project name', _tplName),
             field('persona', 'Persona (optional)', _tplPersona),
+            if (!_tplBrief) field('memoryTurns', 'Remembered exchanges per chat (0 to 30)', _tplMemory),
             field('lookupUrl', 'Read-only lookup address (optional, https)', _tplLookup),
             field('lookupDescription', 'What that address answers (optional)', _tplLookupDesc),
             field('lookupSecret', 'Secret name sent as a bearer token (optional)', _tplLookupSecret),
             if (!_tplBrief && _tplCalendar) field('calendarConnection', 'Google OAuth connection id', _tplCalConn),
+            if (!_tplBrief && _tplImages) field('imageModel', 'Image model', _tplImageModel),
+            if (!_tplBrief) field('emailRecipients', 'Addresses the assistant may email (optional, comma-separated; sent only after you answer yes)', _tplEmail),
             if (_tplBrief) ...[
               field('topic', 'What the brief covers', _tplTopic),
               field('cron', 'Cron (minute hour day month weekday)', _tplCron),
@@ -356,7 +436,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             const SizedBox(width: 8),
             ElevatedButton(onPressed: _busy || !ok || _tplChat.text.trim().isEmpty ? null : () => _createFromTemplate(dry: false), child: const Text('Create project')),
           ]),
-          if (_tplReport != null) ...[const SizedBox(height: 12), _ReportView(report: _tplReport!)],
+          if (_tplReport != null) ...[const SizedBox(height: 12), ReportView(report: _tplReport!)],
         ]),
       ),
     );
@@ -400,6 +480,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               items: [for (final t in ReleaseForm.targets) DropdownMenuItem(value: t, child: Text(switch (t) { 'SERVICE' => 'HTTP service', 'GAMELAN' => 'Durable service (Gamelan)', _ => 'Standalone program' }))],
               onChanged: (v) => setState(() => _release = _release.copyWith(target: v)),
             ),
+            DropdownButton<String>(
+              value: _release.profile,
+              items: [for (final p in ReleaseForm.profiles) DropdownMenuItem(value: p, child: Text('Profile: $p'))],
+              onChanged: (v) => setState(() => _release = _release.copyWith(profile: v)),
+            ),
             field('groupId', _release.groupId, (v) => _release = _release.copyWith(groupId: v)),
             field('artifactId (optional)', _release.artifactId, (v) => _release = _release.copyWith(artifactId: v)),
             field('version', _release.version, (v) => _release = _release.copyWith(version: v), width: 110),
@@ -417,6 +502,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           if (plan != null) ...[
             const SizedBox(height: 10),
             Text(plan.summary, style: const TextStyle(fontWeight: FontWeight.w600)),
+            lines('Resolved runtime components', plan.components),
             lines('Secrets to provide at run time (WAYANG_SECRET_<NAME>)', plan.requiredSecrets),
             lines('Settings (WAYANG_CONFIG_<NAME>, bundled value is the default)', plan.requiredConfig),
             lines('Know before you deploy', plan.notes),
@@ -446,48 +532,4 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         Checkbox(value: value, onChanged: (v) => setState(() => set(v ?? false))),
         Text(label),
       ]);
-}
-
-class _ReportView extends StatelessWidget {
-  const _ReportView({required this.report});
-  final ImportReport report;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    Widget lines(String title, List<String> xs, {Color? color}) => xs.isEmpty
-        ? const SizedBox.shrink()
-        : Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: TextStyle(fontWeight: FontWeight.w700, color: color)),
-              for (final x in xs) Text('• $x', style: const TextStyle(fontSize: 12)),
-            ]),
-          );
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(
-        report.ok ? (report.dryRun ? 'Looks fine. Nothing was written.' : 'Done.') : (report.dryRun ? 'Problems found. Nothing was written.' : 'Stopped.'),
-        style: TextStyle(fontWeight: FontWeight.w700, color: report.ok ? Colors.green : scheme.error),
-      ),
-      lines('Problems', report.problems, color: scheme.error),
-      lines('Warnings', report.warnings),
-      if (report.needsSetup) ...[
-        lines(report.secretsChecked ? 'Secrets missing here' : 'Secrets this needs (could not check)', report.missingSecrets),
-        lines('Settings missing here', report.missingConfig),
-        lines('Connected accounts to set up', report.oauthConnections),
-      ],
-      if (report.webhookSecrets.isNotEmpty) ...[
-        const SizedBox(height: 8),
-        const Text('New webhook secrets (shown once)', style: TextStyle(fontWeight: FontWeight.w700)),
-        for (final e in report.webhookSecrets.entries) SelectableText('${e.key}: ${e.value}', style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
-      ],
-      const SizedBox(height: 8),
-      for (final i in report.items)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 1),
-          child: Text('${i.status == 'error' ? '✗' : '✓'} ${i.type} ${i.id}: ${i.action}${i.message.isEmpty ? '' : ' (${i.message})'}',
-              style: TextStyle(fontSize: 12, color: i.isError ? scheme.error : null)),
-        ),
-    ]);
-  }
 }

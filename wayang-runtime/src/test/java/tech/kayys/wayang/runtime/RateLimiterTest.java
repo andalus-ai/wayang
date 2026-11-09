@@ -40,9 +40,24 @@ class RateLimiterTest {
         assertNull(RateLimiter.fromTriggerConfig(Map.of()));
         assertNotNull(RateLimiter.fromTriggerConfig(Map.of("rateLimit", Map.of("perHour", 30))));
         for (Object bad : new Object[] {"30", Map.of(), Map.of("perHour", 0), Map.of("perHour", 10001), Map.of("perHour", 1.5), Map.of("perHour", "5"),
-                Map.of("perHour", 5, "perDay", 1)}) {
+                Map.of("perDay", 0), Map.of("perDay", 10001), Map.of("perWeek", 5), Map.of("perHour", 5, "perDay", 1, "perWeek", 1)}) {
             assertThrows(IllegalArgumentException.class, () -> RateLimiter.fromTriggerConfig(Map.of("rateLimit", bad)), String.valueOf(bad));
         }
         assertThrows(IllegalArgumentException.class, () -> new RateLimiter(0, Duration.ofHours(1)));
+        assertNotNull(RateLimiter.fromTriggerConfig(Map.of("rateLimit", Map.of("perHour", 5, "perDay", 20))));
+        assertNotNull(RateLimiter.fromTriggerConfig(Map.of("rateLimit", Map.of("perDay", 20))));
+    }
+
+    @Test
+    void aDayLimitHoldsEvenWhenTheHourlyRateIsRespected() {
+        var l = RateLimiter.fromTriggerConfig(Map.of("rateLimit", Map.of("perHour", 2, "perDay", 3)));
+        assertTrue(l.allow("a", T));
+        assertTrue(l.allow("a", T.plusSeconds(1)));
+        assertFalse(l.allow("a", T.plusSeconds(2)), "hour limit");
+        assertTrue(l.allow("a", T.plusSeconds(3700)), "a new hour: the third of the day");
+        assertFalse(l.allow("a", T.plusSeconds(7400)), "the hour is free but the day is used up");
+        assertFalse(l.allow("a", T.plusSeconds(86_399)), "refused events were not counted, and the first is still inside the day");
+        assertTrue(l.allow("a", T.plusSeconds(86_401)), "the first event left the day");
+        assertTrue(l.allow("b", T), "another chat has its own day");
     }
 }

@@ -1,0 +1,102 @@
+# Wayang CI. NOTE: written without being able to run Maven or GitHub Actions where it was authored; the first run
+# is the first real check of the Quarkus modules (wayang-api-rest, wayang-gamelan-worker) and of Studio.
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  java:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: pw
+          POSTGRES_DB: wayang
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25" # Gamelan and Andalus compile with release 25; Wayang itself targets 21
+          cache: maven
+      # Wayang builds against Gamelan (version in the parent pom); install it from source. The Andalus adapter is the -Pandalus profile,
+      # built by the `andalus` job below (its classes live in andalus-ai/andalus-framework).
+      - name: Gamelan
+        uses: actions/checkout@v4
+        with:
+          repository: andalus-ai/gamelan
+          path: deps/gamelan
+      - name: Install Gamelan
+        run: mvn -B -q -f deps/gamelan/pom.xml install -DskipTests
+      - name: Build and test Wayang
+        env:
+          WAYANG_TEST_JDBC_URL: jdbc:postgresql://localhost/wayang?user=postgres&password=pw
+        run: mvn -B verify
+
+  wayang-core-adapter:
+    # Core contracts are intentionally a separate repository and are installed before building the opt-in Wayang adapter.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      - name: Wayang Core contracts
+        uses: actions/checkout@v4
+        with:
+          repository: andalus-ai/wayang-core
+          path: deps/wayang-core
+      - name: Install Wayang Core model
+        run: mvn -B -q -f deps/wayang-core/pom.xml install -DskipTests -pl wayang-core-model -am
+      - name: Build and test the Wayang Core adapter
+        run: mvn -B -Pwayang-core -pl wayang-adapter-core -am verify
+
+  andalus:
+    # The adapter compiles against andalus-framework (engine + plugin SPI). Kept separate so a framework problem is visible on its own.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      - name: Andalus framework
+        uses: actions/checkout@v4
+        with:
+          repository: andalus-ai/andalus-framework
+          path: deps/andalus-framework
+      - name: Install the framework modules the adapter needs
+        run: mvn -B -q -f deps/andalus-framework/pom.xml install -DskipTests -pl framework/andalus-engine,framework/andalus-plugin -am
+      - name: Build and test the Andalus adapter
+        run: mvn -B -Pandalus -pl wayang-adapter-andalus -am verify
+
+  studio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: studio
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos # deprecation/const hints are not failures; warnings and errors are
+      - run: flutter test

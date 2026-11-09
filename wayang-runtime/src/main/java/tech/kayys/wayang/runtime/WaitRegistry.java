@@ -56,6 +56,20 @@ public interface WaitRegistry {
     record Registered(String runId, WaitTicket ticket) {
     }
 
+    /**
+     * The correlation key as the registry stores it: private to the tenant, so one tenant's message can never be delivered to, or buffered for,
+     * another tenant's run with the same message name and key. No tenant (a standalone runtime) leaves the key as it is.
+     */
+    static String scoped(String tenant, String correlationKey) {
+        return tenant == null || tenant.isEmpty() ? correlationKey : tenant + "\u001f" + correlationKey;
+    }
+
+    /** The key as the person wrote it (what to show in views). */
+    static String unscoped(String storedKey) {
+        int i = storedKey == null ? -1 : storedKey.indexOf('\u001f');
+        return i < 0 ? storedKey : storedKey.substring(i + 1);
+    }
+
     final class InMemory implements WaitRegistry {
         private static final int MAX_BUFFERED_PER_KEY = 100;
 
@@ -128,7 +142,7 @@ public interface WaitRegistry {
 
         @Override
         public synchronized void bufferMessage(String name, String correlationKey, Map<String, Object> payload) {
-            List<Map<String, Object>> l = buffered.computeIfAbsent(name + "\u0000" + correlationKey, k -> new ArrayList<>());
+            List<Map<String, Object>> l = buffered.computeIfAbsent(name + "\u001f" + correlationKey, k -> new ArrayList<>());
             if (l.size() >= MAX_BUFFERED_PER_KEY) {
                 throw new IllegalStateException("Too many undelivered messages for " + name + "/" + correlationKey);
             }
@@ -137,7 +151,7 @@ public interface WaitRegistry {
 
         @Override
         public synchronized Optional<Map<String, Object>> takeBuffered(String name, String correlationKey) {
-            String k = name + "\u0000" + correlationKey;
+            String k = name + "\u001f" + correlationKey;
             List<Map<String, Object>> l = buffered.get(k);
             if (l == null || l.isEmpty()) {
                 return Optional.empty();

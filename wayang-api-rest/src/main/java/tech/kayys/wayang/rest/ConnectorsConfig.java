@@ -28,6 +28,10 @@ public class ConnectorsConfig {
     @ConfigProperty(name = "wayang.connectors.http.allowed-hosts")
     Optional<List<String>> allowedHosts;
 
+    private static tech.kayys.wayang.runtime.Extensions extensions() {
+        return tech.kayys.wayang.runtime.Extensions.load(tech.kayys.wayang.runtime.Profile.fromEnvironment());
+    }
+
     private volatile Map<String, ServiceHandler.Connector> all;
 
     private volatile Map<String, tech.kayys.wayang.runtime.Poller> pollers;
@@ -35,19 +39,19 @@ public class ConnectorsConfig {
     public Map<String, tech.kayys.wayang.runtime.Poller> pollers() {
         Map<String, tech.kayys.wayang.runtime.Poller> p = pollers;
         if (p == null) {
-            p = pollers = Connectors.pollers(new tech.kayys.wayang.connectors.UrlGuard(allowPrivate, Set.copyOf(allowedHosts.orElse(List.of()))));
+            p = pollers = Connectors.pollers(new tech.kayys.wayang.connectors.UrlGuard(allowPrivate, Set.copyOf(allowedHosts.orElse(List.of()))), extensions());
         }
         return p;
     }
 
     public Map<String, tech.kayys.wayang.runtime.WebhookProvider> webhookProviders() {
-        return Connectors.webhookProviders();
+        return Connectors.webhookProviders(extensions());
     }
 
     public Map<String, ServiceHandler.Connector> all() {
         Map<String, ServiceHandler.Connector> a = all;
         if (a == null) {
-            a = all = Connectors.defaults(allowPrivate, Set.copyOf(allowedHosts.orElse(List.of())));
+            a = all = Connectors.defaults(new tech.kayys.wayang.connectors.UrlGuard(allowPrivate, Set.copyOf(allowedHosts.orElse(List.of()))), extensions());
         }
         return a;
     }

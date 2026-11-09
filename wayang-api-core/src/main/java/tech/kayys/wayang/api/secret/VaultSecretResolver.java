@@ -1,4 +1,7 @@
-package tech.kayys.wayang.api;
+package tech.kayys.wayang.api.secret.cloud;
+
+import tech.kayys.wayang.api.secret.ExternalSecrets;
+import tech.kayys.wayang.api.secret.SecretService;
 
 import java.time.Clock;
 import java.time.Instant;

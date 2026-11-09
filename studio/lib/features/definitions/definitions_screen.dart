@@ -9,9 +9,10 @@ import '../../core/widgets.dart';
 import '../../data/api_client.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
+import '../mapper/pipeline_builder.dart';
 
-/// A JSON editor for definition kinds that have no visual designer yet (agents, pipelines). It uses the same
-/// API as the designers: optimistic-concurrency draft save, server-side validation, publish.
+/// Definition editor for agents and pipelines. Pipelines expose a visual EIP graph
+/// projection alongside JSON editing; both use the same canonical document and API.
 class DefinitionsScreen extends ConsumerStatefulWidget {
   const DefinitionsScreen({super.key, required this.kind});
   final DefinitionKind kind;
@@ -25,6 +26,7 @@ class _DefinitionsScreenState extends ConsumerState<DefinitionsScreen> {
   int? _revision;
   final _text = TextEditingController();
   bool _loading = false;
+  bool _visualBuilder = true;
   String? _error;
   String? _info;
   List<ValidationItem> _items = const [];
@@ -141,7 +143,9 @@ class _DefinitionsScreenState extends ConsumerState<DefinitionsScreen> {
         children: [
           ScreenHeader(
             title: widget.kind.label,
-            subtitle: 'JSON editor — the document is validated by the server before it can be published.',
+            subtitle: widget.kind == DefinitionKind.pipeline
+                ? 'Compose integration steps visually or edit the underlying JSON. Server validation remains authoritative.'
+                : 'JSON editor — the document is validated by the server before it can be published.',
             icon: widget.kind == DefinitionKind.agent ? Icons.smart_toy_outlined : Icons.hub_outlined,
             actions: [ElevatedButton.icon(onPressed: _new, icon: const Icon(Icons.add_rounded, size: 18), label: const Text('New'))],
           ),
@@ -179,6 +183,18 @@ class _DefinitionsScreenState extends ConsumerState<DefinitionsScreen> {
                                 Row(children: [
                                   Text(_id!, style: const TextStyle(fontWeight: FontWeight.w700)),
                                   const Spacer(),
+                                  if (widget.kind == DefinitionKind.pipeline) ...[
+                                    SegmentedButton<bool>(
+                                      showSelectedIcon: false,
+                                      segments: const [
+                                        ButtonSegment(value: true, icon: Icon(Icons.account_tree_outlined, size: 15), label: Text('Graph')),
+                                        ButtonSegment(value: false, icon: Icon(Icons.code_rounded, size: 15), label: Text('JSON')),
+                                      ],
+                                      selected: {_visualBuilder},
+                                      onSelectionChanged: (value) => setState(() => _visualBuilder = value.first),
+                                    ),
+                                    const SizedBox(width: 10),
+                                  ],
                                   OutlinedButton(onPressed: _validate, child: const Text('Validate')),
                                   const SizedBox(width: 8),
                                   OutlinedButton(onPressed: _save, child: const Text('Save draft')),
@@ -195,14 +211,20 @@ class _DefinitionsScreenState extends ConsumerState<DefinitionsScreen> {
                                   ),
                                 const SizedBox(height: 10),
                                 Expanded(
-                                  child: TextField(
-                                    controller: _text,
-                                    expands: true,
-                                    maxLines: null,
-                                    minLines: null,
-                                    textAlignVertical: TextAlignVertical.top,
-                                    style: const TextStyle(fontFamily: 'monospace', fontSize: 12.5),
-                                  ),
+                                  child: widget.kind == DefinitionKind.pipeline && _visualBuilder
+                                      ? PipelineBuilder(controller: _text)
+                                      : TextField(
+                                          controller: _text,
+                                          expands: true,
+                                          maxLines: null,
+                                          minLines: null,
+                                          textAlignVertical: TextAlignVertical.top,
+                                          style: const TextStyle(fontFamily: 'monospace', fontSize: 12.5),
+                                          decoration: const InputDecoration(
+                                            border: OutlineInputBorder(),
+                                            alignLabelWithHint: true,
+                                          ),
+                                        ),
                                 ),
                               ],
                             ),

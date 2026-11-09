@@ -11,7 +11,7 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
-import tech.kayys.andalus.execution.ExecutionContext;
+import tech.kayys.andalus.execution.GraphExecutionContext;
 import tech.kayys.andalus.execution.VariableEntry;
 import tech.kayys.andalus.execution.VariableKey;
 import tech.kayys.andalus.execution.VariableStore;
@@ -35,7 +35,7 @@ class AndalusAdapterTest {
             }
             throw new UnsupportedOperationException(m.getName());
         });
-        ExecutionContext ctx = proxy(ExecutionContext.class, (p, m, a) -> {
+        GraphExecutionContext ctx = proxy(GraphExecutionContext.class, (p, m, a) -> {
             if (m.getName().equals("variables")) {
                 return store;
             }

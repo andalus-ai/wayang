@@ -86,11 +86,11 @@ names with spaces; `==`, `&&`, `||` aliases; `"a" + 1` concatenates; `replace`/`
 |---|---|
 | Pure modules (expression, dmn, business-process, integration, agent, runtime, examples) | Compiled with `javac --release 21 -Xlint:all`; unit tests executed on a **minimal JUnit-5-API shim**, not real JUnit/Surefire |
 | Gamelan adapter | Compiled against the **real Gamelan source** with stubs for Mutiny/CDI/Vert.x only; tests drive Gamelan's real `WorkflowRun` scheduler with the compiled process (both branches complete; retries, exhausted retries and continue-on-error behave as designed). Executors' Mutiny plumbing, CDI wiring and transport were **not executed** |
-| Andalus adapter | Compiled against real Andalus framework source (stub for Jackson YAML only; the `andalus-extension` files had to be passed explicitly because their directories do not match their packages). `ExecutionService` is exercised through a dynamic proxy; **no real Andalus runtime** was started |
+| Andalus adapter | **Not in the default build (`-Pandalus`).** Its contracts (`tech.kayys.andalus.execution.*`, `plugin.spi.node.*`, `service.ExecutionService`, artifacts `andalus-engine` / `andalus-plugin-spi`) live in `andalus-ai/andalus-framework`, not `andalus-ai/andalus`. The `andalus` CI job builds those two modules from framework `main` and then the adapter; it is green since andalus-framework#151 fixed `andalus-engine`'s build (unparseable pom, missing junit dependency), but it only proves the adapter compiles and its proxy-based tests pass. `ExecutionService` is exercised through a dynamic proxy; **no real Andalus runtime** was started |
 | JDBC stores | `JdbcWaitRegistry` and `JdbcDefinitionStore` **pass their contracts (`WaitRegistryContract`, `DefinitionStoreContract`, incl. 8 concurrent publishers) and an API lifecycle test against a real PostgreSQL 16** (driver 42.7.2). Mutation-checked: breaking the revision check makes the contract fail. Other databases, connection pools and multi-node timing were **not** tested. ITs run when `WAYANG_TEST_JDBC_URL` is set |
 | API core (`wayang-api-core`) | Compiled and tested (15 tests on the shim) incl. tenant isolation, RBAC, draft CAS, publish checks, WS session |
 | Gamelan run engine (`GamelanRunEngine`) | Compiled against real Gamelan SDK source; 7 tests against an **in-memory fake of the Gamelan client SDK** (deploy-once under `tenant~process`, waiting/complete/cancel, tenant isolation, polling events, failure mapping). **Never run against a real Gamelan server.** Assumptions to verify live: status strings, `history.tenantId`, "already exists" error text on redeploy, `getRun` 404 text |
-| HTTP connector (`wayang-connectors`) | 11 tests against a **real local HTTP server**: JSON/text, header merge, status->retryability, redirects refused, size/time limits, header-injection refusal, SSRF guard (loopback, metadata, private, ULA, CGNAT, IPv4-mapped, non-http schemes, URL credentials), plus a full process run with a secret header; guard and no-redirect behaviour mutation-checked. **Not verified:** TLS/proxies, DNS-rebinding (documented residual risk), HTTP/2 specifics |
+| HTTP connector (`wayang-connectors`) | 11 tests against a **real local HTTP server**: JSON/text, header merge, status->retryability, redirects refused, size/time limits, header-injection refusal, SSRF guard (loopback, metadata, private, ULA, CGNAT, IPv4-mapped, non-http schemes, URL credentials), plus a full process run with a secret header; guard and no-redirect behaviour mutation-checked. **Not verified:** TLS/proxies, DNS-rebinding on a JVM with the address cache off (documented residual risk; the default cache pins the answer, shown with a flipping resolver outside the test suite), HTTP/2 specifics |
 | Secrets (`SecretCipher`, `SecretService`, `NodeRunner` resolution) | 18 unit tests incl. tamper / wrong tenant / wrong name+version (AAD) / rotation / redaction / expression-injection refusal; `JdbcSecretStore` passes `SecretStoreContract` on **PostgreSQL 16**. Master keys can come from config, a mounted file or HashiCorp Vault (`docs/WORKSPACE.md`); no cloud KMS |
 | Collaboration rooms (`Rooms`, `WsSession`) | 6 unit tests (tenant isolation, server-stamped identity, RBAC, limits, dead peer). Single node only |
 | API server (`wayang-api-rest`) | REST/WebSocket/scheduler classes compile against **hand-written stubs of the Jakarta/Quarkus annotations** (consistency check only). The gRPC service and `.proto` were **never compiled** (no protoc/gRPC jars). OIDC config is unverified |
@@ -113,3 +113,25 @@ names with spaces; `==`, `&&`, `||` aliases; `"a" + 1` concatenates; `replace`/`
 - Message buffer is not tenant-namespaced (a buffered message can be consumed by another tenant's waiter with the same name+key).
 - Flutter web cannot send an Authorization header on WebSocket upgrade: needs a short-lived ticket endpoint. gRPC needs grpc-web for Flutter web.
 - No audit log, rate limiting or pagination cursors on the API yet.
+
+## Package map of `wayang-api-core`
+
+`tech.kayys.wayang.api` holds only the facade and shared vocabulary; everything else is grouped by concern.
+
+| Package | Contents |
+|---|---|
+| `api` | `WayangApi` (facade), `ApiException`, `Principal`, `Role`, `TenantGate`, `Views`, `RateLimiter` |
+| `api.definition` | definition store/kinds, `NodeCatalog`, `Studio` document helpers, `AutoLayout`, `JsonSchemaLite`, validation, mapper |
+| `api.project` | projects, workspace import/export (`WorkspaceService`, `WorkspaceBundle`), `TemplateService`, `ReleaseService` |
+| `api.run` | `RunEngine`, `ReferenceRunEngine`, run/task views, `EventBus`, WebSocket rooms/sessions/tickets, collect sweep |
+| `api.trigger` | `Trigger`, `TriggerStore`, `TriggerService` |
+| `api.secret` | secret store/service, sealing and keyrings, archives, file resolver |
+| `api.secret.cloud` | Vault, AWS, Azure, GCP secret backends and their HTTP/token helpers |
+| `api.config` | non-secret settings (`ConfigStore`, `ConfigService`) |
+| `api.oauth` | OAuth connections, store and service |
+| `api.mcp` | MCP server definitions, store, service, process-as-MCP-tool |
+| `api.audit` | audit entries, store, service |
+| `api.connector` | connector inspection and test calls |
+| `api.testkit` | store contract tests reused by persistence modules |
+
+Tests live in the package of the class they exercise.

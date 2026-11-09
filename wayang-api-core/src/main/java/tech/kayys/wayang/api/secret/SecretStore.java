@@ -1,4 +1,4 @@
-package tech.kayys.wayang.api;
+package tech.kayys.wayang.api.secret;
 
 import java.util.List;
 import java.util.Optional;

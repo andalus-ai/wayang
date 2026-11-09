@@ -1,4 +1,6 @@
-package tech.kayys.wayang.api;
+package tech.kayys.wayang.api.secret;
+
+import tech.kayys.wayang.api.secret.cloud.VaultSecretResolver;
 
 import java.io.IOException;
 import java.nio.charset.CharacterCodingException;

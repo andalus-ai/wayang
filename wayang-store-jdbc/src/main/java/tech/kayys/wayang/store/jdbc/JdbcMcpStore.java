@@ -12,8 +12,8 @@ import java.util.Optional;
 import javax.sql.DataSource;
 
 import tech.kayys.wayang.api.ApiException;
-import tech.kayys.wayang.api.McpServerDef;
-import tech.kayys.wayang.api.McpStore;
+import tech.kayys.wayang.api.mcp.McpServerDef;
+import tech.kayys.wayang.api.mcp.McpStore;
 import tech.kayys.wayang.runtime.json.Json;
 
 /** {@link McpStore} over plain JDBC. The definition (tools, header templates with secret references) is one JSON document. */

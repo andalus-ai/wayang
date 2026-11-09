@@ -61,3 +61,12 @@ rotation, single-use/expiry of state, revocation, tenant isolation, header injec
 gating, MIME round-trip; JDBC store against PostgreSQL 16. **Not** verified against real Google: endpoint paths follow
 Google's documentation, but no live token exchange or Gmail call has been made, and the REST resources compile only
 against hand-written stubs.
+
+## Reading mail from an agent (`gmail` connector, operations `search` and `read`)
+
+Read-only, same `accessToken` (`gmail.readonly` scope). `search`: inputs `q` (Gmail syntax, one line, 200 characters) and `max`
+(1 to 10) return `messages[]` with `messageId, from, subject, date, authenticated, snippet`. `read`: input `messageId` returns the
+same fields plus `body` (plain text, clipped to 8000 characters). `authenticated` is true only when Gmail's own
+Authentication-Results shows DKIM or SPF pass. Mail is other people's text: agents are told to treat it as data, never
+instructions. The assistant templates add `email_search` and `email_read` (no approval needed) next to the approval-gated
+`email_send` when `emailRecipients` is set.

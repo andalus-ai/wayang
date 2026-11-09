@@ -16,8 +16,8 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import io.smallrye.common.annotation.Blocking;
-import tech.kayys.wayang.api.RunView;
-import tech.kayys.wayang.api.TaskView;
+import tech.kayys.wayang.api.run.RunView;
+import tech.kayys.wayang.api.run.TaskView;
 import tech.kayys.wayang.api.WayangApi;
 
 /** Runs, human tasks, messages, authoring aids and admin operations. */

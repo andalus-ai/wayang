@@ -15,7 +15,7 @@ final class GamelanTemplates {
     private GamelanTemplates() {
     }
 
-    static String pom(ReleaseOptions o, ReleaseBundle b, boolean connectors) {
+    static String pom(ReleaseOptions o, ReleaseBundle b, boolean connectors, boolean multimodal) {
         return """
                 <?xml version="1.0" encoding="UTF-8"?>
                 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -95,13 +95,7 @@ final class GamelanTemplates {
                 </project>
                 """.formatted(Publisher.xmlText(o.groupId()), Publisher.xmlText(o.artifactId()), Publisher.xmlText(o.version()),
                 Publisher.xmlText(Publisher.safe(b.name())), Publisher.xmlText(o.wayangVersion()), Publisher.xmlText(o.gamelanVersion()),
-                Publisher.xmlText(o.quarkusVersion()), connectors ? """
-                                <dependency>
-                                    <groupId>tech.kayys.wayang</groupId>
-                                    <artifactId>wayang-connectors</artifactId>
-                                    <version>${wayang.version}</version>
-                                </dependency>
-                        """ : "");
+                Publisher.xmlText(o.quarkusVersion()), (connectors ? Publisher.CONNECTORS_DEP : "") + (multimodal ? Publisher.MULTIMODAL_DEP : ""));
     }
 
     static String applicationProperties(ReleaseOptions o) {
@@ -356,10 +350,10 @@ final class GamelanTemplates {
                 WORKDIR /app
                 COPY --from=build /src/target/quarkus-app/ /app/
                 USER 10001
-                ENV WAYANG_BIND=0.0.0.0 WAYANG_PORT=%2$d
+                ENV WAYANG_BIND=0.0.0.0 WAYANG_PORT=%2$d WAYANG_PROFILE=%3$s
                 EXPOSE %2$d
                 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/quarkus-run.jar"]
-                """.formatted(o.artifactId(), o.port());
+                """.formatted(o.artifactId(), o.port(), o.profile());
     }
 
     static String envExample(List<String> extra) {

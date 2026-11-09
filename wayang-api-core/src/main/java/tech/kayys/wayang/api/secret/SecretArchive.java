@@ -1,4 +1,7 @@
-package tech.kayys.wayang.api;
+package tech.kayys.wayang.api.secret;
+
+import tech.kayys.wayang.api.ApiException;
+import tech.kayys.wayang.api.project.WorkspaceBundle;
 
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;

@@ -1,5 +1,21 @@
 package tech.kayys.wayang.api;
 
+import tech.kayys.wayang.api.definition.AutoLayout;
+import tech.kayys.wayang.api.definition.DefinitionKind;
+import tech.kayys.wayang.api.definition.DefinitionStore;
+import tech.kayys.wayang.api.run.EventBus;
+import tech.kayys.wayang.api.definition.NodeCatalog;
+import tech.kayys.wayang.api.project.Project;
+import tech.kayys.wayang.api.project.ProjectStore;
+import tech.kayys.wayang.api.run.ReferenceRunEngine;
+import tech.kayys.wayang.api.run.RunEngine;
+import tech.kayys.wayang.api.run.RunEvent;
+import tech.kayys.wayang.api.run.RunView;
+import tech.kayys.wayang.api.definition.StoredDefinition;
+import tech.kayys.wayang.api.definition.Studio;
+import tech.kayys.wayang.api.run.TaskView;
+import tech.kayys.wayang.api.definition.ValidationReport;
+
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -22,6 +38,11 @@ import tech.kayys.wayang.eip.EipLoader;
 import tech.kayys.wayang.eip.IdempotencyStore;
 import tech.kayys.wayang.expression.Expressions;
 import tech.kayys.wayang.runtime.WaitRegistry;
+import tech.kayys.wayang.runtime.ComponentRegistry;
+import tech.kayys.wayang.runtime.ComponentDescriptor;
+import tech.kayys.wayang.runtime.ComponentIdentity;
+import tech.kayys.wayang.runtime.ComponentRequirements;
+import tech.kayys.wayang.runtime.Extensions;
 import tech.kayys.wayang.runtime.json.Json;
 
 /**
@@ -42,6 +63,34 @@ public final class WayangApi {
     private final WaitRegistry waits;
     private final EventBus bus;
     private final Clock clock;
+
+    private volatile tech.kayys.wayang.runtime.Profile profile = tech.kayys.wayang.runtime.Profile.fromEnvironment();
+    private volatile ComponentRegistry componentRegistry;
+
+    /** Which features this deployment serves: hides the rest from the palette and refuses to save them. */
+    public WayangApi withProfile(tech.kayys.wayang.runtime.Profile profile) {
+        this.profile = profile;
+        this.componentRegistry = null;
+        return this;
+    }
+
+    public tech.kayys.wayang.runtime.Profile profile() {
+        return profile;
+    }
+
+    private ComponentRegistry componentRegistry() {
+        ComponentRegistry current = componentRegistry;
+        if (current == null) {
+            synchronized (this) {
+                current = componentRegistry;
+                if (current == null) {
+                    current = ComponentRegistry.standard(profile, Extensions.load(profile));
+                    componentRegistry = current;
+                }
+            }
+        }
+        return current;
+    }
 
     public WayangApi(DefinitionStore store, RunEngine engine, WaitRegistry waits, EventBus bus, Clock clock) {
         this(store, new ProjectStore.InMemory(), engine, waits, bus, clock);
@@ -163,12 +212,47 @@ public final class WayangApi {
             switch (kind) {
                 case PROCESS -> {
                     ProcessModel m = ProcessMaps.fromMap(doc);
+                    List<String> explicitComponentIds = new ArrayList<>();
+                    for (var element : m.elements().values()) {
+                        try {
+                            ComponentIdentity identity = ComponentIdentity.fromConfiguration(element.config());
+                            if (identity != null) explicitComponentIds.add(identity.id());
+                        } catch (IllegalArgumentException ex) {
+                            items.add(new ValidationReport.Item("ERROR", element.id(), "component binding: " + ex.getMessage()));
+                        }
+                    }
+                    try {
+                        ComponentRequirements.resolve(
+                                m.elements().values().stream().map(e -> e.type()).toList(),
+                                explicitComponentIds, componentRegistry());
+                    } catch (ComponentRegistry.ComponentResolutionException e) {
+                        items.add(new ValidationReport.Item("ERROR", null, "component requirements: " + e.getMessage()));
+                    }
                     for (Issue i : m.validate()) {
                         items.add(new ValidationReport.Item(i.severity().name(), i.elementId(), i.message()));
                     }
                     for (var e : m.elements().values()) {
+                        if (!profile.allows(e.type())) {
+                            items.add(new ValidationReport.Item("ERROR", e.id(), e.type() + " is not available in the '" + profile + "' profile"));
+                        }
                         for (String problem : NodeCatalog.validateConfig(e.type(), e.config())) {
                             items.add(new ValidationReport.Item("ERROR", e.id(), "config " + problem));
+                        }
+                        try {
+                            ComponentIdentity identity = ComponentIdentity.fromConfiguration(e.config());
+                            if (identity != null) {
+                                ComponentDescriptor descriptor = componentRegistry().find(identity.id());
+                                if (descriptor == null) {
+                                    items.add(new ValidationReport.Item("ERROR", e.id(),
+                                            "component '" + identity.id() + "' is not available in profile '" + profile.name() + "'"));
+                                } else if (identity.version() != null && !descriptor.version().equals(identity.version())) {
+                                    items.add(new ValidationReport.Item("ERROR", e.id(),
+                                            "component version mismatch for '" + identity.id() + "': requested="
+                                                    + identity.version() + ", available=" + descriptor.version()));
+                                }
+                            }
+                        } catch (IllegalArgumentException ex) {
+                            items.add(new ValidationReport.Item("ERROR", e.id(), "component binding: " + ex.getMessage()));
                         }
                     }
                     if (items.stream().noneMatch(i -> i.severity().equals("ERROR"))) {
@@ -311,7 +395,7 @@ public final class WayangApi {
     /** The Studio palette with config schemas. */
     public List<Map<String, Object>> nodeCatalog(Principal p) {
         requireAnywhere(p, Permission.DEFINITION_READ);
-        return NodeCatalog.entries().stream().map(NodeCatalog.Entry::toMap).toList();
+        return NodeCatalog.entries().stream().filter(e -> profile.allows(tech.kayys.wayang.bpmn.ElementType.valueOf(e.type()))).map(NodeCatalog.Entry::toMap).toList();
     }
 
     public Object evalExpression(Principal p, String expression, Map<String, Object> variables) {
@@ -448,7 +532,7 @@ public final class WayangApi {
 
     /**
      * Delivers a correlated message to a waiting run of the caller's tenant, or
-     * buffers it. Known limitation: the buffer is not tenant-namespaced. A project-scoped caller may only
+     * buffers it. The wait and the buffer are private to the tenant (the key is namespaced). A project-scoped caller may only
      * deliver to a run of its own project and cannot buffer (a buffered message is not tied to any project).
      */
     public String sendMessage(Principal p, String name, String correlationKey, Map<String, Object> payload) {
@@ -457,6 +541,7 @@ public final class WayangApi {
             throw ApiException.badRequest("name and correlationKey are required");
         }
         Map<String, Object> body = payload == null ? Map.of() : payload;
+        correlationKey = tech.kayys.wayang.runtime.WaitRegistry.scoped(p.tenantId(), correlationKey); // private to the tenant
         var w = waits.findMessage(name, correlationKey);
         if (w.isPresent() && engine.get(p.tenantId(), w.get().runId()).isPresent()) {
             if (!canOnRun(p, Permission.MESSAGE_SEND, w.get().runId())) {

@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
+import '../../core/widgets.dart';
 import '../../plugins/plugin.dart';
 import '../../plugins/registry.dart';
 import '../../providers/app_providers.dart';
 import '../dashboard/dashboard_screen.dart';
+import '../components/component_catalog_screen.dart';
 import '../projects/projects_screen.dart';
 import '../runs/runs_screen.dart';
 import '../channels/channels_screen.dart';
@@ -29,6 +31,7 @@ class _NavItem {
 }
 
 const _platformScreenBuilders = <String, WidgetBuilder>{
+  'components': _componentsBuilder,
   'runs': _runsBuilder,
   'tasks': _tasksBuilder,
   'projects': _projectsBuilder,
@@ -41,6 +44,7 @@ const _platformScreenBuilders = <String, WidgetBuilder>{
   'settings': _settingsBuilder,
 };
 
+Widget _componentsBuilder(BuildContext context) => const ComponentCatalogScreen();
 Widget _runsBuilder(BuildContext context) => const RunsScreen();
 Widget _tasksBuilder(BuildContext context) => const TasksScreen();
 Widget _projectsBuilder(BuildContext context) => const ProjectsScreen();
@@ -158,6 +162,25 @@ class _NavRail extends ConsumerWidget {
                 ),
               ),
               const Divider(height: 1),
+              if (extended)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+                  child: Row(
+                    children: const [
+                      Icon(Icons.edit_note_rounded, size: 15, color: AppColors.primaryBright),
+                      SizedBox(width: 7),
+                      Text(
+                        'COMPOSE WORKSPACE',
+                        style: TextStyle(
+                          color: AppColors.textMutedDark,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               Expanded(
                 child: ListView(
                   padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
@@ -254,9 +277,28 @@ class _TopBar extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(width: 14),
-          _EnvPill(label: project == null ? 'All projects' : 'Project: $project'),
+          Flexible(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          const SizedBox(width: 10),
+          const StatusPill(
+            label: 'COMPOSE',
+            color: AppColors.primaryBright,
+            dense: true,
+            icon: Icons.edit_note_rounded,
+          ),
+          const SizedBox(width: 10),
+          if (MediaQuery.sizeOf(context).width >= 680)
+            Flexible(
+              child: _EnvPill(
+                label: project == null ? 'All projects' : 'Project: $project',
+              ),
+            ),
           const Spacer(),
           IconButton(
             tooltip: 'Toggle theme',

@@ -4,7 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import io.quarkus.scheduler.Scheduled;
-import tech.kayys.wayang.api.RunEngine;
+import tech.kayys.wayang.api.run.RunEngine;
 
 /**
  * Background duties: fire due timers every few seconds and, with the Gamelan
@@ -17,9 +17,9 @@ public class TimerTicker {
     @Inject
     RunEngine engine;
     @Inject
-    tech.kayys.wayang.api.TriggerService triggers;
+    tech.kayys.wayang.api.trigger.TriggerService triggers;
     @Inject
-    tech.kayys.wayang.api.CollectSweepService collects;
+    tech.kayys.wayang.api.run.CollectSweepService collects;
 
     @Scheduled(every = "{wayang.timers.interval:5s}", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void tick() {

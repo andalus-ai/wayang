@@ -12,7 +12,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import io.smallrye.common.annotation.Blocking;
-import tech.kayys.wayang.api.ReleaseService;
+import tech.kayys.wayang.api.project.ReleaseService;
 
 /**
  * From a designed project to something that runs without this server. {@code plan} says what a release would contain; the other

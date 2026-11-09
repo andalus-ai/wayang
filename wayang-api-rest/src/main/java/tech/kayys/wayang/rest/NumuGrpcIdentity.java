@@ -13,7 +13,6 @@ import io.quarkus.grpc.GrpcClient;
 import tech.kayys.numou.identity.grpc.AuthCheckService;
 import tech.kayys.numou.identity.grpc.CheckPermissionsRequest;
 import tech.kayys.numou.identity.grpc.PathPermissionPair;
-import tech.kayys.numou.identity.grpc.PrincipalType;
 import tech.kayys.numou.identity.grpc.ResolvePrincipalRequest;
 import tech.kayys.wayang.numu.NumuIdentity;
 
@@ -42,12 +41,13 @@ public class NumuGrpcIdentity implements NumuIdentity {
             if (!r.getValid()) {
                 return Optional.empty();
             }
-            PrincipalType type = r.getPrincipalType();
-            if (type != PrincipalType.USER && type != PrincipalType.SERVICE_ACCOUNT) {
+            // the gRPC enum is qualified: inside this class the simple name PrincipalType is NumuIdentity.PrincipalType
+            tech.kayys.numou.identity.grpc.PrincipalType type = r.getPrincipalType();
+            if (type != tech.kayys.numou.identity.grpc.PrincipalType.USER && type != tech.kayys.numou.identity.grpc.PrincipalType.SERVICE_ACCOUNT) {
                 return Optional.empty(); // unspecified or unknown: do not guess
             }
             return Optional.of(new Resolved(
-                    type == PrincipalType.USER ? NumuIdentity.PrincipalType.USER : NumuIdentity.PrincipalType.SERVICE_ACCOUNT,
+                    type == tech.kayys.numou.identity.grpc.PrincipalType.USER ? NumuIdentity.PrincipalType.USER : NumuIdentity.PrincipalType.SERVICE_ACCOUNT,
                     UUID.fromString(r.getPrincipalId()), r.getDisplayName()));
         } catch (RuntimeException e) {
             throw new IdentityUnavailableException("Numu ResolvePrincipal failed", e);
@@ -58,7 +58,7 @@ public class NumuGrpcIdentity implements NumuIdentity {
     public List<Boolean> check(Resolved principal, List<Check> checks) {
         try {
             var req = CheckPermissionsRequest.newBuilder()
-                    .setPrincipalType(principal.type() == NumuIdentity.PrincipalType.USER ? PrincipalType.USER : PrincipalType.SERVICE_ACCOUNT)
+                    .setPrincipalType(principal.type() == NumuIdentity.PrincipalType.USER ? tech.kayys.numou.identity.grpc.PrincipalType.USER : tech.kayys.numou.identity.grpc.PrincipalType.SERVICE_ACCOUNT)
                     .setPrincipalId(principal.id().toString());
             for (Check c : checks) {
                 req.addChecks(PathPermissionPair.newBuilder().setRequestedPath(c.path()).setRequiredPermission(c.permission()));

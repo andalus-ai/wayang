@@ -242,4 +242,30 @@ class GmailTest {
         var e = assertThrows(OAuthTokenEndpoint.OAuthError.class, () -> http.post(url, Map.of("refresh_token", "bad")));
         assertEquals("invalid_grant", e.error());
     }
+
+    @Test
+    void searchAndReadAreReadOnlyAndBounded() throws Exception {
+        listAnswer = "{\"messages\":[{\"id\":\"m1\"},{\"id\":\"../evil\"},{\"id\":\"m2\"}]}";
+        messages.put("m1", msg("m1", 5000, "Big Boss <boss@x.com>", "Plan", PASS, "Hello plan"));
+        messages.put("m2", msg("m2", 6000, "spam@y.com", "Win", null, "click here"));
+        @SuppressWarnings("unchecked")
+        var found = (java.util.List<Map<String, Object>>) sender.call(cfg("operation", "search"), Map.of("q", "from:boss", "max", 99)).get("messages");
+        assertEquals(2, found.size(), "a malformed id is skipped, never fetched");
+        assertEquals("Plan", found.get(0).get("subject"));
+        assertEquals(true, found.get(0).get("authenticated"));
+        assertEquals(false, found.get(1).get("authenticated"));
+        assertFalse(found.get(0).containsKey("body"));
+        assertTrue(seen.stream().anyMatch(x -> x.contains("maxResults=10") && x.contains("auth=Bearer ya29.token")), seen.toString());
+        assertTrue(seen.stream().allMatch(x -> x.startsWith("GET ")), "search never writes");
+
+        Map<String, Object> one = sender.call(cfg("operation", "read"), Map.of("messageId", "m1"));
+        assertEquals("Hello plan", one.get("body"));
+        messages.put("big", msg("big", 7000, "a@x.com", "Long", PASS, "x".repeat(20000)));
+        assertEquals(8000, ((String) sender.call(cfg("operation", "read"), Map.of("messageId", "big")).get("body")).length());
+        for (Map<String, Object> bad : List.<Map<String, Object>>of(Map.of(), Map.of("messageId", "../x"), Map.of("messageId", "a b"))) {
+            assertThrows(ServiceHandler.ConnectorException.class, () -> sender.call(cfg("operation", "read"), bad), bad.toString());
+        }
+        assertThrows(ServiceHandler.ConnectorException.class, () -> sender.call(cfg("operation", "search"), Map.of("q", "a\nb")));
+        assertThrows(ServiceHandler.ConnectorException.class, () -> sender.call(cfg("operation", "search"), Map.of("q", "x".repeat(201))));
+    }
 }

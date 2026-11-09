@@ -1,4 +1,4 @@
-package tech.kayys.wayang.api;
+package tech.kayys.wayang.api.secret.cloud;
 
 import java.io.IOException;
 import java.io.InputStream;

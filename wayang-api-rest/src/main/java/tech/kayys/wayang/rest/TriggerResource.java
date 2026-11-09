@@ -21,8 +21,8 @@ import jakarta.ws.rs.core.Response;
 
 import io.smallrye.common.annotation.Blocking;
 import tech.kayys.wayang.api.ApiException;
-import tech.kayys.wayang.api.Trigger;
-import tech.kayys.wayang.api.TriggerService;
+import tech.kayys.wayang.api.trigger.Trigger;
+import tech.kayys.wayang.api.trigger.TriggerService;
 
 /**
  * Manage triggers (authenticated) and receive webhooks (authenticated by the trigger's own secret, so it lives

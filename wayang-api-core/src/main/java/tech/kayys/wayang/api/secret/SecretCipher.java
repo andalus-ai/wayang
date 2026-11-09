@@ -1,4 +1,4 @@
-package tech.kayys.wayang.api;
+package tech.kayys.wayang.api.secret;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;

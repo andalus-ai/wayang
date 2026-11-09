@@ -1,4 +1,6 @@
-package tech.kayys.wayang.api;
+package tech.kayys.wayang.api.secret.cloud;
+
+import tech.kayys.wayang.api.CloudBackend;
 
 import java.net.URI;
 import java.nio.ByteBuffer;

@@ -10,7 +10,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
 import io.smallrye.common.annotation.Blocking;
-import tech.kayys.wayang.api.MapperService;
+import tech.kayys.wayang.api.definition.MapperService;
 
 /** Dry-run of mapper specs and EIP pipelines for the Studio editor. No side effects, no connectors. */
 @Path("/api/v1/mapper")

@@ -59,6 +59,49 @@ public final class NodeRunner {
             tech.kayys.wayang.bpmn.ElementType.EIP_TASK);
     private static final java.util.regex.Pattern SECRET_REF = java.util.regex.Pattern.compile("\\$\\{(secret|config):([A-Za-z0-9_.-]{1,100})}");
 
+    /** Drops handlers the profile does not serve; nodes needing them then fail with a clear message. */
+    public NodeRunner withProfile(Profile profile) {
+        java.util.Objects.requireNonNull(profile, "profile");
+        if (componentCatalog != null && !componentCatalog.profile().name().equals(profile.name())) {
+            throw new IllegalArgumentException("Component catalog profile '" + componentCatalog.profile().name()
+                    + "' does not match requested NodeRunner profile '" + profile.name() + "'");
+        }
+        this.profile = profile;
+        handlers.keySet().removeIf(t -> !profile.allowsExecutor(t));
+        return this;
+    }
+
+    /** Adds extension handlers (custom executor types); a type that is already served is an error. */
+    public NodeRunner withExtensions(Extensions extensions) {
+        for (DomainHandler h : extensions.handlers()) {
+            if (handlers.putIfAbsent(h.executorType(), h) != null) {
+                throw new IllegalArgumentException("Two handlers for executor type " + h.executorType());
+            }
+        }
+        return this;
+    }
+
+    private Profile profile = Profile.FULL;
+    private ComponentExecutorCatalog componentCatalog;
+
+    /**
+     * Enables explicit component-ID dispatch for nodes that declare
+     * {@code wayang.component.id}. Nodes without that declaration continue
+     * through the legacy executor-family handler path.
+     *
+     * <p>The catalog must be resolved for the same profile as this runner.
+     * Component execution remains inside this runner's existing active-node,
+     * retry, output-merging, and secret-redaction lifecycle.</p>
+     */
+    public NodeRunner withComponentCatalog(ComponentExecutorCatalog catalog) {
+        if (catalog != null && !catalog.profile().name().equals(profile.name())) {
+            throw new IllegalArgumentException("Component catalog profile '" + catalog.profile().name()
+                    + "' does not match NodeRunner profile '" + profile.name() + "'");
+        }
+        this.componentCatalog = catalog;
+        return this;
+    }
+
     public boolean supports(String executorType) {
         return handlers.containsKey(executorType);
     }
@@ -98,10 +141,6 @@ public final class NodeRunner {
                 return new NodeOutcome.Completed(FlowRuntime.deadOutputs(node));
             }
             DomainHandler h = handlers.get(node.executorType());
-            if (h == null) {
-                return new NodeOutcome.Failed("No handler registered for executor type '" + node.executorType()
-                        + "' (node " + node.id() + ")", false);
-            }
             java.util.Set<String> used = new java.util.LinkedHashSet<>();
             PlanNode effective = node;
             if ((secrets != null || config != null) && SECRET_ELEMENTS.contains(node.type())) {
@@ -109,7 +148,25 @@ public final class NodeRunner {
                 String process = vars.get(SecretResolver.PROCESS_VARIABLE) instanceof String pr ? pr : null;
                 effective = withResolvedSecrets(runId, node, tenant, process, used);
             }
-            NodeOutcome o = h.handle(runId, effective, vars);
+            NodeOutcome o;
+            ComponentIdentity identity = ComponentIdentity.fromConfiguration(effective.config());
+            if (identity != null) {
+                if (componentCatalog == null) {
+                    return new NodeOutcome.Failed("Node " + node.id()
+                            + " declares component '" + identity.id() + "' but no component catalog is configured", false);
+                }
+                o = executeComponent(runId, effective, vars, identity);
+            } else {
+                if (h == null) {
+                    if (!profile.allowsExecutor(node.executorType())) {
+                        return new NodeOutcome.Failed("Node " + node.id() + " needs " + node.executorType()
+                                + ", which the '" + profile.name() + "' profile does not enable", false);
+                    }
+                    return new NodeOutcome.Failed("No handler registered for executor type '" + node.executorType()
+                            + "' (node " + node.id() + ")", false);
+                }
+                o = h.handle(runId, effective, vars);
+            }
             if (!used.isEmpty()) {
                 o = redact(o, used);
             }
@@ -124,6 +181,44 @@ public final class NodeRunner {
         } catch (RuntimeException e) {
             return new NodeOutcome.Failed(node.id() + ": " + e.getClass().getSimpleName() + ": " + e.getMessage(), false);
         }
+    }
+
+    private NodeOutcome executeComponent(String runId, PlanNode node, Map<String, Object> vars,
+            ComponentIdentity identity) {
+        ComponentDescriptor descriptor = componentCatalog.components().stream()
+                .filter(candidate -> candidate.id().equals(identity.id()))
+                .findFirst().orElse(null);
+        if (descriptor == null) {
+            return new NodeOutcome.Failed("Component '" + identity.id()
+                    + "' is not part of the resolved runtime catalog", false);
+        }
+        if (identity.version() != null && !descriptor.version().equals(identity.version())) {
+            return new NodeOutcome.Failed("Component version mismatch for '" + identity.id()
+                    + "': requested=" + identity.version() + ", resolved=" + descriptor.version(), false);
+        }
+        Map<String, Object> configuration = new java.util.LinkedHashMap<>();
+        configuration.put("wayang.planNode", node.toConfiguration());
+        configuration.put("componentConfig", node.config());
+        ExecutionRequest request = new ExecutionRequest(runId, identity.id(), descriptor.version(), identity.operation(),
+                vars, configuration, ExecutionMetadata.empty());
+        ComponentExecutionResult result = componentCatalog.executors().execute(request);
+        if (result instanceof ComponentExecutionResult.Completed completed) {
+            return new NodeOutcome.Completed(completed.outputs());
+        }
+        if (result instanceof ComponentExecutionResult.Suspended suspended) {
+            Map<String, Object> details = new java.util.LinkedHashMap<>(suspended.details());
+            Object kind = details.remove("kind");
+            return new NodeOutcome.Waiting(new WaitTicket(suspended.resumeToken(), node.id(),
+                    kind == null ? "component" : String.valueOf(kind), details));
+        }
+        if (result instanceof ComponentExecutionResult.Rejected rejected) {
+            return new NodeOutcome.Failed("Component dispatch rejected [" + rejected.code() + "]: "
+                    + rejected.message(), false);
+        }
+        if (result instanceof ComponentExecutionResult.Failed failed) {
+            return new NodeOutcome.Failed(failed.message(), failed.retryable());
+        }
+        return new NodeOutcome.Failed("Unsupported component execution result: " + result.getClass().getName(), false);
     }
 
     /** Completes a parked node once its ticket was fulfilled. */

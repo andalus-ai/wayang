@@ -8,7 +8,7 @@ import jakarta.inject.Inject;
 import tech.kayys.wayang.adapter.gamelan.StoreBackedComponents;
 import tech.kayys.wayang.adapter.gamelan.WayangComponents;
 import tech.kayys.wayang.agent.AgentSpec;
-import tech.kayys.wayang.api.DefinitionStore;
+import tech.kayys.wayang.api.definition.DefinitionStore;
 import tech.kayys.wayang.dmn.DecisionModel;
 import tech.kayys.wayang.runtime.WaitRegistry;
 

@@ -83,7 +83,7 @@ public class WayangRuntime {
 
     /** Delivers (or buffers) a message for a message-catch event. */
     public TimerService.Delivery deliverMessage(String name, String correlationKey, Map<String, Object> payload) {
-        return timers().deliver(name, correlationKey, payload == null ? Map.of() : payload);
+        return timers().deliver(tech.kayys.wayang.embed.ReleaseEngine.TENANT, name, correlationKey, payload == null ? Map.of() : payload);
     }
 
     private TimerService timers() {
@@ -99,6 +99,8 @@ public class WayangRuntime {
         NodeRunner runner = new NodeRunner(List.of(new ControlHandler(registry), new HumanHandler(registry),
                 new DmnHandler(c.decisionLookup()), new EipHandler(c.idempotencyStore(), c.connectors(), c.claimStore(), c.aggregationStore(), new tech.kayys.wayang.eip.EipState()),
                 new AgentHandler(c.agentInvoker(), c.agentLookup()).withMemory(c.conversationMemory()), new ServiceHandler(c.connectors())));
+        tech.kayys.wayang.runtime.Profile profile = tech.kayys.wayang.runtime.Profile.fromEnvironment();
+        runner.withProfile(profile).withExtensions(tech.kayys.wayang.runtime.Extensions.load(profile));
         tech.kayys.wayang.runtime.SecretResolver secrets = c.secretResolver();
         tech.kayys.wayang.runtime.ConfigResolver config = c.configResolver();
         if (config != null) {

@@ -5,8 +5,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
-import tech.kayys.wayang.api.AuditEntry;
-import tech.kayys.wayang.api.AuditStore;
+import tech.kayys.wayang.api.audit.AuditEntry;
+import tech.kayys.wayang.api.audit.AuditStore;
 
 /** Behavioural contract for {@link AuditStore} implementations (pass a factory returning an empty store). */
 public final class AuditStoreContract {

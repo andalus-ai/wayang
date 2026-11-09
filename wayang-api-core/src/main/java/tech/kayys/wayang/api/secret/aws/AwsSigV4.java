@@ -1,4 +1,4 @@
-package tech.kayys.wayang.api;
+package tech.kayys.wayang.api.secret.cloud;
 
 import java.net.URI;
 import java.net.URLEncoder;

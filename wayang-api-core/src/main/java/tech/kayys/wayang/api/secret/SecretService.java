@@ -1,4 +1,9 @@
-package tech.kayys.wayang.api;
+package tech.kayys.wayang.api.secret;
+
+import tech.kayys.wayang.api.ApiException;
+import tech.kayys.wayang.api.Permission;
+import tech.kayys.wayang.api.Principal;
+import tech.kayys.wayang.api.secret.cloud.VaultSecretResolver;
 
 import java.time.Clock;
 import java.util.List;
@@ -49,11 +54,11 @@ public final class SecretService implements SecretResolver {
     }
 
     /** Platform use only (OAuth refresh tokens); not reachable from the API. */
-    void putSystem(String tenant, String name, String value, String by) {
+    public void putSystem(String tenant, String name, String value, String by) {
         write(tenant, name, value, by);
     }
 
-    boolean deleteSystem(String tenant, String name) {
+    public boolean deleteSystem(String tenant, String name) {
         return store.delete(tenant, name);
     }
 
