@@ -45,7 +45,7 @@ class VerifiedArtifactCacheTest {
     }
 
     @Test
-    void rejectsDigestMismatchAndDoesNotPublishPartialCacheEntry() throws IOException {
+    void rejectsDigestMismatchAndDoesNotPublishPartialCacheEntry() throws Exception {
         byte[] bytes = "tampered".getBytes(StandardCharsets.UTF_8);
         var cache = cache((uri, timeout) -> response(200, bytes));
         assertThrows(IOException.class, () -> cache.fetch(ARTIFACT, "0".repeat(64)));

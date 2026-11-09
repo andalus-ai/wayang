@@ -133,7 +133,7 @@ class TemplateServiceTest {
 
     @Test
     void theSlackAssistantUsesASignedWebhookRestrictedToOneChannel() {
-        assertEquals(4, templates.list().size());
+        assertEquals(6, templates.list().size());
         var r = templates.instantiate(acme, "assistant-slack", Map.of("channelId", "D0123ABCD", "model", "ollama/llama3.1"), false);
         assertTrue(r.ok(), r.problems().toString());
         var t = triggers.list(acme).get(0);
@@ -490,12 +490,46 @@ class TemplateServiceTest {
     }
 
     @Test
+    void webhookAlertsNeedNoAgentAndShowTheSecretOnce() {
+        var integration = new TemplateService(ws).withProfile(tech.kayys.wayang.runtime.Profile.INTEGRATION);
+        var r = integration.instantiate(acme, "webhook-alert-telegram", Map.of("chatId", "-1001234"), false);
+        assertTrue(r.ok(), r.problems().toString());
+        assertEquals(1, r.webhookSecrets().size(), "the webhook secret is returned once");
+        var t = triggers.list(acme).get(0);
+        assertEquals(Trigger.Kind.WEBHOOK, t.kind());
+        assertFalse(t.enabled(), "it starts disabled");
+        assertEquals(Trigger.Kind.WEBHOOK, t.kind(), t.toString());
+        assertEquals(Map.of("perHour", 60, "perDay", 500), t.config().get("rateLimit"));
+        assertTrue(r.missingSecrets().contains("TELEGRAM_TOKEN"), r.missingSecrets().toString());
+        assertFalse(r.toString().contains("-1001234") && r.webhookSecrets().values().stream().anyMatch(v -> v.contains("-1001234")));
+
+        var slackDry = integration.instantiate(acme, "webhook-alert-slack", Map.of("channelId", "D0123ABCD", "name", "Slack alerts"), true);
+        assertTrue(slackDry.ok(), slackDry.problems().toString());
+        assertThrows(ApiException.class, () -> integration.instantiate(acme, "webhook-alert-telegram", Map.of("chatId", "abc"), true));
+        assertThrows(ApiException.class, () -> integration.instantiate(acme, "webhook-alert-slack", Map.of("channelId", "nope"), true));
+        assertThrows(ApiException.class, () -> integration.instantiate(acme, "webhook-alert-whatsapp", Map.of("chatId", "1"), true));
+    }
+
+    @Test
+    void theAlertTextIsBoundedAndTheDestinationIsNotInTheBody() {
+        var bundle = TemplateService.webhookAlert("n", false, "123");
+        String text = (String) ((Map<?, ?>) ((Map<?, ?>) ((Map<?, ?>) ((List<?>) ((Map<?, ?>) ((Map<?, ?>) ((List<?>) bundle.get("definitions")).get(0)).get("document")).get("elements")).stream()
+                .filter(e -> "send".equals(((Map<?, ?>) e).get("id"))).findFirst().orElseThrow()).get("config")).get("inputs")).get("text");
+        assertEquals("Alert: hi", tech.kayys.wayang.expression.Expressions.evaluate(text, Map.of("event", Map.of("message", "hi"))));
+        assertEquals("Alert: (no message)", tech.kayys.wayang.expression.Expressions.evaluate(text, Map.of("event", Map.of())));
+        assertEquals(1000, ((String) tech.kayys.wayang.expression.Expressions.evaluate(text, Map.of("event", Map.of("message", "x".repeat(5000))))).length());
+        assertTrue(bundle.toString().contains("chatId=\"123\""), "the destination is a literal");
+        assertFalse(text.contains("event.chatId"), "the body cannot choose where it goes");
+    }
+
+    @Test
     void templatesNeedTheAgentFeature() {
         var none = new TemplateService(ws).withProfile(tech.kayys.wayang.runtime.Profile.INTEGRATION);
-        assertTrue(none.list().isEmpty());
+        assertEquals(List.of("webhook-alert-telegram", "webhook-alert-slack"), none.list().stream().map(TemplateService.Info::id).toList(),
+                "an integration-only profile still offers the agent-free alerts");
         assertThrows(ApiException.class, () -> none.instantiate(new Principal("acme", "ann", java.util.Set.of(Role.ADMIN)), "assistant-telegram",
                 Map.of("chatId", "123"), true));
-        assertEquals(4, new TemplateService(ws).withProfile(tech.kayys.wayang.runtime.Profile.AGENTIC).list().size());
+        assertEquals(6, new TemplateService(ws).withProfile(tech.kayys.wayang.runtime.Profile.AGENTIC).list().size());
     }
 
     @Test
