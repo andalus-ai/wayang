@@ -55,8 +55,7 @@ public final class BoundedPressureEventDispatcher implements EvaluationPressureE
                 rejected.increment();
                 return;
             }
-            queue.poll();
-            dropped.increment();
+            if (queue.poll() != null) dropped.increment();
             if (queue.offer(event)) accepted.increment();
             else rejected.increment();
         }
