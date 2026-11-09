@@ -25,24 +25,31 @@ import tech.kayys.wayang.runtime.json.Json;
  */
 public final class ReleaseArtifactDigestManifest {
 
-    public record ArtifactDigest(ReleaseArtifactResolver.Coordinate coordinate, String sha256) {
+    public record ArtifactDigest(ReleaseArtifactResolver.Coordinate coordinate, String pomSha256, String jarSha256) {
         public ArtifactDigest {
             Objects.requireNonNull(coordinate, "coordinate");
-            if (sha256 == null || !sha256.matches("[0-9a-f]{64}")) {
-                throw new IllegalArgumentException("Artifact SHA-256 must be 64 lowercase hexadecimal characters");
-            }
+            requireDigest(pomSha256, "POM");
+            requireDigest(jarSha256, "JAR");
         }
     }
 
-    public record VerifiedManifest(String lockSha256, Map<String, String> digests) {
+    public record VerifiedManifest(String lockSha256, Map<String, ArtifactDigest> artifacts) {
         public VerifiedManifest {
-            digests = Map.copyOf(digests);
+            artifacts = Map.copyOf(artifacts);
         }
 
-        public String sha256(ReleaseArtifactResolver.Coordinate coordinate) {
-            String digest = digests.get(key(coordinate));
+        public ArtifactDigest artifact(ReleaseArtifactResolver.Coordinate coordinate) {
+            ArtifactDigest digest = artifacts.get(key(coordinate));
             if (digest == null) throw new IllegalArgumentException("Artifact is not covered by verified manifest: " + key(coordinate));
             return digest;
+        }
+
+        public String pomSha256(ReleaseArtifactResolver.Coordinate coordinate) {
+            return artifact(coordinate).pomSha256();
+        }
+
+        public String jarSha256(ReleaseArtifactResolver.Coordinate coordinate) {
+            return artifact(coordinate).jarSha256();
         }
     }
 
@@ -100,7 +107,7 @@ public final class ReleaseArtifactDigestManifest {
             var c = artifact.coordinate();
             locked.put(key(c), c);
         }
-        Map<String, String> digests = new HashMap<>();
+        Map<String, ArtifactDigest> digests = new HashMap<>();
         for (Object entry : entries) {
             if (!(entry instanceof Map<?, ?> rawEntry)) throw new IllegalArgumentException("Malformed artifact digest entry");
             Map<String, Object> item = stringMap(rawEntry);
@@ -112,8 +119,9 @@ public final class ReleaseArtifactDigestManifest {
             if (!"compile".equals(coordinate.scope())) throw new IllegalArgumentException("Only compile artifacts may be manifested");
             String key = key(coordinate);
             if (!locked.containsKey(key)) throw new IllegalArgumentException("Manifest contains an artifact outside the verified lock: " + key);
-            String digest = requiredString(item.get("sha256"), "artifact.sha256");
-            if (!digest.matches("[0-9a-f]{64}")) throw new IllegalArgumentException("Invalid artifact SHA-256 for " + key);
+            String pomDigest = requiredString(item.get("pomSha256"), "artifact.pomSha256");
+            String jarDigest = requiredString(item.get("jarSha256"), "artifact.jarSha256");
+            ArtifactDigest digest = new ArtifactDigest(coordinate, pomDigest, jarDigest);
             if (digests.putIfAbsent(key, digest) != null) throw new IllegalArgumentException("Duplicate manifest artifact: " + key);
         }
         if (!digests.keySet().equals(locked.keySet())) {
@@ -122,6 +130,12 @@ public final class ReleaseArtifactDigestManifest {
             throw new IllegalArgumentException("Manifest is missing locked artifacts: " + missing);
         }
         return new VerifiedManifest(lockDigest, digests);
+    }
+
+    private static void requireDigest(String digest, String kind) {
+        if (digest == null || !digest.matches("[0-9a-f]{64}")) {
+            throw new IllegalArgumentException(kind + " SHA-256 must be 64 lowercase hexadecimal characters");
+        }
     }
 
     private static String key(ReleaseArtifactResolver.Coordinate c) {
