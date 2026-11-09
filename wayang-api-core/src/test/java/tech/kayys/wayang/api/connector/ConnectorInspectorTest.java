@@ -104,4 +104,35 @@ class ConnectorInspectorTest {
         assertThrows(ApiException.class, () -> strict.describe(designer, Map.of("connector", "soap", "config", Map.of("wsdl", base() + "/wsdl"))));
         assertEquals(0, hits.size());
     }
+
+    @Test
+    void openapiIsListedWithOnlyTheDocumentAndFilters() {
+        var seen = new java.util.concurrent.atomic.AtomicReference<Map<String, Object>>();
+        tech.kayys.wayang.runtime.ServiceHandler.Connector fake = (cfg, in) -> {
+            seen.set(cfg);
+            return Map.of("operations", List.of(Map.of("name", "getPet")));
+        };
+        var inspector = new ConnectorInspector(Map.of("openapi", fake));
+        Map<String, Object> cfg = new java.util.LinkedHashMap<>();
+        cfg.put("specUrl", "https://x.example/openapi.json");
+        cfg.put("includeTags", List.of("pets"));
+        cfg.put("headers", Map.of("Authorization", "Bearer s3cret"));
+        cfg.put("baseUrl", "https://evil.example");
+        cfg.put("operation", "deletePet");
+        Map<String, Object> out = inspector.describe(designer, Map.of("connector", "openapi", "config", cfg));
+        assertNotNull(out.get("operations"));
+        assertEquals("listOperations", seen.get().get("operation"));
+        assertEquals(List.of("pets"), seen.get().get("includeTags"));
+        assertFalse(seen.get().containsKey("headers"));
+        assertFalse(seen.get().containsKey("baseUrl"));
+    }
+
+    @Test
+    void openapiNeedsExactlyOneOfSpecAndSpecUrl() {
+        var inspector = new ConnectorInspector(Map.of("openapi", (cfg, in) -> Map.of()));
+        assertThrows(ApiException.class, () -> inspector.describe(designer, Map.of("connector", "openapi", "config", Map.of())));
+        assertThrows(ApiException.class,
+                () -> inspector.describe(designer, Map.of("connector", "openapi", "config", Map.of("spec", "{}", "specUrl", "https://x/y"))));
+        assertThrows(ApiException.class, () -> inspector.describe(viewer, Map.of("connector", "openapi", "config", Map.of("spec", "{}"))));
+    }
 }
