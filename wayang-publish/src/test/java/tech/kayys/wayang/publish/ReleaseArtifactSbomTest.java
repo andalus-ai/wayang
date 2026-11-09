@@ -29,7 +29,8 @@ class ReleaseArtifactSbomTest {
         assertEquals(lock.artifacts().size(), ((List<?>) bom.get("dependencies")).size());
         Map<?, ?> component = (Map<?, ?>) ((List<?>) bom.get("components")).get(0);
         assertEquals("library", component.get("type"));
-        assertEquals(2, ((List<?>) component.get("hashes")).size());
+        assertEquals(1, ((List<?>) component.get("hashes")).size());
+        assertEquals("a".repeat(64), ((Map<?, ?>) ((List<?>) component.get("properties")).get(0)).get("value"));
         assertTrue(component.get("purl").toString().startsWith("pkg:maven/tech.kayys.wayang/"));
     }
 
