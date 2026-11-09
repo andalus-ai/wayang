@@ -99,6 +99,15 @@ CREATE TABLE IF NOT EXISTS wayang_audit (
 );
 CREATE INDEX IF NOT EXISTS wayang_audit_tenant_time ON wayang_audit (tenant_id, at_ms DESC);
 
+-- Feedback (ratings, comments, bug and error reports). Append-only like the audit log; text is scrubbed of credentials before it gets here.
+CREATE TABLE IF NOT EXISTS wayang_feedback (
+    tenant_id  VARCHAR(128) NOT NULL,
+    at_ms      BIGINT       NOT NULL,
+    kind       VARCHAR(16)  NOT NULL,
+    entry      TEXT         NOT NULL
+);
+CREATE INDEX IF NOT EXISTS wayang_feedback_tenant_time ON wayang_feedback (tenant_id, at_ms DESC);
+
 -- EIP state. Claim checks are keyed by namespace and token with an expiry, aggregation groups are append-only rows closed by DELETE.
 CREATE TABLE IF NOT EXISTS wayang_eip_claim (
     ns          VARCHAR(512) NOT NULL,

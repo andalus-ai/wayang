@@ -1,0 +1,79 @@
+/// What a person can send: a rating of something, a comment, a bug, an idea, or an error report. The names are the API's.
+enum FeedbackKind {
+  comment('comment', 'Comment'),
+  bug('bug', 'Bug'),
+  idea('idea', 'Idea'),
+  error('error', 'Error report'),
+  rating('rating', 'Rating');
+
+  const FeedbackKind(this.api, this.label);
+  final String api;
+  final String label;
+}
+
+/// The limits the server enforces (it refuses longer text rather than cutting it, so the form cuts first).
+const feedbackMaxMessage = 4000;
+const feedbackMaxStack = 8000;
+const feedbackMaxValue = 500;
+const feedbackMaxContext = 12;
+
+/// An error caught by the app itself, kept until the person decides to report it. Nothing is sent automatically.
+class CapturedError {
+  const CapturedError({required this.message, required this.stack, required this.at});
+
+  factory CapturedError.of(Object error, StackTrace? stack, {DateTime? at}) => CapturedError(
+        message: _clip('$error', feedbackMaxValue),
+        stack: _clip(stack?.toString() ?? '', feedbackMaxStack),
+        at: at ?? DateTime.now(),
+      );
+
+  final String message;
+  final String stack;
+  final DateTime at;
+}
+
+String _clip(String s, int max) => s.length <= max ? s : s.substring(0, max);
+
+/// The request body for `POST /api/v1/feedback`. Text is trimmed and cut to the server's limits; empty context values are dropped. The
+/// server also masks anything that looks like a credential, but nothing secret should be put in here in the first place: [context] is for
+/// short, named details (a run id, the screen, the platform), never request or response bodies.
+Map<String, dynamic> feedbackRequest({
+  required FeedbackKind kind,
+  String? rating,
+  String message = '',
+  Map<String, String> context = const {},
+}) {
+  final ctx = <String, String>{};
+  for (final e in context.entries) {
+    final v = e.value.trim();
+    if (v.isEmpty || ctx.length >= feedbackMaxContext) continue;
+    ctx[e.key] = _clip(v, e.key == 'stack' ? feedbackMaxStack : feedbackMaxValue);
+  }
+  return {
+    'kind': kind.api,
+    if (rating != null) 'rating': rating,
+    'message': _clip(message.trim(), feedbackMaxMessage),
+    if (ctx.isNotEmpty) 'context': ctx,
+  };
+}
+
+/// What stops the form from being sent, or null when it can be: a rating needs up/down, everything else needs a message.
+String? feedbackProblem(FeedbackKind kind, {String? rating, String message = ''}) {
+  if (kind == FeedbackKind.rating) return rating == 'up' || rating == 'down' ? null : 'Choose thumbs up or down.';
+  return message.trim().isEmpty ? 'Write a few words first.' : null;
+}
+
+/// The plain-text preview of a request, so the person sees exactly what would leave their browser.
+String feedbackPreview(Map<String, dynamic> request) {
+  final b = StringBuffer('Kind: ${request['kind']}');
+  if (request['rating'] != null) b.write('\nRating: ${request['rating']}');
+  final msg = request['message'];
+  if (msg is String && msg.isNotEmpty) b.write('\n\n$msg');
+  final ctx = request['context'];
+  if (ctx is Map) {
+    for (final e in ctx.entries) {
+      b.write('\n${e.key}: ${e.value}');
+    }
+  }
+  return b.toString();
+}

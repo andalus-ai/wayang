@@ -7,6 +7,7 @@ import '../../plugins/plugin.dart';
 import '../../plugins/registry.dart';
 import '../../providers/app_providers.dart';
 import '../dashboard/dashboard_screen.dart';
+import '../feedback/feedback_dialog.dart';
 import '../components/component_catalog_screen.dart';
 import '../projects/projects_screen.dart';
 import '../runs/runs_screen.dart';
@@ -300,6 +301,14 @@ class _TopBar extends ConsumerWidget {
               ),
             ),
           const Spacer(),
+          Builder(builder: (context) {
+            final caught = ref.watch(lastErrorProvider);
+            return IconButton(
+              tooltip: caught == null ? 'Send feedback' : 'Something went wrong: report it',
+              icon: Icon(caught == null ? Icons.feedback_outlined : Icons.report_problem_rounded, size: 19, color: caught == null ? null : AppColors.danger),
+              onPressed: () => showFeedbackDialog(context, error: caught),
+            );
+          }),
           IconButton(
             tooltip: 'Toggle theme',
             icon: Icon(themeMode == ThemeMode.dark ? Icons.dark_mode_rounded : Icons.light_mode_rounded, size: 19),
