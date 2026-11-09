@@ -50,7 +50,28 @@ public final class TemplateService {
     }
 
     public List<Info> list() {
-        return profile.has(tech.kayys.wayang.runtime.Profile.Feature.AGENT) ? all() : List.of();
+        List<Info> out = new ArrayList<>();
+        if (profile.has(tech.kayys.wayang.runtime.Profile.Feature.AGENT)) {
+            out.addAll(all());
+        }
+        out.addAll(alerts());
+        return out;
+    }
+
+    /** Webhook alerts need no agent: they are the integration profile's starter projects. */
+    private static List<Info> alerts() {
+        return List.of(
+                alert("webhook-alert-telegram", "Webhook alert to Telegram", "chatId", "Your Telegram chat id: alerts are sent here", List.of("TELEGRAM_TOKEN")),
+                alert("webhook-alert-slack", "Webhook alert to Slack", "channelId", "The Slack channel or DM id (starts with C, D or G) alerts are sent to", List.of("SLACK_BOT_TOKEN")));
+    }
+
+    private static Info alert(String id, String title, String toParam, String toDesc, List<String> secrets) {
+        return new Info(id, title,
+                "A secret webhook that forwards its JSON body's `message` to one place you name. No agent and no model: the text is sent as is "
+                        + "(at most 1000 characters), only to that place. The webhook secret is shown once when the project is created; the trigger starts disabled. One per kind (Telegram, Slack) in a tenant.",
+                List.of(new Param(toParam, toDesc, true, null),
+                        new Param("name", "Project name", false, "Webhook alert")),
+                secrets);
     }
 
     private List<Info> all() {
@@ -126,6 +147,9 @@ public final class TemplateService {
      * @throws ApiException 400 for an unknown template or a bad parameter
      */
     public WorkspaceService.Report instantiate(Principal p, String id, Map<String, Object> params, boolean dryRun) {
+        if (id != null && id.startsWith("webhook-alert-")) {
+            return instantiateAlert(p, id, params, dryRun);
+        }
         if (!profile.has(tech.kayys.wayang.runtime.Profile.Feature.AGENT)) {
             throw ApiException.badRequest("Template '" + id + "' needs agents, which the '" + profile + "' profile does not enable");
         }
@@ -288,6 +312,58 @@ public final class TemplateService {
         o.put("triggers", true);
         o.put("allowUnsigned", true); // built in, not from outside: there is nothing to verify a signature against
         return workspace.importBundle(p, bundle, WorkspaceService.Options.of(o));
+    }
+
+    private WorkspaceService.Report instantiateAlert(Principal p, String id, Map<String, Object> params, boolean dryRun) {
+        boolean slack = "webhook-alert-slack".equals(id);
+        if (!slack && !"webhook-alert-telegram".equals(id)) {
+            throw ApiException.badRequest("Unknown template '" + id + "'");
+        }
+        Map<String, Object> in = params == null ? Map.of() : params;
+        String to = text(in, slack ? "channelId" : "chatId", null);
+        if (slack ? to == null || !SLACK_CHANNEL.matcher(to).matches() : to == null || !CHAT_ID.matcher(to).matches()) {
+            throw ApiException.badRequest(slack ? "channelId must be a Slack channel id such as D0123ABCD" : "chatId must be your Telegram chat id (a number)");
+        }
+        String name = text(in, "name", "Webhook alert");
+        if (name.isBlank() || name.length() > 80) {
+            throw ApiException.badRequest("name must be 1..80 characters");
+        }
+        Map<String, Object> o = new LinkedHashMap<>();
+        o.put("dryRun", dryRun);
+        o.put("publish", true);
+        o.put("triggers", true);
+        o.put("allowUnsigned", true);
+        return workspace.importBundle(p, webhookAlert(name, slack, to), WorkspaceService.Options.of(o));
+    }
+
+    /** Secret webhook, then one send to the one place the owner named. The body only supplies the text; the destination is a literal (validated id), never read from the body. */
+    static Map<String, Object> webhookAlert(String projectName, boolean slack, String to) {
+        Map<String, Object> trigger = new LinkedHashMap<>();
+        String pid = slack ? "webhook-alert-slack" : "webhook-alert-telegram";
+        trigger.put("id", slack ? "alert-hook-slack" : "alert-hook-telegram");
+        trigger.put("kind", "WEBHOOK");
+        trigger.put("processId", pid);
+        trigger.put("enabled", false);
+        trigger.put("config", Map.of("rateLimit", Map.of("perHour", 60, "perDay", 500)));
+        String msg = "substring(\"Alert: \" + string(coalesce(event.message, \"(no message)\")), 1, 1000)";
+        ProcessModel process = ProcessModel.builder(pid).name("Webhook alert").start("received")
+                .task("send", ElementType.SERVICE_TASK, slack
+                        ? Map.of("connector", "slack", "botToken", "${secret:SLACK_BOT_TOKEN}", "inputs", Map.of("channel", "\"" + to + "\"", "text", msg))
+                        : Map.of("connector", "telegram", "botToken", "${secret:TELEGRAM_TOKEN}", "inputs", Map.of("chatId", "\"" + to + "\"", "text", msg)))
+                .end("sent")
+                .flow("received", "send").flow("send", "sent")
+                .build();
+        List<Object> defs = new ArrayList<>();
+        defs.add(def("PROCESS", pid, ProcessMaps.toMap(process)));
+        Map<String, Object> b = new LinkedHashMap<>();
+        b.put("format", WorkspaceBundle.FORMAT);
+        b.put("formatVersion", WorkspaceBundle.VERSION);
+        b.put("project", Map.of("name", projectName, "description", "Webhook alert (from a template)"));
+        b.put("definitions", defs);
+        b.put("triggers", List.of(trigger));
+        b.put("config", Map.of());
+        b.put("integrity", Map.of("sha256", WorkspaceBundle.sha256(b)));
+        return b;
     }
 
     private WorkspaceService.Report instantiateBrief(Principal p, String id, Map<String, Object> params, boolean dryRun) {
