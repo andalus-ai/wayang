@@ -12,6 +12,7 @@ import '../../providers/bpmn_provider.dart';
 import '../common/schema_form.dart';
 import 'bpmn_canvas.dart';
 import 'node_test_section.dart';
+import 'openapi_section.dart';
 import 'soap_section.dart';
 
 // ---------------------------------------------------------------------------
@@ -387,6 +388,8 @@ class _NodeInspectorState extends ConsumerState<_NodeInspector> {
           ),
         if (node.type == BpmnElementType.serviceTask && node.properties['connector'] == 'soap')
           SoapSection(props: node.properties, onChanged: (props) => controller.updateNodeProperties(node.id, props)),
+        if (node.type == BpmnElementType.serviceTask && node.properties['connector'] == 'openapi')
+          OpenApiSection(props: node.properties, onChanged: (props) => controller.updateNodeProperties(node.id, props)),
         if (node.type == BpmnElementType.serviceTask) NodeTestSection(key: ValueKey('test-${node.id}'), props: node.properties),
       ],
     );
