@@ -77,7 +77,7 @@ class ReleaseArtifactDigestManifestTest {
             boolean omitFirst) throws Exception {
         List<Map<String, Object>> artifacts = new ArrayList<>();
         for (var artifact : lock.artifacts()) {
-            if (omitFirst && artifacts.isEmpty()) continue;
+            if (omitFirst && artifacts.isEmpty()) { omitFirst = false; continue; }
             var c = artifact.coordinate();
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("groupId", c.groupId());
