@@ -20,7 +20,9 @@ public final class PressureEventAdapterGroup implements EvaluationPressureEventL
     private final LongAdder deliveryFailures = new LongAdder();
     private final ReentrantLock lifecycleLock = new ReentrantLock();
     private final Condition dispatchesDrained = lifecycleLock.newCondition();
+    private final Condition closeCompleted = lifecycleLock.newCondition();
     private boolean closed;
+    private boolean closeComplete;
     private int activeDispatches;
 
     public PressureEventAdapterGroup(Collection<? extends PressureEventAdapter> adapters) {
@@ -78,13 +80,23 @@ public final class PressureEventAdapterGroup implements EvaluationPressureEventL
 
     @Override
     public void close() {
+        boolean interrupted = false;
         lifecycleLock.lock();
         try {
             if (closed) {
+                while (!closeComplete) {
+                    try {
+                        closeCompleted.await();
+                    } catch (InterruptedException ignored) {
+                        interrupted = true;
+                    }
+                }
+                if (interrupted) {
+                    Thread.currentThread().interrupt();
+                }
                 return;
             }
             closed = true;
-            boolean interrupted = false;
             while (activeDispatches != 0) {
                 try {
                     dispatchesDrained.await();
@@ -92,22 +104,32 @@ public final class PressureEventAdapterGroup implements EvaluationPressureEventL
                     interrupted = true;
                 }
             }
-            if (interrupted) {
-                Thread.currentThread().interrupt();
-            }
         } finally {
             lifecycleLock.unlock();
         }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
 
         RuntimeException aggregate = null;
-        for (int i = adapters.size() - 1; i >= 0; i--) {
-            try {
-                adapters.get(i).close();
-            } catch (RuntimeException failure) {
-                if (aggregate == null) {
-                    aggregate = new IllegalStateException("One or more pressure-event adapters failed to close");
+        try {
+            for (int i = adapters.size() - 1; i >= 0; i--) {
+                try {
+                    adapters.get(i).close();
+                } catch (RuntimeException failure) {
+                    if (aggregate == null) {
+                        aggregate = new IllegalStateException("One or more pressure-event adapters failed to close");
+                    }
+                    aggregate.addSuppressed(failure);
                 }
-                aggregate.addSuppressed(failure);
+            }
+        } finally {
+            lifecycleLock.lock();
+            try {
+                closeComplete = true;
+                closeCompleted.signalAll();
+            } finally {
+                lifecycleLock.unlock();
             }
         }
         if (aggregate != null) {
