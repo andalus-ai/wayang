@@ -101,5 +101,9 @@ class BoundedPressureEventDispatcherTest {
     void validatesCapacityAndTimeout() {
         assertThrows(IllegalArgumentException.class, () -> new BoundedPressureEventDispatcher(0,
                 BoundedPressureEventDispatcher.OverflowPolicy.REJECT_NEWEST, e -> {}));
+        var dispatcher = new BoundedPressureEventDispatcher(1,
+                BoundedPressureEventDispatcher.OverflowPolicy.REJECT_NEWEST, e -> {});
+        assertThrows(IllegalArgumentException.class, () -> dispatcher.awaitTermination(Duration.ofSeconds(-1)));
+        dispatcher.close();
     }
 }
