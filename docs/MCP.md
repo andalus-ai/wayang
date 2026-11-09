@@ -85,13 +85,41 @@ token; it is stateless and answers with plain JSON (no SSE, no sessions).
 In the Studio: **MCP servers -> Import OpenAPI** (URL or pasted spec, method/tag/path filters, credential headers) shows a
 preview of the generated tools and warnings before **Create**.
 
+## The `openapi` node: a spec and an operation, nothing else
+
+For a REST API you only need its document. A service task with `connector: "openapi"`:
+
+```json
+{ "connector": "openapi",
+  "specUrl": "https://petstore3.swagger.io/api/v3/openapi.json",
+  "operation": "getPetById",
+  "inputs": { "petId": "event.petId" } }
+```
+
+* `spec` (the document text, JSON or YAML) **or** `specUrl`; `operation` is the generated tool name (the `operationId`, else
+  derived from method and path). `operation: "listOperations"` returns the operations with their input schemas, so a form or a
+  person can pick one. The `inputs` are the operation's arguments (path/query/header parameters and `body`).
+* Output `{result, text, isError}`; an API error fails the node unless `failOnError: false`.
+* **Read-only by default**: only GET and HEAD operations exist for the node. Anything that changes data needs
+  `methods: ["GET", "POST", ...]` named on the node. `includeTags`/`excludeTags`/`includePaths`/`excludePaths` narrow further.
+* **The document does not decide where credentials go.** It is untrusted input and its `servers` URL can point anywhere, so
+  `headers`/`query` (credentials, as `${secret:NAME}`) are refused unless `baseUrl` is set on the node. Without credentials
+  the base URL may come from the document. The host is then fixed, arguments are percent-encoded into path segments and query
+  values, the SSRF guard applies, redirects are not followed.
+* The document is fetched with the URL guard (5 MB limit) and cached for a minute; parsing is cached by content.
+* Loaded from `wayang-mcp` (so any deployment with the API module has it). A generated **release** does not include it yet
+  (`wayang-publish` has no dependency on `wayang-mcp`): publishing a bundle that uses it fails with the usual "connector not
+  available in a release" message rather than producing a broken release.
+* Not done: a Studio picker that calls `listOperations` and builds the argument form, and the same one-step node for an MCP
+  server (today the `mcp` node already takes just the server `url` and a `tool`; `operation: listTools` lists them).
+
 ## Verification status
 
 Tested (JUnit shim, JDK HTTP servers): generator over OAS 3.0/3.1 and Swagger 2.0 (JSON and YAML), `$ref`/recursion/`allOf`,
 filters, naming, hostile specs; executor (encoding, injection attempts, validation, errors); JSON-RPC server (negotiation,
 batches, errors, notifications); the `mcp` connector (JSON and SSE replies, sessions, output mapping); an end-to-end run
 spec -> MCP server -> `mcp` connector -> fake API. **Not** tested against any real MCP server or client implementation,
-a real public OpenAPI document, or Andalus. The REST resources compile only against stubs.
+a real public OpenAPI document, or Andalus. The REST resources compile only against stubs. The `openapi` node is tested against a fake API that serves its own document (7 tests: discovery, calls, writes opt-in, credential host rule, errors, bad config, spec caching, SSRF guard), not against a real public API.
 
 ## Wayang processes as MCP tools
 
