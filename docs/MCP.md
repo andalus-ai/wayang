@@ -107,11 +107,12 @@ For a REST API you only need its document. A service task with `connector: "open
   the base URL may come from the document. The host is then fixed, arguments are percent-encoded into path segments and query
   values, the SSRF guard applies, redirects are not followed.
 * The document is fetched with the URL guard (5 MB limit) and cached for a minute; parsing is cached by content.
-* Loaded from `wayang-mcp` (so any deployment with the API module has it). A generated **release** does not include it yet
-  (`wayang-publish` has no dependency on `wayang-mcp`): publishing a bundle that uses it fails with the usual "connector not
-  available in a release" message rather than producing a broken release.
-* Not done: a Studio picker that calls `listOperations` and builds the argument form, and the same one-step node for an MCP
-  server (today the `mcp` node already takes just the server `url` and a `tool`; `operation: listTools` lists them).
+* Loaded from `wayang-mcp` (so any deployment with the API module has it). A generated **release** that uses it adds the
+  `wayang-mcp` module to the generated pom (both targets) and `wayang.mcp.openapi` to the artifact lock; the spec is still fetched at
+  run time, so the release needs network access to it (and `WAYANG_CONNECTORS_ALLOWED_HOSTS` for a private host). Checked by
+  `PublishTest` only at the level of generated files: no release was built with Maven or run here.
+* Studio lists the operations under the node (`/connectors/describe`). Not done: a one-step node for an MCP server (today the
+  `mcp` node already takes just the server `url` and a `tool`; `operation: listTools` lists them).
 
 ## Verification status
 

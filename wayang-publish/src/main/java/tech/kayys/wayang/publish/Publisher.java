@@ -105,6 +105,7 @@ public final class Publisher {
             throw new IllegalArgumentException("These trigger types are not available in a release: " + unknownTriggers);
         }
         boolean multimodal = used.stream().anyMatch(MULTIMODAL_CONNECTORS::contains);
+        boolean mcp = used.stream().anyMatch(MCP_CONNECTORS::contains);
         boolean needsConnectors = !used.isEmpty() || !pollSources.isEmpty() || !providers.isEmpty();
         List<String> notes = new ArrayList<>();
         List<String> badSecrets = bundle.requiredSecrets().stream().filter(s -> !ReleaseSecrets.supported(s)).toList();
@@ -138,7 +139,7 @@ public final class Publisher {
         List<String> secrets = bundle.requiredSecrets().stream().distinct().sorted().toList();
         Map<String, byte[]> f = new TreeMap<>();
         String pkgPath = o.packageName().replace('.', '/');
-        f.put("pom.xml", (gamelan ? GamelanTemplates.pom(o, bundle, needsConnectors, multimodal) : pom(o, bundle, needsConnectors, multimodal)).getBytes(StandardCharsets.UTF_8));
+        f.put("pom.xml", (gamelan ? GamelanTemplates.pom(o, bundle, needsConnectors, multimodal, mcp) : pom(o, bundle, needsConnectors, multimodal, mcp)).getBytes(StandardCharsets.UTF_8));
         f.put("src/main/resources/wayang/bundle.json", bundleJson.getBytes(StandardCharsets.UTF_8));
         f.put("src/main/resources/wayang/component-lock.json", componentLock.json().getBytes(StandardCharsets.UTF_8));
         f.put("src/main/resources/wayang/artifact-lock.json", artifactLock.json().getBytes(StandardCharsets.UTF_8));
@@ -220,7 +221,7 @@ public final class Publisher {
 
     // ------------------------------------------------------------------ templates
 
-    private static String pom(ReleaseOptions o, ReleaseBundle b, boolean connectors, boolean multimodal) {
+    private static String pom(ReleaseOptions o, ReleaseBundle b, boolean connectors, boolean multimodal, boolean mcp) {
         return """
                 <?xml version="1.0" encoding="UTF-8"?>
                 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -285,7 +286,7 @@ public final class Publisher {
                     </build>
                 </project>
                 """.formatted(xml(o.groupId()), xml(o.artifactId()), xml(o.version()), xml(safe(b.name())), xml(o.wayangVersion()),
-                (connectors ? CONNECTORS_DEP : "") + (multimodal ? MULTIMODAL_DEP : ""), o.packageName());
+                (connectors ? CONNECTORS_DEP : "") + (multimodal ? MULTIMODAL_DEP : "") + (mcp ? MCP_DEP : ""), o.packageName());
     }
 
     static final String CONNECTORS_DEP = """
@@ -303,6 +304,15 @@ public final class Publisher {
                                     <version>${wayang.version}</version>
                                 </dependency>
                         """;
+    /** Needed only when the {@code openapi} connector is used; the runtime finds the extension through ServiceLoader. */
+    static final String MCP_DEP = """
+                                <dependency>
+                                    <groupId>tech.kayys.wayang</groupId>
+                                    <artifactId>wayang-mcp</artifactId>
+                                    <version>${wayang.version}</version>
+                                </dependency>
+                        """;
+    static final Set<String> MCP_CONNECTORS = Set.of("openapi");
     static final Set<String> MULTIMODAL_CONNECTORS = Set.of("image-generate", "comfyui", "transcribe", "speak", "describe");
 
     /** The connectors, poll sources and webhook providers this release uses, built from the environment. Shared by every target. */
