@@ -31,7 +31,8 @@ class ReleaseArtifactDigestManifestTest {
         assertEquals(lock.sha256(), verified.lockSha256());
         assertEquals(lock.artifacts().size(), verified.digests().size());
         for (var artifact : lock.artifacts()) {
-            assertEquals("a".repeat(64), verified.sha256(artifact.coordinate()));
+            assertEquals("a".repeat(64), verified.pomSha256(artifact.coordinate()));
+            assertEquals("b".repeat(64), verified.jarSha256(artifact.coordinate()));
         }
     }
 
@@ -83,7 +84,8 @@ class ReleaseArtifactDigestManifestTest {
             item.put("artifactId", c.artifactId());
             item.put("version", c.version());
             item.put("scope", c.scope());
-            item.put("sha256", "a".repeat(64));
+            item.put("pomSha256", "a".repeat(64));
+            item.put("jarSha256", "b".repeat(64));
             artifacts.add(item);
         }
         Map<String, Object> document = new LinkedHashMap<>();
