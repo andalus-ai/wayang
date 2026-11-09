@@ -108,9 +108,17 @@ class ConnectorInspectorTest {
     @Test
     void openapiIsListedWithOnlyTheDocumentAndFilters() {
         var seen = new java.util.concurrent.atomic.AtomicReference<Map<String, Object>>();
-        tech.kayys.wayang.runtime.ServiceHandler.Connector fake = (cfg, in) -> {
-            seen.set(cfg);
-            return Map.of("operations", List.of(Map.of("name", "getPet")));
+        tech.kayys.wayang.runtime.ServiceHandler.Connector fake = new tech.kayys.wayang.runtime.ServiceHandler.Connector() {
+            @Override
+            public Map<String, Object> call(Map<String, Object> inputs) {
+                throw new AssertionError("the config-aware call is the one used");
+            }
+
+            @Override
+            public Map<String, Object> call(Map<String, Object> cfg, Map<String, Object> in) {
+                seen.set(cfg);
+                return Map.of("operations", List.of(Map.of("name", "getPet")));
+            }
         };
         var inspector = new ConnectorInspector(Map.<String, tech.kayys.wayang.runtime.ServiceHandler.Connector>of("openapi", fake));
         Map<String, Object> cfg = new java.util.LinkedHashMap<>();
@@ -129,7 +137,7 @@ class ConnectorInspectorTest {
 
     @Test
     void openapiNeedsExactlyOneOfSpecAndSpecUrl() {
-        tech.kayys.wayang.runtime.ServiceHandler.Connector empty = (cfg, in) -> Map.of();
+        tech.kayys.wayang.runtime.ServiceHandler.Connector empty = inputs -> Map.of();
         var inspector = new ConnectorInspector(Map.<String, tech.kayys.wayang.runtime.ServiceHandler.Connector>of("openapi", empty));
         assertThrows(ApiException.class, () -> inspector.describe(designer, Map.of("connector", "openapi", "config", Map.of())));
         assertThrows(ApiException.class,
