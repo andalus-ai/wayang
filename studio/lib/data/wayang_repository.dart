@@ -201,6 +201,10 @@ class WayangRepository {
   Future<ReleasePlan> planRelease(String projectId, ReleaseForm form) async =>
       ReleasePlan.fromJson(asMap(await _api.sendJson('POST', '/api/v1/projects/$projectId/release/plan', body: form.toJson())));
 
+  /// Sends feedback (rating, comment, bug, idea or error report); any signed-in user may. Returns `{id}`.
+  Future<Map<String, dynamic>> sendFeedback(Map<String, dynamic> request) async =>
+      asMap(await _api.sendJson('POST', '/api/v1/feedback', body: request));
+
   /// The starter templates this server offers (empty when its profile has none).
   Future<List<TemplateInfo>> listTemplates() async => [
         for (final t in asList(await _api.getJson('/api/v1/templates'))) if (t is Map) TemplateInfo.fromJson(asMap(t)),

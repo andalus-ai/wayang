@@ -1,0 +1,53 @@
+package tech.kayys.wayang.rest;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+
+import jakarta.inject.Inject;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.MediaType;
+
+import io.smallrye.common.annotation.Blocking;
+import tech.kayys.wayang.api.ApiException;
+
+/**
+ * Feedback: any signed-in user sends a rating, comment, bug, idea or error report ({@code POST}); the tenant's ADMIN reads them
+ * ({@code GET}, newest first, filter with {@code kind}, page with {@code before}). Credentials are masked before anything is stored.
+ */
+@Path("/api/v1/feedback")
+@Blocking
+public class FeedbackResource {
+
+    @Inject
+    FeedbackConfig feedback;
+    @Inject
+    Principals principals;
+
+    @POST
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Map<String, Object> submit(Map<String, Object> body) {
+        return feedback.service().submit(principals.current(), body);
+    }
+
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    public List<Map<String, Object>> list(@QueryParam("kind") String kind, @QueryParam("limit") Integer limit, @QueryParam("before") String before) {
+        Instant b = null;
+        if (before != null && !before.isBlank()) {
+            try {
+                b = Instant.parse(before);
+            } catch (java.time.format.DateTimeParseException e) {
+                throw ApiException.badRequest("before must be an ISO-8601 instant like 2026-01-01T00:00:00Z");
+            }
+        }
+        return feedback.service().list(principals.current(), kind == null || kind.isBlank() ? null : kind, limit == null ? 100 : limit, b).stream()
+                .map(e -> e.toMap()).toList();
+    }
+}

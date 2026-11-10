@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/api_client.dart';
+import '../data/feedback_model.dart';
 import '../data/wayang_repository.dart';
 import '../data/workspace_model.dart';
 import '../models/wayang.dart';
@@ -86,3 +87,6 @@ final tasksProvider = FutureProvider.autoDispose<List<TaskView>>((ref) {
 
 /// Run selected from dashboard activity or the Runs explorer.
 final selectedRunIdProvider = StateProvider<String?>((ref) => null);
+
+/// The last error the app caught itself (null until one happens, or after it was reported or dismissed). Never sent without the person's say.
+final lastErrorProvider = StateProvider<CapturedError?>((ref) => null);

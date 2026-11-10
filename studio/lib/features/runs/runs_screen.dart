@@ -8,10 +8,12 @@ import '../../core/theme.dart';
 import '../../core/utils.dart';
 import '../../core/widgets.dart';
 import '../../data/api_client.dart';
+import '../../data/feedback_model.dart';
 import '../../data/run_events.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/bpmn_provider.dart';
+import '../feedback/feedback_dialog.dart';
 
 final runsProvider = FutureProvider.autoDispose<List<RunView>>((ref) => ref.watch(repositoryProvider).listRuns());
 
@@ -244,6 +246,16 @@ class _RunDetail extends ConsumerWidget {
             if (r.error != null) ...[
               const SizedBox(height: 10),
               Text(r.error!, style: const TextStyle(color: AppColors.danger, fontSize: 12)),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  icon: const Icon(Icons.report_outlined, size: 16),
+                  label: const Text('Report this error'),
+                  // The run's id and process id only: never its variables or outputs.
+                  onPressed: () => showFeedbackDialog(context,
+                      kind: FeedbackKind.error, message: r.error, details: {'runId': r.id, 'processId': r.processId, 'processVersion': '${r.version}'}),
+                ),
+              ),
             ],
             const SizedBox(height: 14),
             Wrap(spacing: 8, children: [
