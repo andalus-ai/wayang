@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wayang_studio/data/feedback_model.dart';
 
 void main() {
+  feedbackItemTests();
   test('request trims, cuts to the server limits and drops empty context', () {
     final r = feedbackRequest(
       kind: FeedbackKind.bug,
@@ -48,5 +49,23 @@ void main() {
     expect(p, contains('boom'));
     expect(p, contains('screen: runs'));
     expect(p, contains('runId: r1'));
+  });
+}
+
+void feedbackItemTests() {
+  test('an entry is read from the API shape; an unknown kind is shown as it is', () {
+    final f = FeedbackItem.fromJson({
+      'id': 'a',
+      'time': '2026-11-09T10:00:00Z',
+      'user': 'vic',
+      'kind': 'error',
+      'message': 'boom',
+      'context': {'runId': 'r1', 'n': 3},
+    });
+    expect(f.kindLabel, 'Error report');
+    expect(f.rating, isNull);
+    expect(f.context, {'runId': 'r1', 'n': '3'});
+    expect(f.time, DateTime.utc(2026, 11, 9, 10));
+    expect(FeedbackItem.fromJson({'id': 'b', 'kind': 'praise', 'rating': 'up'}).kindLabel, 'praise');
   });
 }

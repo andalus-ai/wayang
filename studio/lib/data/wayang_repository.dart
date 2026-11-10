@@ -4,6 +4,7 @@ import '../models/wayang.dart';
 import 'api_client.dart';
 import 'bpmn_mapper.dart';
 import 'dmn_mapper.dart';
+import 'feedback_model.dart';
 import 'workspace_model.dart';
 
 /// Everything the Studio and the management screens ask of the Wayang API, one method per endpoint
@@ -204,6 +205,13 @@ class WayangRepository {
   /// Sends feedback (rating, comment, bug, idea or error report); any signed-in user may. Returns `{id}`.
   Future<Map<String, dynamic>> sendFeedback(Map<String, dynamic> request) async =>
       asMap(await _api.sendJson('POST', '/api/v1/feedback', body: request));
+
+  /// The tenant's feedback, newest first (admin only). [kind] filters; [before] pages (ISO-8601 instant).
+  Future<List<FeedbackItem>> listFeedback({String? kind, int limit = 100, String? before}) async => [
+        for (final f in asList(await _api.getJson('/api/v1/feedback?limit=$limit${kind == null ? '' : '&kind=${Uri.encodeQueryComponent(kind)}'}'
+            '${before == null ? '' : '&before=${Uri.encodeQueryComponent(before)}'}')))
+          if (f is Map) FeedbackItem.fromJson(asMap(f)),
+      ];
 
   /// The starter templates this server offers (empty when its profile has none).
   Future<List<TemplateInfo>> listTemplates() async => [

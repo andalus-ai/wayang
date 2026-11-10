@@ -61,6 +61,7 @@ const platformSectionsAfterPlugins = [
   PlatformSection(key: 'secrets', label: 'Secrets', icon: Icons.key_rounded),
   PlatformSection(key: 'config', label: 'Configuration', icon: Icons.tune_rounded),
   PlatformSection(key: 'workspace', label: 'Workspace', icon: Icons.inventory_2_outlined),
+  PlatformSection(key: 'feedback', label: 'Feedback', icon: Icons.feedback_outlined),
   PlatformSection(key: 'settings', label: 'Settings', icon: Icons.settings_rounded),
 ];
 

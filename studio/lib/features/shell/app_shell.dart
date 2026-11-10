@@ -8,6 +8,7 @@ import '../../plugins/registry.dart';
 import '../../providers/app_providers.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../feedback/feedback_dialog.dart';
+import '../feedback/feedback_screen.dart';
 import '../components/component_catalog_screen.dart';
 import '../projects/projects_screen.dart';
 import '../runs/runs_screen.dart';
@@ -42,6 +43,7 @@ const _platformScreenBuilders = <String, WidgetBuilder>{
   'secrets': _secretsBuilder,
   'config': _configBuilder,
   'workspace': _workspaceBuilder,
+  'feedback': _feedbackBuilder,
   'settings': _settingsBuilder,
 };
 
@@ -55,6 +57,7 @@ Widget _channelsBuilder(BuildContext context) => const ChannelsScreen();
 Widget _secretsBuilder(BuildContext context) => const SecretsScreen();
 Widget _configBuilder(BuildContext context) => const ConfigScreen();
 Widget _workspaceBuilder(BuildContext context) => const WorkspaceScreen();
+Widget _feedbackBuilder(BuildContext context) => const FeedbackScreen();
 Widget _settingsBuilder(BuildContext context) => const SettingsScreen();
 
 /// Assembles the full nav list: Dashboard, then every installed plugin's
