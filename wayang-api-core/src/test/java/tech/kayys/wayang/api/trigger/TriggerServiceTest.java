@@ -775,6 +775,57 @@ class TriggerServiceTest {
         assertEquals(1, s.receive("acme", "sl", "POST", Map.of(), slackHeaders(again), again.getBytes(StandardCharsets.UTF_8)).runs(), "nothing waits any more");
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void aThumbsPressIsRecordedAsFeedbackAndNeverStartsARun() {
+        publishProcess(admin);
+        var store = new tech.kayys.wayang.api.feedback.FeedbackStore.InMemory(10);
+        var fb = new tech.kayys.wayang.api.feedback.FeedbackService(store, clock, null);
+        var t = service(Map.of("telegram", fake)).withFeedback(fb);
+        t.create(admin, "chat", Trigger.Kind.POLL, "inbox", Map.of("source", "telegram", "ratings", true));
+        Map<String, Object> press = Map.of("kind", "feedback", "rating", "down", "chatId", 7, "fromId", 5, "messageId", 9, "reply", "The reply");
+        assertEquals(0, tickWith(t, press), "a press starts no run");
+        assertEquals(0, runCount());
+        var entries = store.list("acme", "rating", 10, null);
+        assertEquals(1, entries.size());
+        assertEquals("down", entries.get(0).rating());
+        assertEquals("telegram-5", entries.get(0).user());
+        assertEquals("The reply", entries.get(0).context().get("reply"));
+        assertEquals("9", entries.get(0).context().get("messageId"));
+        assertEquals("chat", entries.get(0).context().get("trigger"));
+        assertEquals(1, tickWith(t, msg(7, "hello")), "ordinary messages still start runs");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aFeedbackShapedEventIsJustAMessageUnlessTheTriggerAsksForRatings() {
+        publishProcess(admin);
+        var store = new tech.kayys.wayang.api.feedback.FeedbackStore.InMemory(10);
+        var t = service(Map.of("telegram", fake)).withFeedback(new tech.kayys.wayang.api.feedback.FeedbackService(store, clock, null));
+        t.create(admin, "plain", Trigger.Kind.POLL, "inbox", Map.of("source", "telegram"));
+        assertEquals(1, tickWith(t, Map.of("kind", "feedback", "rating", "up", "chatId", 7)));
+        assertTrue(store.list("acme", null, 10, null).isEmpty(), "nothing is recorded without ratings:true");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void withoutAFeedbackStoreAPressIsDroppedNotHandedToTheProcess() {
+        publishProcess(admin);
+        var t = service(Map.of("telegram", fake));
+        t.create(admin, "chat", Trigger.Kind.POLL, "inbox", Map.of("source", "telegram", "ratings", true));
+        assertEquals(0, tickWith(t, Map.of("kind", "feedback", "rating", "up", "chatId", 7, "fromId", 5)));
+        assertEquals(0, runCount());
+    }
+
+    @Test
+    void ratingsIsCheckedWhenCreated() {
+        var t = service(Map.of("telegram", fake, "other", fake));
+        assertThrows(ApiException.class, () -> t.create(admin, "a", Trigger.Kind.POLL, "inbox", Map.of("source", "other", "ratings", true)));
+        assertThrows(ApiException.class, () -> t.create(admin, "b", Trigger.Kind.POLL, "inbox", Map.of("source", "telegram", "ratings", "yes")));
+        assertThrows(ApiException.class, () -> t.create(admin, "c", Trigger.Kind.SCHEDULE, "inbox", Map.of("cron", "@daily", "ratings", true)));
+        t.create(admin, "ok", Trigger.Kind.POLL, "inbox", Map.of("source", "telegram", "ratings", true));
+    }
+
     private RunView run0() {
         return api.listRuns(admin, "inbox", 1).get(0);
     }

@@ -34,13 +34,30 @@ a guarantee: it errs on the side of masking, and the form tells people not to pa
 Server-side failures are already visible in the audit log (`outcome: FAILED`) and the run's own error; this is for the person's
 view of what went wrong and why it mattered.
 
+## Thumbs under Telegram assistant replies
+
+Template parameter `ratings` (off by default) on the Telegram assistant:
+
+* the reply is sent with 👍 and 👎 buttons (`sendMessage` input `rate: true`, on the one step that sends the reply, not on the
+  confirmations or approval questions);
+* the trigger gets `ratings: true`, so the poller also asks Telegram for button presses. A press from an allowed chat (and allowed user,
+  when `allowedUserIds` is set) on one of our two buttons is acknowledged ("Thanks for the feedback") and becomes a feedback event; any other
+  button, chat or person is ignored;
+* the trigger records it as `kind: rating` with `context`: `source`, `trigger`, `processId`, `chatId`, `messageId` and the **first 200
+  characters of the rated reply**, under the user id `telegram-<id>`. The press never starts a run. The excerpt is the one place reply
+  content reaches the feedback log (admin-readable, scrubbed like everything else), so leave `ratings` off if replies are too private for that;
+* a press is dropped silently if the feedback store rate limit (10 a minute per user) is hit, and never fails the poll.
+
+`ratings` is for Telegram poll triggers only (the API refuses it elsewhere). A **generated release** drops these presses (it has no feedback
+store, and a press is not a message for the process), so buttons there would only be acknowledged, not recorded.
+
 ## Not done
 
-* Thumbs up/down under assistant replies in Telegram and Slack (needs inline buttons and callback handling in the pollers).
+* Thumbs under assistant replies in Slack (Telegram has them, below), and in generated releases (no feedback store there).
 * Retention, status (open/done) and export.
 
 ## Verification
 
 `FeedbackTest` (10 tests: access rules, tenant isolation, validation and size limits, credential masking, rate limit, paging, bounded memory
-store) was run here with a small stand-in JUnit runner and passes; `JdbcFeedbackStore`, the REST classes and the Studio code were only
+store) was run here with a small stand-in JUnit runner and passes, as were `TelegramRatingsTest` (6), the new trigger/template/release tests and the existing `TriggerServiceTest` (43), `TemplateServiceTest` (29), the Telegram tests and `TriggerTest` (16); `JdbcFeedbackStore`, the REST classes and the Studio code were only
 compiled or read, never run (no database, Quarkus or Flutter SDK here). `feedback_model_test.dart` is pure Dart and unrun. CI is the real check.

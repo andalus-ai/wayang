@@ -434,6 +434,24 @@ class TriggerTest {
     }
 
     @Test
+    void aThumbsPressIsNotAMessageForTheProcessInARelease() {
+        Tick c = new Tick();
+        ReleaseBundle b = ReleaseBundle.parse(withTriggers(List.of(
+                trig("chat", "POLL", "hello", Map.of("source", "telegram", "everySeconds", 5, "ratings", true), true))));
+        var rt = rt(b, ENV, c);
+        var t = new ReleaseTriggers(b, rt, ReleaseSecrets.secrets(null, ENV::get), Map.of("telegram", poller), Map.of(), c, null);
+        toEmit.clear();
+        toEmit.add(Map.of("kind", "feedback", "rating", "up", "chatId", 7L, "fromId", 5L));
+        c.now = c.now.plusSeconds(10);
+        assertEquals(0, t.tick(), "a release has no feedback store: the press is dropped, not run");
+        assertEquals(0, rt.list("hello", 10).size());
+        toEmit.clear();
+        toEmit.add(Map.of("chatId", 7L, "text", "hello"));
+        c.now = c.now.plusSeconds(10);
+        assertEquals(1, t.tick(), "ordinary messages still run");
+    }
+
+    @Test
     void aChatOverItsHourlyLimitIsDroppedInAReleaseToo() {
         Tick c = new Tick();
         ReleaseBundle b = ReleaseBundle.parse(withTriggers(List.of(

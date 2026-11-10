@@ -164,9 +164,9 @@ public class WayangBeans {
     @Produces
     @ApplicationScoped
     tech.kayys.wayang.api.trigger.TriggerService triggers(tech.kayys.wayang.api.trigger.TriggerStore store, WayangApi api,
-            ConnectorsConfig connectors, OAuthConfig secrets, Clock clock, TenantGateConfig gate) {
+            ConnectorsConfig connectors, OAuthConfig secrets, Clock clock, TenantGateConfig gate, FeedbackConfig feedback) {
         return new tech.kayys.wayang.api.trigger.TriggerService(store, api, connectors.pollers(), connectors.webhookProviders(),
-                secrets.resolver(), clock).withTenantGate(gate.gate());
+                secrets.resolver(), clock).withTenantGate(gate.gate()).withFeedback(feedback.service());
     }
 
     /** Hard deadlines for {@code collect} groups with {@code sweepTo}; ticked by {@link TimerTicker}. */

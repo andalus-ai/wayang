@@ -167,6 +167,11 @@ public final class Telegram {
             if (inputs.get("replyTo") instanceof Number n) {
                 body.put("reply_to_message_id", n.longValue());
             }
+            if (Boolean.TRUE.equals(inputs.get("rate")) || "true".equals(inputs.get("rate"))) {
+                // thumbs under the reply; a press arrives as a callback_query that the poller (with ratings:true) turns into a feedback event
+                body.put("reply_markup", Map.of("inline_keyboard", List.of(List.of(
+                        Map.of("text", "\uD83D\uDC4D", "callback_data", RATE_UP), Map.of("text", "\uD83D\uDC4E", "callback_data", RATE_DOWN)))));
+            }
             Map<String, Object> res = api(http, config, "sendMessage", "POST", body, null);
             Map<String, Object> out = new LinkedHashMap<>();
             if (res.get("result") instanceof Map<?, ?> r) {
@@ -178,6 +183,11 @@ public final class Telegram {
             return out;
         }
     }
+
+    static final String RATE_UP = "fb:up";
+    static final String RATE_DOWN = "fb:down";
+    /** How much of the rated reply goes into the feedback event. */
+    static final int RATED_EXCERPT = 200;
 
     private static final int MAX_CAPTION = 1024;
     static final long MAX_AUDIO = 10L << 20;
@@ -302,7 +312,8 @@ public final class Telegram {
             Map<String, Object> q = new LinkedHashMap<>();
             q.put("timeout", 0);
             q.put("limit", limit);
-            q.put("allowed_updates", "[\"message\"]");
+            boolean ratings = Boolean.TRUE.equals(config.get("ratings"));
+            q.put("allowed_updates", ratings ? "[\"message\",\"callback_query\"]" : "[\"message\"]");
             if (cursor != null && !cursor.isBlank()) {
                 q.put("offset", cursor);
             }
@@ -315,6 +326,13 @@ public final class Telegram {
                         continue;
                     }
                     max = Math.max(max, id.longValue());
+                    if (ratings && um.get("callback_query") instanceof Map<?, ?> cb) {
+                        Map<String, Object> fb = feedbackEvent(http, config, id.longValue(), cb, allowed, users);
+                        if (fb != null) {
+                            events.add(fb);
+                        }
+                        continue;
+                    }
                     if (!(um.get("message") instanceof Map<?, ?> msg) || !(msg.get("chat") instanceof Map<?, ?> chat)) {
                         continue;
                     }
@@ -366,6 +384,45 @@ public final class Telegram {
             }
             return new Result(events, max < 0 ? null : Long.toString(max + 1));
         }
+    }
+
+    /**
+     * A thumbs press on one of the bot's replies, as an event {@code {kind: "feedback", rating, chatId, fromId, messageId, reply}}; null for
+     * anything else (another button, a chat or person that is not allowed). The press is acknowledged so the button stops spinning; if that
+     * fails the event still counts.
+     */
+    private static Map<String, Object> feedbackEvent(HttpConnector http, Map<String, Object> config, long updateId, Map<?, ?> cb, Set<String> allowed,
+            Set<String> users) {
+        String data = cb.get("data") instanceof String d ? d : "";
+        if (!data.equals(RATE_UP) && !data.equals(RATE_DOWN)) {
+            return null;
+        }
+        if (!(cb.get("message") instanceof Map<?, ?> msg) || !(msg.get("chat") instanceof Map<?, ?> chat) || !allowed.contains(String.valueOf(chat.get("id")))) {
+            return null;
+        }
+        Object from = cb.get("from") instanceof Map<?, ?> f ? f.get("id") : null;
+        if (!users.isEmpty() && (from == null || !users.contains(String.valueOf(from)))) {
+            return null;
+        }
+        if (cb.get("id") instanceof String qid && qid.matches("[A-Za-z0-9_-]{1,100}")) {
+            try {
+                api(http, config, "answerCallbackQuery", "POST", Map.of("callback_query_id", qid, "text", "Thanks for the feedback"), null);
+            } catch (Exception ignored) {
+                // only the spinner: the rating itself is still recorded
+            }
+        }
+        String reply = msg.get("text") instanceof String t ? t : "";
+        Map<String, Object> e = new LinkedHashMap<>();
+        e.put("kind", "feedback");
+        e.put("updateId", updateId);
+        e.put("rating", data.equals(RATE_UP) ? "up" : "down");
+        e.put("chatId", chat.get("id"));
+        if (from != null) {
+            e.put("fromId", from);
+        }
+        e.put("messageId", msg.get("message_id"));
+        e.put("reply", reply.length() > RATED_EXCERPT ? reply.substring(0, RATED_EXCERPT) : reply);
+        return e;
     }
 
     /** The file id of the largest photo size within {@link #MAX_PHOTO} (Telegram sends several sizes of one picture), or null. */
