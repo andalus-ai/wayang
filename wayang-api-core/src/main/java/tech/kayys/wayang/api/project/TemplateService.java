@@ -96,6 +96,7 @@ public final class TemplateService {
                         new Param("voice", "true makes the assistant understand voice notes (up to 5 minutes): they are transcribed with an OpenAI-compatible speech-to-text API (secret OPENAI_API_KEY) and then handled like typed text, including the approval policy. Needs the MEDIA feature", false, "false"),
                         new Param("speak", "true (with voice) makes the assistant also answer a voice note by voice: text to speech with an OpenAI-compatible API (secret OPENAI_API_KEY), sent as a Telegram voice note", false, "false"),
                         new Param("photos", "true makes the assistant understand photos you send (with the caption as your message): a vision model describes the picture (OpenAI-compatible chat API, secret OPENAI_API_KEY) and the description is handled like typed text, including the approval policy. Text inside a picture is treated as untrusted. Needs the MEDIA feature", false, "false"),
+                        new Param("ratings", "true adds thumbs up/down buttons under each reply; a press is recorded as feedback (Feedback section, admin only) with the chat and message ids and the first 200 characters of the reply. Only chats and people the trigger already allows can press them", false, "false"),
                         new Param("visionModel", "The vision model used when photos is true", false, "gpt-4o-mini"),
                         new Param("name", "Project name", false, "Personal assistant")),
                 List.of("TELEGRAM_TOKEN")),
@@ -284,6 +285,17 @@ public final class TemplateService {
                 throw ApiException.badRequest("visionModel is not a valid model name");
             }
         }
+        boolean ratings = false;
+        if (in.get("ratings") != null) {
+            String rv = String.valueOf(in.get("ratings")).strip();
+            if (!rv.equalsIgnoreCase("true") && !rv.equalsIgnoreCase("false")) {
+                throw ApiException.badRequest("ratings must be true or false");
+            }
+            ratings = rv.equalsIgnoreCase("true");
+            if (ratings && slack) {
+                throw ApiException.badRequest("ratings is only available for the Telegram assistant");
+            }
+        }
         Email email = null;
         String emailTo = text(in, "emailRecipients", "");
         if (!emailTo.isEmpty()) {
@@ -305,7 +317,7 @@ public final class TemplateService {
             email = new Email(conn, List.copyOf(addrs));
         }
         Map<String, Object> bundle = slack ? assistantSlack(name, chat, model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes, images)
-                : assistantTelegram(name, Long.parseLong(chat), model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes, images, voice, speak, photos ? visionModel : null);
+                : assistantTelegram(name, Long.parseLong(chat), model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes, images, voice, speak, photos ? visionModel : null, ratings);
         Map<String, Object> o = new LinkedHashMap<>();
         o.put("dryRun", dryRun);
         o.put("publish", true);
@@ -523,6 +535,11 @@ public final class TemplateService {
 
     /** @param visionModel non-null: photos are accepted, described by that vision model (connector describe, secret OPENAI_API_KEY) and then handled like typed text */
     static Map<String, Object> assistantTelegram(String projectName, long chatId, String model, String persona, String lookupUrl, String lookupDesc, String lookupSecret, int memoryTurns, String calendar, boolean webSearch, Email email, boolean notes, Images images, boolean voice, boolean speak, String visionModel) {
+        return assistantTelegram(projectName, chatId, model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes, images, voice, speak, visionModel, false);
+    }
+
+    /** @param ratings the reply has thumbs up/down buttons and the trigger records the presses as feedback (needs the API's feedback store) */
+    static Map<String, Object> assistantTelegram(String projectName, long chatId, String model, String persona, String lookupUrl, String lookupDesc, String lookupSecret, int memoryTurns, String calendar, boolean webSearch, Email email, boolean notes, Images images, boolean voice, boolean speak, String visionModel, boolean ratings) {
         Map<String, Object> trigger = new LinkedHashMap<>();
         trigger.put("id", "assistant-inbox");
         trigger.put("kind", "POLL");
@@ -535,8 +552,11 @@ public final class TemplateService {
         if (visionModel != null) {
             tc.put("photo", true);
         }
+        if (ratings) {
+            tc.put("ratings", true);
+        }
         trigger.put("config", tc);
-        Map<String, Object> b = bundle(projectName, "Telegram assistant with an approval policy (from a template)", model, persona, lookupUrl, lookupDesc, lookupSecret, "{{ event.chatId }}", memoryTurns, calendar, webSearch, email, notes, images == null && !speak ? null : new Images(images == null ? null : images.model(), chatId, null, speak), process(false, voice, visionModel), trigger);
+        Map<String, Object> b = bundle(projectName, "Telegram assistant with an approval policy (from a template)", model, persona, lookupUrl, lookupDesc, lookupSecret, "{{ event.chatId }}", memoryTurns, calendar, webSearch, email, notes, images == null && !speak ? null : new Images(images == null ? null : images.model(), chatId, null, speak), process(false, voice, visionModel, ratings), trigger);
         return voice || visionModel != null ? withMediaPrompt(b, voice, speak, visionModel != null) : b;
     }
 
@@ -871,6 +891,11 @@ public final class TemplateService {
      *                    vision model, then follows the same draft, policy and approval path as typed text
      */
     static ProcessModel process(boolean slack, boolean voice, String visionModel) {
+        return process(slack, voice, visionModel, false);
+    }
+
+    /** @param ratings Telegram only: the reply carries thumbs up/down buttons ({@code rate: true} on the send step) */
+    static ProcessModel process(boolean slack, boolean voice, String visionModel, boolean ratings) {
         boolean photos = visionModel != null;
         // Telegram shows "typing..." while the agent works; a failure of that step never fails the run
         String intoDraft = slack ? "draft" : "typing";
@@ -916,7 +941,8 @@ public final class TemplateService {
                         ? Map.of("connector", "slack", "botToken", "${secret:SLACK_BOT_TOKEN}",
                                 "inputs", Map.of("channel", "event.channel", "text", "draft.output"))
                         : Map.of("connector", "telegram", "botToken", "${secret:TELEGRAM_TOKEN}",
-                                "inputs", Map.of("chatId", "event.chatId", "text", "draft.output")))
+                                "inputs", ratings ? Map.of("chatId", "event.chatId", "text", "draft.output", "rate", "true")
+                                        : Map.of("chatId", "event.chatId", "text", "draft.output")))
                 .end("sent").end("dropped")
                 .flow("received", voice || photos ? "kind" : "command").flow("command", "forget", "event.text = \"/forget\" or event.text = \"forget me\"").defaultFlow("command", intoDraft)
                 .flow("forget", "confirm").flow("confirm", "forgotten")

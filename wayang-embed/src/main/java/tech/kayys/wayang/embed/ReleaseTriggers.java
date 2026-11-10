@@ -424,6 +424,9 @@ public final class ReleaseTriggers implements AutoCloseable {
             Poller.Result res = pollers.get(String.valueOf(t.config().get("source"))).poll(resolve(t.config(), used), s.cursor);
             int n = 0;
             for (Map<String, Object> ev : res.events()) {
+                if (Boolean.TRUE.equals(t.config().get("ratings")) && "feedback".equals(ev.get("kind"))) {
+                    continue; // a thumbs press: a release has no feedback store, and it is not a message for the process
+                }
                 if (!answeredApproval(t, ev) && withinRateLimit(t, ev)) {
                     start(t, ev);
                     n++;

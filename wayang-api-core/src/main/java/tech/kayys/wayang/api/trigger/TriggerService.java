@@ -100,6 +100,7 @@ public final class TriggerService {
         Map<String, Object> cfg = config == null ? Map.of() : config;
         requireSecretRefs(cfg);
         validateApprovals(kind, cfg);
+        validateRatings(kind, cfg);
         try {
             tech.kayys.wayang.runtime.RateLimiter.fromTriggerConfig(cfg);
         } catch (IllegalArgumentException e) {
@@ -339,6 +340,20 @@ public final class TriggerService {
         }
     }
 
+    /** {@code ratings: true} is for Telegram poll triggers: thumbs presses on the bot's replies are recorded as feedback. */
+    public static void validateRatings(Trigger.Kind kind, Map<String, Object> cfg) {
+        Object r = cfg.get("ratings");
+        if (r == null) {
+            return;
+        }
+        if (!(r instanceof Boolean b)) {
+            throw ApiException.badRequest("ratings must be true or false");
+        }
+        if (b && !(kind == Trigger.Kind.POLL && "telegram".equals(cfg.get("source")))) {
+            throw ApiException.badRequest("ratings is for Telegram poll triggers only");
+        }
+    }
+
     /**
      * A "yes" or "no" from a chat answers the oldest approval this trigger's runs wait on in that same conversation.
      *
@@ -496,6 +511,10 @@ public final class TriggerService {
             Principal runner = runner(t);
             int n = 0;
             for (Map<String, Object> ev : res.events()) {
+                if (isFeedback(t, ev)) {
+                    recordFeedback(t, ev); // a thumbs press on a reply is feedback, never a message for the process
+                    continue;
+                }
                 if (!answeredApproval(t, runner, ev) && withinRateLimit(t, ev)) {
                     api.startRun(runner, t.processId(), null, Map.of("event", ev, "trigger", t.id()));
                     n++;
@@ -507,6 +526,46 @@ public final class TriggerService {
             String msg = redact(String.valueOf(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()), resolvedValues);
             store.update(t.with(true, t.cursor(), now, msg.length() > 500 ? msg.substring(0, 500) : msg, t.consecutiveFailures() + 1));
             return 0;
+        }
+    }
+
+    /** Where thumbs presses go (set by the API wiring); without it they are dropped. */
+    private volatile tech.kayys.wayang.api.feedback.FeedbackService feedback;
+
+    public TriggerService withFeedback(tech.kayys.wayang.api.feedback.FeedbackService service) {
+        this.feedback = service;
+        return this;
+    }
+
+    /** Only the Telegram poller produces these, and only when the trigger asked for {@code ratings}. */
+    private static boolean isFeedback(Trigger t, Map<String, Object> ev) {
+        return "telegram".equals(t.config().get("source")) && Boolean.TRUE.equals(t.config().get("ratings")) && "feedback".equals(ev.get("kind"))
+                && ev.get("rating") instanceof String;
+    }
+
+    private void recordFeedback(Trigger t, Map<String, Object> ev) {
+        var svc = feedback;
+        if (svc == null) {
+            return;
+        }
+        Map<String, Object> ctx = new LinkedHashMap<>();
+        ctx.put("source", "telegram");
+        ctx.put("trigger", t.id());
+        ctx.put("processId", t.processId());
+        for (String k : new String[] { "chatId", "messageId" }) {
+            if (ev.get(k) != null) {
+                ctx.put(k, String.valueOf(ev.get(k)));
+            }
+        }
+        if (ev.get("reply") instanceof String r && !r.isBlank()) {
+            ctx.put("reply", r);
+        }
+        try {
+            String from = String.valueOf(ev.get("fromId")).replaceAll("[^A-Za-z0-9_-]", "");
+            svc.submit(new Principal(t.tenant(), "telegram-" + (from.isEmpty() ? "unknown" : from), Set.of()),
+                    Map.of("kind", "rating", "rating", ev.get("rating"), "context", ctx));
+        } catch (RuntimeException e) {
+            // over the feedback rate limit or invalid: a lost thumb must never fail the poll
         }
     }
 

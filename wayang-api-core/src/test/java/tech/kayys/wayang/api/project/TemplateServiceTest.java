@@ -592,6 +592,21 @@ class TemplateServiceTest {
     }
 
     @Test
+    void ratingsAddThumbsToTheReplyAndAskTheTriggerToRecordThem() {
+        var on = TemplateService.assistantTelegram("n", 1L, "openai/gpt-4o-mini", "", "", "", "", 10, null, false, null, false, null, false, false, null, true);
+        var trig = (Map<?, ?>) ((Map<?, ?>) ((List<?>) on.get("triggers")).get(0)).get("config");
+        assertEquals(Boolean.TRUE, trig.get("ratings"));
+        assertTrue(on.toString().contains("rate=true"), "only the reply carries the buttons");
+        assertEquals(1, on.toString().split("rate=true", -1).length - 1, "one step, not every message the bot sends");
+        var off = TemplateService.assistantTelegram("n", 1L, "openai/gpt-4o-mini", "", "", "", "", 10, null, false, null, false, null, false);
+        assertFalse(((Map<?, ?>) ((Map<?, ?>) ((List<?>) off.get("triggers")).get(0)).get("config")).containsKey("ratings"));
+        assertFalse(off.toString().contains("rate="));
+        assertTrue(templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "ratings", "true"), true).ok());
+        assertThrows(ApiException.class, () -> templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "ratings", "maybe"), false));
+        assertThrows(ApiException.class, () -> templates.instantiate(acme, "assistant-slack", Map.of("channelId", "C0123456789", "ratings", "true"), false));
+    }
+
+    @Test
     void imagesAndVoiceCanBeCombinedAndBothSurvive() {
         var b = TemplateService.assistantTelegram("n", 1L, "openai/gpt-4o-mini", "", "", "", "", 10, null, false, null, false,
                 new TemplateService.Images("gpt-image-1", 0), true);
