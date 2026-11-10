@@ -15,7 +15,7 @@ final class GamelanTemplates {
     private GamelanTemplates() {
     }
 
-    static String pom(ReleaseOptions o, ReleaseBundle b, boolean connectors, boolean multimodal) {
+    static String pom(ReleaseOptions o, ReleaseBundle b, boolean connectors, boolean multimodal, boolean mcp) {
         return """
                 <?xml version="1.0" encoding="UTF-8"?>
                 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -95,7 +95,7 @@ final class GamelanTemplates {
                 </project>
                 """.formatted(Publisher.xmlText(o.groupId()), Publisher.xmlText(o.artifactId()), Publisher.xmlText(o.version()),
                 Publisher.xmlText(Publisher.safe(b.name())), Publisher.xmlText(o.wayangVersion()), Publisher.xmlText(o.gamelanVersion()),
-                Publisher.xmlText(o.quarkusVersion()), (connectors ? Publisher.CONNECTORS_DEP : "") + (multimodal ? Publisher.MULTIMODAL_DEP : ""));
+                Publisher.xmlText(o.quarkusVersion()), (connectors ? Publisher.CONNECTORS_DEP : "") + (multimodal ? Publisher.MULTIMODAL_DEP : "") + (mcp ? Publisher.MCP_DEP : ""));
     }
 
     static String applicationProperties(ReleaseOptions o) {

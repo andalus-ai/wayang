@@ -569,6 +569,22 @@ class PublishTest {
     }
 
     @Test
+    void anOpenapiNodeBringsTheMcpModuleInBothTargets() {
+        // the same bundle as the http one, with the node turned into an openapi call (the spec link, an operation, fixed headers)
+        String httpBundle = bundle(true, false, "Pets");
+        assertTrue(httpBundle.contains("\"connector\":\"http\""), "bundle shape changed");
+        String bundleJson = httpBundle.replace("\"connector\":\"http\"", "\"connector\":\"openapi\",\"specUrl\":\"https://api.example.com/openapi.json\",\"operation\":\"getPet\"");
+        for (ReleaseOptions o : List.of(OPTS, GAM)) {
+            var p = Publisher.generate(bundleJson, o);
+            assertEquals(List.of("openapi"), p.connectors());
+            assertTrue(p.components().contains("wayang.mcp.openapi"), p.components().toString());
+            assertTrue(text(p, "pom.xml").contains("wayang-mcp"), o.target().toString());
+            assertTrue(text(p, "src/main/resources/wayang/artifact-lock.json").contains("wayang-mcp"), o.target().toString());
+        }
+        assertFalse(text(Publisher.generate(bundle(true, false, "Plain"), OPTS), "pom.xml").contains("wayang-mcp"));
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void aTranscribeToolAlsoBringsTheMultimodalModule() {
         Map<String, Object> m = (Map<String, Object>) Json.read(bundle(false, true, "Ears"));
