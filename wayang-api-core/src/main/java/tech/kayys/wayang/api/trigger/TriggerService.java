@@ -309,6 +309,29 @@ public final class TriggerService {
     // ------------------------------------------------------------ rate limit
 
     private final Map<String, tech.kayys.wayang.runtime.RateLimiter> limiters = new java.util.concurrent.ConcurrentHashMap<>();
+    private volatile tech.kayys.wayang.runtime.RateLimiter.Journal rateJournal;
+    private volatile java.time.Instant journalPurgedAt = java.time.Instant.EPOCH;
+
+    /** Keeps trigger rate-limit counts across restarts (see {@link tech.kayys.wayang.runtime.RateLimiter}); without it they live in memory only. */
+    public TriggerService withRateJournal(tech.kayys.wayang.runtime.RateLimiter.Journal journal) {
+        this.rateJournal = journal;
+        return this;
+    }
+
+    /** At most hourly: the day window is the longest a trigger can ask for, so two days of history is more than enough. */
+    private void purgeJournal() {
+        var j = rateJournal;
+        java.time.Instant now = clock.instant();
+        if (j == null || journalPurgedAt.plus(java.time.Duration.ofHours(1)).isAfter(now)) {
+            return;
+        }
+        journalPurgedAt = now;
+        try {
+            j.purgeBefore(now.minus(java.time.Duration.ofDays(2)));
+        } catch (RuntimeException e) {
+            // housekeeping only
+        }
+    }
 
     /**
      * Applies the trigger's {@code rateLimit} to one message: per conversation for chat triggers, otherwise per trigger. A message over the limit
@@ -318,7 +341,10 @@ public final class TriggerService {
         if (t.config().get("rateLimit") == null) {
             return true;
         }
-        var limiter = limiters.computeIfAbsent(t.tenant() + "\u0000" + t.id(), k -> tech.kayys.wayang.runtime.RateLimiter.fromTriggerConfig(t.config()));
+        var limiter = limiters.computeIfAbsent(t.tenant() + "\u0000" + t.id(), k -> {
+            var l = tech.kayys.wayang.runtime.RateLimiter.fromTriggerConfig(t.config());
+            return rateJournal == null ? l : l.withJournal(rateJournal, k);
+        });
         String field = tech.kayys.wayang.runtime.ChatApproval.conversationField(t.config());
         Object who = field == null ? null : ev.get(field);
         return limiter.allow(who == null ? "*" : String.valueOf(who), clock.instant());
@@ -469,6 +495,7 @@ public final class TriggerService {
     public synchronized int tick() {
         int started = 0;
         Instant now = clock.instant();
+        purgeJournal();
         for (Trigger t : store.pollable()) {
             if (!gate.active(t.tenant())) {
                 continue;

@@ -826,6 +826,24 @@ class TriggerServiceTest {
         t.create(admin, "ok", Trigger.Kind.POLL, "inbox", Map.of("source", "telegram", "ratings", true));
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void aDayCapSurvivesARestartWhenAJournalIsSet() {
+        publishProcess(admin);
+        var journal = new tech.kayys.wayang.runtime.RateLimiter.MemoryJournal();
+        var first = service(Map.of("telegram", fake)).withRateJournal(journal);
+        first.create(admin, "chat", Trigger.Kind.POLL, "inbox", Map.of("source", "telegram", "rateLimit", Map.of("perDay", 2)));
+        assertEquals(1, tickWith(first, msg(7, "one")));
+        assertEquals(1, tickWith(first, msg(7, "two")));
+        assertEquals(0, tickWith(first, msg(7, "three")), "over the cap");
+        // the process restarts: a new service over the same trigger store and journal
+        var second = service(Map.of("telegram", fake)).withRateJournal(journal);
+        assertEquals(0, tickWith(second, msg(7, "four")), "the day's allowance is not reset by the restart");
+        assertEquals(1, tickWith(second, msg(8, "someone else")));
+        // without a journal a restart does forget (documented)
+        assertEquals(1, tickWith(service(Map.of("telegram", fake)), msg(7, "five")));
+    }
+
     private RunView run0() {
         return api.listRuns(admin, "inbox", 1).get(0);
     }
