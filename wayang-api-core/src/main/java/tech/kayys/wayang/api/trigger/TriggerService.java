@@ -235,7 +235,7 @@ public final class TriggerService {
                 return new Reception(200, challenge.get(), 0, false);
             }
             provider.verify(cfg, h, raw, clock.instant());
-            Map<String, Object> json = parseObject(raw);
+            Map<String, Object> json = formOrJson(h, raw);
             var challenge = provider.handshake(cfg, query == null ? Map.of() : query, json);
             if (challenge.isPresent()) {
                 return new Reception(200, challenge.get(), 0, false);
@@ -244,6 +244,11 @@ public final class TriggerService {
             Principal runner = runner(t);
             for (WebhookProvider.Event ev : provider.events(cfg, json)) {
                 if (seen(t, ev.id())) {
+                    continue;
+                }
+                if (isFeedback(t, ev.data())) {
+                    recordFeedback(t, ev.data()); // a thumbs press: feedback, never a message for the process
+                    remember(t, ev.id());
                     continue;
                 }
                 boolean answer = answeredApproval(t, runner, ev.data()) || !withinRateLimit(t, ev.data());
@@ -261,6 +266,19 @@ public final class TriggerService {
 
     private boolean usesProvider(Trigger t) {
         return t.config().get("auth") instanceof String a && !a.equals("secret");
+    }
+
+    /** Slack buttons arrive as a form with the JSON in {@code payload}; everything else is a JSON body. */
+    private static Map<String, Object> formOrJson(Map<String, String> h, byte[] raw) {
+        try {
+            var form = tech.kayys.wayang.runtime.FormPayload.parse(h.get("content-type"), raw);
+            if (form.isPresent()) {
+                return form.get();
+            }
+        } catch (IllegalArgumentException e) {
+            throw ApiException.badRequest("payload must be a JSON object");
+        }
+        return parseObject(raw);
     }
 
     private static Map<String, Object> parseObject(byte[] raw) {
@@ -340,7 +358,7 @@ public final class TriggerService {
         }
     }
 
-    /** {@code ratings: true} is for Telegram poll triggers: thumbs presses on the bot's replies are recorded as feedback. */
+    /** {@code ratings: true} is for Telegram poll and Slack webhook triggers: thumbs presses on the bot's replies are recorded as feedback. */
     public static void validateRatings(Trigger.Kind kind, Map<String, Object> cfg) {
         Object r = cfg.get("ratings");
         if (r == null) {
@@ -349,8 +367,10 @@ public final class TriggerService {
         if (!(r instanceof Boolean b)) {
             throw ApiException.badRequest("ratings must be true or false");
         }
-        if (b && !(kind == Trigger.Kind.POLL && "telegram".equals(cfg.get("source")))) {
-            throw ApiException.badRequest("ratings is for Telegram poll triggers only");
+        boolean telegram = kind == Trigger.Kind.POLL && "telegram".equals(cfg.get("source"));
+        boolean slack = kind == Trigger.Kind.WEBHOOK && "slack".equals(cfg.get("auth"));
+        if (b && !telegram && !slack) {
+            throw ApiException.badRequest("ratings is for Telegram poll and Slack webhook triggers only");
         }
     }
 
@@ -539,8 +559,15 @@ public final class TriggerService {
 
     /** Only the Telegram poller produces these, and only when the trigger asked for {@code ratings}. */
     private static boolean isFeedback(Trigger t, Map<String, Object> ev) {
-        return "telegram".equals(t.config().get("source")) && Boolean.TRUE.equals(t.config().get("ratings")) && "feedback".equals(ev.get("kind"))
-                && ev.get("rating") instanceof String;
+        return chatSource(t) != null && Boolean.TRUE.equals(t.config().get("ratings")) && "feedback".equals(ev.get("kind")) && ev.get("rating") instanceof String;
+    }
+
+    /** {@code telegram} or {@code slack} for the triggers that can carry ratings, else null. */
+    private static String chatSource(Trigger t) {
+        if (t.kind() == Trigger.Kind.POLL && "telegram".equals(t.config().get("source"))) {
+            return "telegram";
+        }
+        return t.kind() == Trigger.Kind.WEBHOOK && "slack".equals(t.config().get("auth")) ? "slack" : null;
     }
 
     private void recordFeedback(Trigger t, Map<String, Object> ev) {
@@ -549,10 +576,11 @@ public final class TriggerService {
             return;
         }
         Map<String, Object> ctx = new LinkedHashMap<>();
-        ctx.put("source", "telegram");
+        String source = chatSource(t);
+        ctx.put("source", source);
         ctx.put("trigger", t.id());
         ctx.put("processId", t.processId());
-        for (String k : new String[] { "chatId", "messageId" }) {
+        for (String k : new String[] { "chatId", "messageId", "channel", "messageTs" }) {
             if (ev.get(k) != null) {
                 ctx.put(k, String.valueOf(ev.get(k)));
             }
@@ -561,8 +589,8 @@ public final class TriggerService {
             ctx.put("reply", r);
         }
         try {
-            String from = String.valueOf(ev.get("fromId")).replaceAll("[^A-Za-z0-9_-]", "");
-            svc.submit(new Principal(t.tenant(), "telegram-" + (from.isEmpty() ? "unknown" : from), Set.of()),
+            String from = String.valueOf(ev.get("fromId") != null ? ev.get("fromId") : ev.get("user")).replaceAll("[^A-Za-z0-9_-]", "");
+            svc.submit(new Principal(t.tenant(), source + "-" + (from.isEmpty() || from.equals("null") ? "unknown" : from), Set.of()),
                     Map.of("kind", "rating", "rating", ev.get("rating"), "context", ctx));
         } catch (RuntimeException e) {
             // over the feedback rate limit or invalid: a lost thumb must never fail the poll

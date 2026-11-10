@@ -218,7 +218,15 @@ public final class ReleaseTriggers implements AutoCloseable {
                 return new Reception(200, challenge.get(), false);
             }
             provider.verify(cfg, h, raw, clock.instant());
-            Map<String, Object> json = parseObject(raw);
+            Map<String, Object> json;
+            try {
+                json = tech.kayys.wayang.runtime.FormPayload.parse(h.get("content-type"), raw).orElse(null);
+            } catch (IllegalArgumentException e) {
+                throw new Refused(400, "payload must be a JSON object");
+            }
+            if (json == null) {
+                json = parseObject(raw);
+            }
             var challenge = provider.handshake(cfg, query == null ? Map.of() : query, json);
             if (challenge.isPresent()) {
                 return new Reception(200, challenge.get(), false);
@@ -227,6 +235,10 @@ public final class ReleaseTriggers implements AutoCloseable {
             for (WebhookProvider.Event ev : provider.events(cfg, json)) {
                 if (seen(t, ev.id())) {
                     continue;
+                }
+                if (Boolean.TRUE.equals(t.config().get("ratings")) && "feedback".equals(ev.data().get("kind"))) {
+                    remember(t, ev.id());
+                    continue; // a thumbs press: a release has no feedback store, and it is not a message for the process
                 }
                 boolean answer = answeredApproval(t, ev.data()) || !withinRateLimit(t, ev.data());
                 if (!answer) {
