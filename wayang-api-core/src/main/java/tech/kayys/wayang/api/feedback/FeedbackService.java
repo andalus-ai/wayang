@@ -124,6 +124,28 @@ public final class FeedbackService {
     }
 
     /**
+     * Deletes this tenant's feedback older than {@code before} (tenant-wide ADMIN). The cut-off is required and must be at least a day old,
+     * so one call cannot wipe what people sent today.
+     *
+     * @return {@code {deleted}}
+     */
+    public Map<String, Object> purge(Principal p, Instant before) {
+        if (p == null) {
+            throw new ApiException(ApiException.Code.UNAUTHORIZED, "Not authenticated");
+        }
+        if (!p.can(Permission.ADMIN)) {
+            throw ApiException.forbidden(Permission.ADMIN);
+        }
+        if (before == null) {
+            throw ApiException.badRequest("before is required");
+        }
+        if (before.isAfter(Instant.now(clock).minus(java.time.Duration.ofDays(1)))) {
+            throw ApiException.badRequest("before must be at least one day ago");
+        }
+        return Map.of("deleted", store.purgeBefore(p.tenantId(), before));
+    }
+
+    /**
      * Masks what looks like a credential: Authorization/Bearer values, {@code token=...}-style pairs, URL passwords and query strings, JWTs and
      * well-known token shapes, and any 40+ character run of token characters. It is a safety net for text people paste, not a guarantee, and
      * it errs on the side of masking. Control characters other than newline and tab are dropped.

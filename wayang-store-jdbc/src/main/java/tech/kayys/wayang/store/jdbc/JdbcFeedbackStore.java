@@ -17,7 +17,7 @@ import tech.kayys.wayang.api.feedback.FeedbackEntry;
 import tech.kayys.wayang.api.feedback.FeedbackStore;
 import tech.kayys.wayang.runtime.json.Json;
 
-/** {@link FeedbackStore} over plain JDBC. INSERT and SELECT only; the application never updates or deletes feedback rows. */
+/** {@link FeedbackStore} over plain JDBC. INSERT and SELECT, plus the age-based DELETE of {@link #purgeBefore}; rows are never updated. */
 public final class JdbcFeedbackStore implements FeedbackStore {
 
     private final DataSource ds;
@@ -37,6 +37,17 @@ public final class JdbcFeedbackStore implements FeedbackStore {
             ps.executeUpdate();
         } catch (SQLException ex) {
             throw failure("append");
+        }
+    }
+
+    @Override
+    public int purgeBefore(String tenant, Instant before) {
+        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement("DELETE FROM wayang_feedback WHERE tenant_id = ? AND at_ms < ?")) {
+            ps.setString(1, tenant);
+            ps.setLong(2, before.toEpochMilli());
+            return ps.executeUpdate();
+        } catch (SQLException ex) {
+            throw failure("purge");
         }
     }
 
