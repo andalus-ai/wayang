@@ -6,6 +6,7 @@ import java.util.Map;
 
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
@@ -49,5 +50,18 @@ public class FeedbackResource {
         }
         return feedback.service().list(principals.current(), kind == null || kind.isBlank() ? null : kind, limit == null ? 100 : limit, b).stream()
                 .map(e -> e.toMap()).toList();
+    }
+
+    /** Deletes the tenant's feedback older than {@code before} (ISO-8601, at least a day ago); ADMIN only. */
+    @DELETE
+    @Produces(MediaType.APPLICATION_JSON)
+    public Map<String, Object> purge(@QueryParam("before") String before) {
+        Instant b;
+        try {
+            b = before == null || before.isBlank() ? null : Instant.parse(before);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw ApiException.badRequest("before must be an ISO-8601 instant like 2026-01-01T00:00:00Z");
+        }
+        return feedback.service().purge(principals.current(), b);
     }
 }
