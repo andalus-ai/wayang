@@ -36,9 +36,9 @@ a guarantee: it errs on the side of masking, and the form tells people not to pa
 Server-side failures are already visible in the audit log (`outcome: FAILED`) and the run's own error; this is for the person's
 view of what went wrong and why it mattered.
 
-## Thumbs under Telegram assistant replies
+## Thumbs under assistant replies (Telegram and Slack)
 
-Template parameter `ratings` (off by default) on the Telegram assistant:
+Template parameter `ratings` (off by default) on the Telegram and Slack assistants:
 
 * the reply is sent with 👍 and 👎 buttons (`sendMessage` input `rate: true`, on the one step that sends the reply, not on the
   confirmations or approval questions);
@@ -50,7 +50,13 @@ Template parameter `ratings` (off by default) on the Telegram assistant:
   content reaches the feedback log (admin-readable, scrubbed like everything else), so leave `ratings` off if replies are too private for that;
 * a press is dropped silently if the feedback store rate limit (10 a minute per user) is hit, and never fails the poll.
 
-`ratings` is for Telegram poll triggers only (the API refuses it elsewhere). A **generated release** drops these presses (it has no feedback
+`ratings` is for Telegram poll triggers and Slack webhook triggers only (the API refuses it elsewhere). **Slack** works the same way, with Block Kit buttons under the reply (a long reply is split into 3000-character sections; the full text stays
+as the notification text). Slack sends button presses to the app's **Interactivity Request URL**, which must be set (Interactivity & Shortcuts
+in the Slack app settings) to the same webhook URL as the Events subscription: Wayang verifies the signature, reads the form-encoded
+`payload`, and handles a press only from an allowed channel and, if `allowedUsers` is set, an allowed person, on our two buttons. A retry of
+the same press (same `action_ts`) counts once. Recorded users are `slack-<id>`; context has `channel` and `messageTs` instead of `chatId` and `messageId`.
+
+A **generated release** drops these presses (it has no feedback
 store, and a press is not a message for the process), so buttons there would only be acknowledged, not recorded.
 
 ## Not done

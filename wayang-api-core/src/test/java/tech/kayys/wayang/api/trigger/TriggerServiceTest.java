@@ -826,6 +826,89 @@ class TriggerServiceTest {
         t.create(admin, "ok", Trigger.Kind.POLL, "inbox", Map.of("source", "telegram", "ratings", true));
     }
 
+    private static String slackPress(String channel, String user, String actionId, String actionTs) {
+        String json = "{\"type\":\"block_actions\",\"user\":{\"id\":\"" + user + "\"},\"channel\":{\"id\":\"" + channel + "\"},"
+                + "\"message\":{\"ts\":\"5.5\",\"text\":\"The reply\"},\"actions\":[{\"action_id\":\"" + actionId + "\",\"action_ts\":\"" + actionTs + "\"}]}";
+        return "payload=" + java.net.URLEncoder.encode(json, StandardCharsets.UTF_8);
+    }
+
+    private Map<String, String> formHeaders(String body) {
+        Map<String, String> h = new java.util.HashMap<>(slackHeaders(body));
+        h.put("Content-Type", "application/x-www-form-urlencoded");
+        return h;
+    }
+
+    @Test
+    void aSlackThumbsPressIsRecordedAsFeedbackNotRunAndRetriesCountOnce() {
+        publishProcess(admin);
+        secretValues.put("acme/SLACK_SIGNING", "slack-secret");
+        var store = new tech.kayys.wayang.api.feedback.FeedbackStore.InMemory(10);
+        TriggerService s = providerService().withFeedback(new tech.kayys.wayang.api.feedback.FeedbackService(store, clock, null));
+        s.create(admin, "sl", Trigger.Kind.WEBHOOK, "inbox",
+                Map.of("auth", "slack", "signingSecret", "${secret:SLACK_SIGNING}", "allowedChannels", List.of("D1"), "ratings", true));
+        String press = slackPress("D1", "U7", "fb_down", "111.1");
+        var r = s.receive("acme", "sl", "POST", Map.of(), formHeaders(press), press.getBytes(StandardCharsets.UTF_8));
+        assertEquals(200, r.status());
+        assertEquals(0, r.runs());
+        assertEquals(0, runCount());
+        var e = store.list("acme", "rating", 10, null).get(0);
+        assertEquals("down", e.rating());
+        assertEquals("slack-U7", e.user());
+        assertEquals("The reply", e.context().get("reply"));
+        assertEquals("D1", e.context().get("channel"));
+        assertEquals("5.5", e.context().get("messageTs"));
+        assertEquals("slack", e.context().get("source"));
+        s.receive("acme", "sl", "POST", Map.of(), formHeaders(press), press.getBytes(StandardCharsets.UTF_8));
+        assertEquals(1, store.list("acme", "rating", 10, null).size(), "Slack's retry of the same press is not a second rating");
+        String other = slackPress("D1", "U7", "fb_up", "222.2");
+        s.receive("acme", "sl", "POST", Map.of(), formHeaders(other), other.getBytes(StandardCharsets.UTF_8));
+        assertEquals(2, store.list("acme", "rating", 10, null).size());
+        String msg = slackBody("Ev9", "D1", "hello");
+        assertEquals(1, s.receive("acme", "sl", "POST", Map.of(), slackHeaders(msg), msg.getBytes(StandardCharsets.UTF_8)).runs(), "messages still run");
+    }
+
+    @Test
+    void aSlackPressWithoutRatingsOrFromTheWrongPlaceStartsNothingAndRecordsNothing() {
+        publishProcess(admin);
+        secretValues.put("acme/SLACK_SIGNING", "slack-secret");
+        var store = new tech.kayys.wayang.api.feedback.FeedbackStore.InMemory(10);
+        TriggerService s = providerService().withFeedback(new tech.kayys.wayang.api.feedback.FeedbackService(store, clock, null));
+        s.create(admin, "plain", Trigger.Kind.WEBHOOK, "inbox", Map.of("auth", "slack", "signingSecret", "${secret:SLACK_SIGNING}", "allowedChannels", List.of("D1")));
+        s.create(admin, "rated", Trigger.Kind.WEBHOOK, "inbox",
+                Map.of("auth", "slack", "signingSecret", "${secret:SLACK_SIGNING}", "allowedChannels", List.of("D1"), "allowedUsers", List.of("U7"), "ratings", true));
+        for (String[] c : new String[][] { { "plain", "D1", "U7", "fb_up" }, { "rated", "D2", "U7", "fb_up" }, { "rated", "D1", "U8", "fb_up" },
+                { "rated", "D1", "U7", "something_else" } }) {
+            String press = slackPress(c[1], c[2], c[3], "1." + c[0].length() + c[1] + c[2]);
+            var r = s.receive("acme", c[0], "POST", Map.of(), formHeaders(press), press.getBytes(StandardCharsets.UTF_8));
+            assertEquals(0, r.runs(), String.join(",", c));
+        }
+        assertTrue(store.list("acme", null, 10, null).isEmpty());
+        assertEquals(0, runCount());
+    }
+
+    @Test
+    void aFormPressNeedsAValidSignatureAndAJsonPayload() {
+        publishProcess(admin);
+        secretValues.put("acme/SLACK_SIGNING", "slack-secret");
+        TriggerService s = providerService();
+        s.create(admin, "sl", Trigger.Kind.WEBHOOK, "inbox",
+                Map.of("auth", "slack", "signingSecret", "${secret:SLACK_SIGNING}", "allowedChannels", List.of("D1"), "ratings", true));
+        String press = slackPress("D1", "U7", "fb_up", "1.1");
+        Map<String, String> bad = new java.util.HashMap<>(formHeaders(press));
+        bad.put("X-Slack-Signature", "v0=" + "0".repeat(64));
+        assertThrows(ApiException.class, () -> s.receive("acme", "sl", "POST", Map.of(), bad, press.getBytes(StandardCharsets.UTF_8)));
+        String notJson = "payload=" + java.net.URLEncoder.encode("not json", StandardCharsets.UTF_8);
+        assertThrows(ApiException.class, () -> s.receive("acme", "sl", "POST", Map.of(), formHeaders(notJson), notJson.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    void ratingsAreAcceptedOnASlackWebhookTriggerButNotOnAPlainOne() {
+        var t = providerService();
+        secretValues.put("acme/SLACK_SIGNING", "slack-secret");
+        t.create(admin, "sl", Trigger.Kind.WEBHOOK, "inbox", Map.of("auth", "slack", "signingSecret", "${secret:SLACK_SIGNING}", "allowedChannels", List.of("D1"), "ratings", true));
+        assertThrows(ApiException.class, () -> t.create(admin, "w", Trigger.Kind.WEBHOOK, "inbox", Map.of("auth", "secret", "ratings", true)));
+    }
+
     private RunView run0() {
         return api.listRuns(admin, "inbox", 1).get(0);
     }

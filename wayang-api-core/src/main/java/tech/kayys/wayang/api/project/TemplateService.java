@@ -96,7 +96,7 @@ public final class TemplateService {
                         new Param("voice", "true makes the assistant understand voice notes (up to 5 minutes): they are transcribed with an OpenAI-compatible speech-to-text API (secret OPENAI_API_KEY) and then handled like typed text, including the approval policy. Needs the MEDIA feature", false, "false"),
                         new Param("speak", "true (with voice) makes the assistant also answer a voice note by voice: text to speech with an OpenAI-compatible API (secret OPENAI_API_KEY), sent as a Telegram voice note", false, "false"),
                         new Param("photos", "true makes the assistant understand photos you send (with the caption as your message): a vision model describes the picture (OpenAI-compatible chat API, secret OPENAI_API_KEY) and the description is handled like typed text, including the approval policy. Text inside a picture is treated as untrusted. Needs the MEDIA feature", false, "false"),
-                        new Param("ratings", "true adds thumbs up/down buttons under each reply; a press is recorded as feedback (Feedback section, admin only) with the chat and message ids and the first 200 characters of the reply. Only chats and people the trigger already allows can press them", false, "false"),
+                        new Param("ratings", "true adds thumbs up/down buttons under each reply; a press is recorded as feedback (Feedback section, admin only) with the chat and message ids and the first 200 characters of the reply. Only chats and people the trigger already allows can press them. Slack: also turn on Interactivity in the Slack app and set its Request URL to the trigger's webhook URL", false, "false"),
                         new Param("visionModel", "The vision model used when photos is true", false, "gpt-4o-mini"),
                         new Param("name", "Project name", false, "Personal assistant")),
                 List.of("TELEGRAM_TOKEN")),
@@ -292,9 +292,6 @@ public final class TemplateService {
                 throw ApiException.badRequest("ratings must be true or false");
             }
             ratings = rv.equalsIgnoreCase("true");
-            if (ratings && slack) {
-                throw ApiException.badRequest("ratings is only available for the Telegram assistant");
-            }
         }
         Email email = null;
         String emailTo = text(in, "emailRecipients", "");
@@ -316,7 +313,7 @@ public final class TemplateService {
             }
             email = new Email(conn, List.copyOf(addrs));
         }
-        Map<String, Object> bundle = slack ? assistantSlack(name, chat, model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes, images)
+        Map<String, Object> bundle = slack ? assistantSlack(name, chat, model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes, images, ratings)
                 : assistantTelegram(name, Long.parseLong(chat), model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes, images, voice, speak, photos ? visionModel : null, ratings);
         Map<String, Object> o = new LinkedHashMap<>();
         o.put("dryRun", dryRun);
@@ -589,13 +586,22 @@ public final class TemplateService {
 
     /** @param images adds image generation and sharing in the channel (secret IMAGE_API_KEY; the Slack app needs files:write), or null */
     static Map<String, Object> assistantSlack(String projectName, String channelId, String model, String persona, String lookupUrl, String lookupDesc, String lookupSecret, int memoryTurns, String calendar, boolean webSearch, Email email, boolean notes, Images images) {
+        return assistantSlack(projectName, channelId, model, persona, lookupUrl, lookupDesc, lookupSecret, memoryTurns, calendar, webSearch, email, notes, images, false);
+    }
+
+    /** @param ratings the reply has thumbs up/down buttons; the trigger records presses (the Slack app needs Interactivity pointed at the webhook URL) */
+    static Map<String, Object> assistantSlack(String projectName, String channelId, String model, String persona, String lookupUrl, String lookupDesc, String lookupSecret, int memoryTurns, String calendar, boolean webSearch, Email email, boolean notes, Images images, boolean ratings) {
         Map<String, Object> trigger = new LinkedHashMap<>();
         trigger.put("id", "assistant-inbox");
         trigger.put("kind", "WEBHOOK");
         trigger.put("processId", "personal-assistant");
         trigger.put("enabled", false);
-        trigger.put("config", Map.of("auth", "slack", "signingSecret", "${secret:SLACK_SIGNING_SECRET}", "allowedChannels", List.of(channelId), "approvals", true, "rateLimit", Map.of("perHour", 60, "perDay", 300)));
-        return bundle(projectName, "Slack assistant with an approval policy (from a template)", model, persona, lookupUrl, lookupDesc, lookupSecret, "{{ event.channel }}", memoryTurns, calendar, webSearch, email, notes, images == null ? null : new Images(images.model(), 0, channelId), process(true), trigger);
+        Map<String, Object> slackCfg = new LinkedHashMap<>(Map.of("auth", "slack", "signingSecret", "${secret:SLACK_SIGNING_SECRET}", "allowedChannels", List.of(channelId), "approvals", true, "rateLimit", Map.of("perHour", 60, "perDay", 300)));
+        if (ratings) {
+            slackCfg.put("ratings", true);
+        }
+        trigger.put("config", slackCfg);
+        return bundle(projectName, "Slack assistant with an approval policy (from a template)", model, persona, lookupUrl, lookupDesc, lookupSecret, "{{ event.channel }}", memoryTurns, calendar, webSearch, email, notes, images == null ? null : new Images(images.model(), 0, channelId), process(true, false, null, ratings), trigger);
     }
 
     private static Map<String, Object> bundle(String projectName, String description, String model, String persona, String lookupUrl, String lookupDesc, String lookupSecret, String memoryKey, int memoryTurns, String calendar, boolean webSearch, Email email, boolean notes, Images images, ProcessModel process, Map<String, Object> trigger) {
@@ -939,7 +945,8 @@ public final class TemplateService {
                 .task("actions", ElementType.SERVICE_TASK, Map.of("connector", "agent-actions", "inputs", Map.of("calls", "draft.pendingCalls")))
                 .task("send", ElementType.SERVICE_TASK, slack
                         ? Map.of("connector", "slack", "botToken", "${secret:SLACK_BOT_TOKEN}",
-                                "inputs", Map.of("channel", "event.channel", "text", "draft.output"))
+                                "inputs", ratings ? Map.of("channel", "event.channel", "text", "draft.output", "rate", "true")
+                                        : Map.of("channel", "event.channel", "text", "draft.output"))
                         : Map.of("connector", "telegram", "botToken", "${secret:TELEGRAM_TOKEN}",
                                 "inputs", ratings ? Map.of("chatId", "event.chatId", "text", "draft.output", "rate", "true")
                                         : Map.of("chatId", "event.chatId", "text", "draft.output")))

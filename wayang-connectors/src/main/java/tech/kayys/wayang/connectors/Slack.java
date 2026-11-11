@@ -28,6 +28,12 @@ public final class Slack {
 
     private static final Duration TOLERANCE = Duration.ofMinutes(5);
     private static final int MAX_TEXT = 40_000;
+    /** A Slack section block holds at most 3000 characters of text. */
+    private static final int SECTION = 3000;
+    static final String RATE_UP = "fb_up";
+    static final String RATE_DOWN = "fb_down";
+    /** How much of the rated reply goes into the feedback event. */
+    static final int RATED_EXCERPT = 200;
     private static final String DEFAULT_BASE = "https://slack.com";
 
     private Slack() {
@@ -77,7 +83,16 @@ public final class Slack {
                 l.forEach(o -> allowed.add(String.valueOf(o)));
             }
             List<Event> out = new ArrayList<>();
-            if (allowed.isEmpty() || json == null || !"event_callback".equals(json.get("type"))
+            if (allowed.isEmpty() || json == null) {
+                return out;
+            }
+            if ("block_actions".equals(json.get("type"))) {
+                if (Boolean.TRUE.equals(config.get("ratings"))) {
+                    thumbs(config, json, allowed).ifPresent(out::add);
+                }
+                return out;
+            }
+            if (!"event_callback".equals(json.get("type"))
                     || !(json.get("event") instanceof Map<?, ?> ev)) {
                 return out;
             }
@@ -104,6 +119,40 @@ public final class Slack {
             out.add(new Event(id, d));
             return out;
         }
+    }
+
+    /**
+     * A thumbs press (Slack's interactivity payload, {@code block_actions}) on one of our two buttons, in an allowed channel by an allowed
+     * user, as {@code {kind: "feedback", rating, channel, user, messageTs, reply}}. Anything else is ignored.
+     */
+    private static Optional<WebhookProvider.Event> thumbs(Map<String, Object> config, Map<String, Object> json, Set<String> allowed) {
+        if (!(json.get("actions") instanceof List<?> actions) || actions.size() != 1 || !(actions.get(0) instanceof Map<?, ?> a)) {
+            return Optional.empty();
+        }
+        Object actionId = a.get("action_id");
+        if (!RATE_UP.equals(actionId) && !RATE_DOWN.equals(actionId)) {
+            return Optional.empty();
+        }
+        Object channel = json.get("channel") instanceof Map<?, ?> c ? c.get("id") : null;
+        Object user = json.get("user") instanceof Map<?, ?> u ? u.get("id") : null;
+        if (channel == null || user == null || !allowed.contains(String.valueOf(channel))) {
+            return Optional.empty();
+        }
+        if (config.get("allowedUsers") instanceof List<?> ul && !ul.isEmpty() && ul.stream().noneMatch(x -> String.valueOf(x).equals(String.valueOf(user)))) {
+            return Optional.empty();
+        }
+        Map<?, ?> msg = json.get("message") instanceof Map<?, ?> m ? m : Map.of();
+        String reply = msg.get("text") instanceof String t ? t : "";
+        Map<String, Object> d = new LinkedHashMap<>();
+        d.put("kind", "feedback");
+        d.put("rating", RATE_UP.equals(actionId) ? "up" : "down");
+        d.put("channel", channel);
+        d.put("user", user);
+        d.put("messageTs", msg.get("ts"));
+        d.put("reply", reply.length() > RATED_EXCERPT ? reply.substring(0, RATED_EXCERPT) : reply);
+        // one press is one event; Slack retries an unanswered delivery with the same action_ts
+        String id = "slack-fb:" + channel + ":" + user + ":" + a.get("action_ts");
+        return Optional.of(new WebhookProvider.Event(id, d));
     }
 
     public static final class Sender implements ServiceHandler.Connector {
@@ -218,6 +267,17 @@ public final class Slack {
             body.put("text", text);
             if (inputs.get("threadTs") instanceof String t && !t.isBlank()) {
                 body.put("thread_ts", t);
+            }
+            if (Boolean.TRUE.equals(inputs.get("rate")) || "true".equals(inputs.get("rate"))) {
+                // blocks replace the text on screen (text stays as the notification and as what the press payload quotes back)
+                List<Map<String, Object>> blocks = new ArrayList<>();
+                for (int i = 0; i < text.length(); i += SECTION) {
+                    blocks.add(Map.of("type", "section", "text", Map.of("type", "mrkdwn", "text", text.substring(i, Math.min(text.length(), i + SECTION)))));
+                }
+                blocks.add(Map.of("type", "actions", "block_id", "wayang_feedback", "elements", List.of(
+                        Map.of("type", "button", "action_id", RATE_UP, "text", Map.of("type", "plain_text", "text", "\uD83D\uDC4D", "emoji", true)),
+                        Map.of("type", "button", "action_id", RATE_DOWN, "text", Map.of("type", "plain_text", "text", "\uD83D\uDC4E", "emoji", true)))));
+                body.put("blocks", blocks);
             }
             Map<String, Object> cfg = new LinkedHashMap<>();
             cfg.put("url", base + "/api/chat.postMessage");
