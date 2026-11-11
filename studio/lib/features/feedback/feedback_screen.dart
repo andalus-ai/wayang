@@ -15,6 +15,8 @@ final feedbackKindFilterProvider = StateProvider<String?>((ref) => null);
 final feedbackListProvider = FutureProvider.autoDispose<List<FeedbackItem>>(
     (ref) => ref.watch(repositoryProvider).listFeedback(kind: ref.watch(feedbackKindFilterProvider)));
 
+final feedbackSummaryProvider = FutureProvider.autoDispose<FeedbackSummary>((ref) => ref.watch(repositoryProvider).feedbackSummary());
+
 /// What people sent from Studio, newest first. Reading needs the tenant ADMIN role; anyone else sees the server's refusal and can still
 /// use "Send feedback" here.
 class FeedbackScreen extends ConsumerWidget {
@@ -24,6 +26,7 @@ class FeedbackScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final items = ref.watch(feedbackListProvider);
     final filter = ref.watch(feedbackKindFilterProvider);
+    final summary = ref.watch(feedbackSummaryProvider).valueOrNull; // a failure shows on the list below; the counts just stay out
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -40,15 +43,19 @@ class FeedbackScreen extends ConsumerWidget {
                 label: const Text('Send feedback'),
               ),
               const SizedBox(width: 8),
-              IconButton(tooltip: 'Refresh', onPressed: () => ref.invalidate(feedbackListProvider), icon: const Icon(Icons.refresh_rounded, size: 18)),
+              IconButton(tooltip: 'Refresh', onPressed: () {
+                ref.invalidate(feedbackListProvider);
+                ref.invalidate(feedbackSummaryProvider);
+              }, icon: const Icon(Icons.refresh_rounded, size: 18)),
             ],
           ),
+          if (summary != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(summary.line, style: const TextStyle(fontSize: 12))),
           const SizedBox(height: 12),
           Wrap(spacing: 8, children: [
             ChoiceChip(label: const Text('All'), selected: filter == null, onSelected: (_) => ref.read(feedbackKindFilterProvider.notifier).state = null),
             for (final k in FeedbackKind.values)
               ChoiceChip(
-                label: Text(k.label),
+                label: Text(summary != null && summary.openOf(k.api) > 0 ? '${k.label} (${summary.openOf(k.api)})' : k.label),
                 selected: filter == k.api,
                 onSelected: (_) => ref.read(feedbackKindFilterProvider.notifier).state = k.api,
               ),
@@ -106,6 +113,7 @@ class _FeedbackCard extends ConsumerWidget {
                 try {
                   await ref.read(repositoryProvider).setFeedbackStatus(item.id, done: !item.isDone);
                   ref.invalidate(feedbackListProvider);
+                  ref.invalidate(feedbackSummaryProvider);
                 } catch (e) {
                   if (context.mounted) showToast(context, errText(e));
                 }

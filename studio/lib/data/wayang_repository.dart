@@ -213,6 +213,9 @@ class WayangRepository {
           if (f is Map) FeedbackItem.fromJson(asMap(f)),
       ];
 
+  /// Open items per kind and the thumbs, over the newest entries (admin only).
+  Future<FeedbackSummary> feedbackSummary() async => FeedbackSummary.fromJson(asMap(await _api.getJson('/api/v1/feedback/summary')));
+
   /// Marks one feedback entry `done` or `open` (admin only).
   Future<void> setFeedbackStatus(String id, {required bool done}) async =>
       _api.sendJson('PATCH', '/api/v1/feedback/${Uri.encodeComponent(id)}', body: {'status': done ? 'done' : 'open'});

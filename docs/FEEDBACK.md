@@ -38,6 +38,7 @@ a guarantee: it errs on the side of masking, and the form tells people not to pa
 * The **Feedback** section lists what was sent (newest first, filter by kind; expand a row for its details and stack). Reading needs the
   ADMIN role, so anyone else sees the server's refusal there but can still use Send feedback.
 * In the Feedback section each entry has **Mark as done / Reopen**.
+* A line under the title shows how many entries are open and the thumbs up/down (from `/feedback/summary`; a `+` means the server counted only its newest 500), and the kind chips show their open counts.
 * A failed run has "Report this error": it sends the run's error text and its run id, process id and version, never its variables or outputs.
 
 Server-side failures are already visible in the audit log (`outcome: FAILED`) and the run's own error; this is for the person's
