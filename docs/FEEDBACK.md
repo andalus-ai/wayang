@@ -11,6 +11,11 @@ People can tell the operator what works and what does not, from Studio or the AP
     up to 500 characters (`stack` up to 8000), the message up to 4000. Longer is refused, not cut.
   * 10 submissions a minute per user (in memory, per process; 429 over REST).
 * `GET /api/v1/feedback?kind=&limit=&before=`, tenant-wide ADMIN, newest first, own tenant only.
+* `PATCH /api/v1/feedback/{id}` with `{status: "open" | "done"}`, ADMIN, own tenant: mark an entry as dealt with (or reopen it); entries
+  start `open` and every listed entry carries its `status`. JDBC keeps the entry itself untouched and records `done` in `wayang_feedback_status`.
+* `GET /api/v1/feedback/export?kind=&limit=`, ADMIN: the newest entries (up to 500) as `feedback.csv`
+  (`time,user,kind,rating,status,message,context`). Every cell is quoted and one that starts with `= + - @`, tab or return gets a leading
+  apostrophe, so a bug report that says `=HYPERLINK(...)` is text, not a formula, when opened in a spreadsheet.
 * `DELETE /api/v1/feedback?before=<ISO-8601>`, tenant-wide ADMIN: deletes this tenant's entries older than `before` and answers
   `{deleted}`. `before` is required and must be at least a day ago, so a call cannot wipe today's feedback. Nothing runs it for you.
 * Storage follows `wayang.store`: `jdbc` uses `wayang_feedback` (INSERT/SELECT, plus that age-based DELETE; rows are never edited); `memory` keeps
@@ -31,6 +36,7 @@ a guarantee: it errs on the side of masking, and the form tells people not to pa
   automatically, and a successful send clears it.
 * The **Feedback** section lists what was sent (newest first, filter by kind; expand a row for its details and stack). Reading needs the
   ADMIN role, so anyone else sees the server's refusal there but can still use Send feedback.
+* In the Feedback section each entry has **Mark as done / Reopen**.
 * A failed run has "Report this error": it sends the run's error text and its run id, process id and version, never its variables or outputs.
 
 Server-side failures are already visible in the audit log (`outcome: FAILED`) and the run's own error; this is for the person's
@@ -62,7 +68,7 @@ store, and a press is not a message for the process), so buttons there would onl
 ## Not done
 
 * Thumbs under assistant replies in Slack (Telegram has them, below), and in generated releases (no feedback store there).
-* Automatic retention, status (open/done) and export.
+* Automatic retention, and a download button in Studio (the CSV is an API call today).
 
 ## Verification
 

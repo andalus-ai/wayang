@@ -107,6 +107,13 @@ CREATE TABLE IF NOT EXISTS wayang_feedback (
     entry      TEXT         NOT NULL
 );
 CREATE INDEX IF NOT EXISTS wayang_feedback_tenant_time ON wayang_feedback (tenant_id, at_ms DESC);
+-- Feedback entries are never edited; the ones an admin marked done have a row here (open = no row).
+CREATE TABLE IF NOT EXISTS wayang_feedback_status (
+    tenant_id VARCHAR(128) NOT NULL,
+    id        VARCHAR(40)  NOT NULL,
+    status    VARCHAR(16)  NOT NULL,
+    PRIMARY KEY (tenant_id, id)
+);
 
 -- EIP state. Claim checks are keyed by namespace and token with an expiry, aggregation groups are append-only rows closed by DELETE.
 CREATE TABLE IF NOT EXISTS wayang_eip_claim (

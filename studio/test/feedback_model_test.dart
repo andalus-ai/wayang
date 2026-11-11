@@ -67,5 +67,8 @@ void feedbackItemTests() {
     expect(f.context, {'runId': 'r1', 'n': '3'});
     expect(f.time, DateTime.utc(2026, 11, 9, 10));
     expect(FeedbackItem.fromJson({'id': 'b', 'kind': 'praise', 'rating': 'up'}).kindLabel, 'praise');
+    expect(f.isDone, isFalse);
+    expect(FeedbackItem.fromJson({'id': 'c', 'kind': 'bug', 'status': 'done'}).isDone, isTrue);
+    expect(FeedbackItem.fromJson({'id': 'd', 'kind': 'bug', 'status': 'weird'}).status, 'open');
   });
 }
