@@ -475,4 +475,30 @@ class TriggerTest {
         assertThrows(IllegalArgumentException.class, () -> ReleaseBundle.parse(withTriggers(List.of(
                 trig("x", "POLL", "hello", Map.of("source", "telegram", "rateLimit", Map.of("perHour", 0)), true)))));
     }
+
+    @Test
+    void aRestartKeepsTheCountsWhenThereIsAStateDir() throws Exception {
+        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("rate");
+        Tick c = new Tick();
+        ReleaseBundle b = ReleaseBundle.parse(withTriggers(List.of(
+                trig("chat", "POLL", "hello", Map.of("source", "telegram", "everySeconds", 5, "approvals", true, "rateLimit", Map.of("perDay", 1)), true))));
+        var rt = rt(b, ENV, c);
+        java.util.function.Supplier<ReleaseTriggers> boot = () -> new ReleaseTriggers(b, rt, ReleaseSecrets.secrets(null, ENV::get),
+                Map.of("telegram", poller), Map.of(), c, dir);
+        toEmit.clear();
+        toEmit.add(Map.of("chatId", 7L, "text", "one"));
+        c.now = c.now.plusSeconds(10);
+        assertEquals(1, boot.get().tick());
+        toEmit.clear();
+        toEmit.add(Map.of("chatId", 7L, "text", "two"));
+        c.now = c.now.plusSeconds(10);
+        assertEquals(0, boot.get().tick(), "a fresh process still knows the chat used its allowance");
+        String log = java.nio.file.Files.readString(dir.resolve("rate-events.log"));
+        assertTrue(!log.contains("\t7\t"), "chat ids are stored hashed");
+        java.nio.file.Files.writeString(dir.resolve("rate-events.log"), "garbage\n");
+        toEmit.clear();
+        toEmit.add(Map.of("chatId", 9L, "text", "three"));
+        c.now = c.now.plusSeconds(10);
+        assertEquals(1, boot.get().tick(), "a damaged journal never blocks");
+    }
 }
