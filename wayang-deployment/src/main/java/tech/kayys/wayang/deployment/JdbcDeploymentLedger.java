@@ -94,8 +94,13 @@ public final class JdbcDeploymentLedger implements DeploymentLedger {
         String sql = """
                 UPDATE wayang_deployment_snapshot
                 SET state = ?, version = ?, updated_at = ?, last_reason = ?
-                WHERE deployment_id = ? AND version = ?
+                WHERE deployment_id = ? AND version = ? AND tenant_id = ? AND environment = ?
+                  AND target_id = ? AND release_id = ? AND state = ?
                 """;
+        if (event.fromState() == null || event.sequence() != next.version()
+                || !event.deploymentId().equals(next.deploymentId()) || event.toState() != next.state()) {
+            throw new IllegalArgumentException("Event does not match deployment transition");
+        }
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             try {
@@ -106,6 +111,11 @@ public final class JdbcDeploymentLedger implements DeploymentLedger {
                     update.setString(4, next.lastReason());
                     update.setString(5, next.deploymentId());
                     update.setLong(6, expectedVersion);
+                    update.setString(7, next.tenantId());
+                    update.setString(8, next.environment());
+                    update.setString(9, next.targetId());
+                    update.setString(10, next.releaseId());
+                    update.setString(11, event.fromState().name());
                     if (update.executeUpdate() != 1) throw new IllegalStateException("Stale or unknown deployment version");
                 }
                 insertEvent(connection, event);
