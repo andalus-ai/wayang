@@ -104,6 +104,7 @@ public final class ReleaseTriggers implements AutoCloseable {
         this.providers = providers == null ? Map.of() : Map.copyOf(providers);
         this.clock = clock;
         this.stateDir = stateDir;
+        this.ratings = new RatingTally(stateDir);
         this.rateJournal = stateDir == null ? null : new FileRateJournal(stateDir);
         for (ReleaseBundle.Trigger t : bundle.triggers()) {
             if (t.schedule()) {
@@ -238,8 +239,9 @@ public final class ReleaseTriggers implements AutoCloseable {
                     continue;
                 }
                 if (Boolean.TRUE.equals(t.config().get("ratings")) && "feedback".equals(ev.data().get("kind"))) {
+                    ratings.record(t.id(), ev.data().get("rating"), clock.instant());
                     remember(t, ev.id());
-                    continue; // a thumbs press: a release has no feedback store, and it is not a message for the process
+                    continue; // a thumbs press: counted, and not a message for the process
                 }
                 boolean answer = answeredApproval(t, ev.data()) || !withinRateLimit(t, ev.data());
                 if (!answer) {
@@ -296,6 +298,12 @@ public final class ReleaseTriggers implements AutoCloseable {
     private final Map<String, tech.kayys.wayang.runtime.RateLimiter> limiters = new HashMap<>();
     private final tech.kayys.wayang.runtime.RateLimiter.Journal rateJournal;
     private Instant journalPurgedAt = Instant.EPOCH;
+    private final RatingTally ratings;
+
+    /** Thumbs on chat replies, per trigger: counts only. */
+    public Map<String, Object> ratings() {
+        return ratings.summary();
+    }
 
     /** At most hourly: the day window is the longest a trigger can ask for, so two days of history is plenty. */
     private void purgeRateJournal(Instant now) {
@@ -457,7 +465,8 @@ public final class ReleaseTriggers implements AutoCloseable {
             int n = 0;
             for (Map<String, Object> ev : res.events()) {
                 if (Boolean.TRUE.equals(t.config().get("ratings")) && "feedback".equals(ev.get("kind"))) {
-                    continue; // a thumbs press: a release has no feedback store, and it is not a message for the process
+                    ratings.record(t.id(), ev.get("rating"), clock.instant());
+                    continue; // a thumbs press: counted, and not a message for the process
                 }
                 if (!answeredApproval(t, ev) && withinRateLimit(t, ev)) {
                     start(t, ev);
