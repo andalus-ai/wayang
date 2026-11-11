@@ -32,8 +32,14 @@
         <module>wayang-examples</module>
     </modules>
     <profiles>
-        <profile><id>andalus</id><modules><module>wayang-adapter-andalus</module></modules></profile>
-        <profile><id>wayang-core</id><modules><module>wayang-adapter-core</module></modules></profile>
+        <profile>
+            <id>andalus</id>
+            <modules><module>wayang-adapter-andalus</module></modules>
+        </profile>
+        <profile>
+            <id>wayang-core</id>
+            <modules><module>wayang-adapter-core</module></modules>
+        </profile>
     </profiles>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
