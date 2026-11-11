@@ -69,12 +69,12 @@ class FeedbackScreen extends ConsumerWidget {
   }
 }
 
-class _FeedbackCard extends StatelessWidget {
+class _FeedbackCard extends ConsumerWidget {
   const _FeedbackCard({required this.item});
   final FeedbackItem item;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final stack = item.context['stack'];
     final details = {for (final e in item.context.entries) if (e.key != 'stack') e.key: e.value};
     return Card(
@@ -93,10 +93,25 @@ class _FeedbackCard extends StatelessWidget {
           color: item.kind == 'error' || item.rating == 'down' ? AppColors.danger : null,
         ),
         title: Text(item.message.isEmpty ? item.kindLabel : item.message, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
-        subtitle: Text('${item.kindLabel} · ${item.user}${item.time == null ? '' : ' · ${formatDateShort(item.time!)}'}', style: const TextStyle(fontSize: 11)),
+        subtitle: Text('${item.kindLabel} · ${item.user}${item.time == null ? '' : ' · ${formatDateShort(item.time!)}'}${item.isDone ? ' · done' : ''}', style: const TextStyle(fontSize: 11)),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         expandedCrossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              icon: Icon(item.isDone ? Icons.undo_rounded : Icons.check_circle_outline_rounded, size: 16),
+              label: Text(item.isDone ? 'Reopen' : 'Mark as done'),
+              onPressed: () async {
+                try {
+                  await ref.read(repositoryProvider).setFeedbackStatus(item.id, done: !item.isDone);
+                  ref.invalidate(feedbackListProvider);
+                } catch (e) {
+                  if (context.mounted) showToast(context, errText(e));
+                }
+              },
+            ),
+          ),
           if (item.message.isNotEmpty) SelectableText(item.message, style: const TextStyle(fontSize: 12.5)),
           if (details.isNotEmpty)
             Padding(

@@ -80,7 +80,7 @@ String feedbackPreview(Map<String, dynamic> request) {
 
 /// One stored feedback entry as `GET /api/v1/feedback` returns it (an admin's view).
 class FeedbackItem {
-  const FeedbackItem({required this.id, required this.time, required this.user, required this.kind, required this.rating, required this.message, required this.context});
+  const FeedbackItem({this.status = 'open', required this.id, required this.time, required this.user, required this.kind, required this.rating, required this.message, required this.context});
 
   factory FeedbackItem.fromJson(Map<String, dynamic> j) => FeedbackItem(
         id: '${j['id']}',
@@ -89,6 +89,7 @@ class FeedbackItem {
         kind: '${j['kind']}',
         rating: j['rating'] is String ? j['rating'] as String : null,
         message: '${j['message'] ?? ''}',
+        status: j['status'] == 'done' ? 'done' : 'open',
         context: {
           if (j['context'] is Map) for (final e in (j['context'] as Map).entries) '${e.key}': '${e.value}',
         },
@@ -101,6 +102,11 @@ class FeedbackItem {
   final String? rating;
   final String message;
   final Map<String, String> context;
+
+  /// `open` (new) or `done` (an admin dealt with it).
+  final String status;
+
+  bool get isDone => status == 'done';
 
   /// The label of [kind] as the form shows it; an unknown kind (a newer server) is shown as it is.
   String get kindLabel => FeedbackKind.values.where((k) => k.api == kind).map((k) => k.label).firstOrNull ?? kind;

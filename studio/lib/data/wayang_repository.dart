@@ -213,6 +213,10 @@ class WayangRepository {
           if (f is Map) FeedbackItem.fromJson(asMap(f)),
       ];
 
+  /// Marks one feedback entry `done` or `open` (admin only).
+  Future<void> setFeedbackStatus(String id, {required bool done}) async =>
+      _api.sendJson('PATCH', '/api/v1/feedback/${Uri.encodeComponent(id)}', body: {'status': done ? 'done' : 'open'});
+
   /// The starter templates this server offers (empty when its profile has none).
   Future<List<TemplateInfo>> listTemplates() async => [
         for (final t in asList(await _api.getJson('/api/v1/templates'))) if (t is Map) TemplateInfo.fromJson(asMap(t)),

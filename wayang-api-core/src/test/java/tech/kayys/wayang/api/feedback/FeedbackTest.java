@@ -177,4 +177,41 @@ class FeedbackTest {
         assertThrows(ApiException.class, () -> service.purge(admin, Instant.parse("2027-01-01T00:00:00Z")));
         service.purge(admin, Instant.parse("2026-11-08T09:00:00Z"));
     }
+
+    @Test
+    void anAdminCanMarkFeedbackDoneAndReopenItInTheirOwnTenantOnly() {
+        String id = (String) service.submit(viewer, req("kind", "bug", "message", "broken")).get("id");
+        String foreign = (String) service.submit(other, req("kind", "bug", "message", "theirs")).get("id");
+        assertEquals("open", service.list(admin, null, 10, null).get(0).status());
+        assertThrows(ApiException.class, () -> service.setStatus(viewer, id, "done"));
+        assertEquals("done", service.setStatus(admin, id, "done").get("status"));
+        assertEquals("done", service.list(admin, null, 10, null).get(0).status());
+        assertEquals("done", service.list(admin, null, 10, null).get(0).toMap().get("status"));
+        assertEquals("open", service.setStatus(admin, id, "open").get("status"));
+        assertEquals("open", service.list(admin, null, 10, null).get(0).status());
+        var ex = assertThrows(ApiException.class, () -> service.setStatus(admin, foreign, "done"));
+        assertEquals(ApiException.Code.NOT_FOUND, ex.code());
+        assertThrows(ApiException.class, () -> service.setStatus(admin, id, "maybe"));
+        assertThrows(ApiException.class, () -> service.setStatus(admin, "not-an-id", "done"));
+        assertThrows(ApiException.class, () -> service.setStatus(admin, id.replace(id.charAt(0), 'z'), "done"));
+    }
+
+    @Test
+    void theCsvExportQuotesEverythingAndDefusesFormulas() {
+        service.submit(viewer, req("kind", "bug", "message", "=HYPERLINK(\"http://evil\")", "context", Map.of("screen", "runs", "runId", "r1")));
+        service.submit(viewer, req("kind", "comment", "message", "plain, with comma and \"quotes\"\nand a newline"));
+        service.submit(other, req("kind", "comment", "message", "not this tenant"));
+        String csv = service.exportCsv(admin, null, 10);
+        assertTrue(csv.startsWith("time,user,kind,rating,status,message,context\r\n"));
+        assertTrue(csv.contains("\"'=HYPERLINK(\"\"http://evil\"\")\""), csv);
+        assertTrue(csv.contains("\"plain, with comma and \"\"quotes\"\"\nand a newline\""), csv);
+        assertTrue(csv.contains("\"runId=r1; screen=runs\""), csv);
+        assertFalse(csv.contains("not this tenant"));
+        assertEquals("\"'+1\"", FeedbackService.cell("+1"));
+        assertEquals("\"'-1\"", FeedbackService.cell("-1"));
+        assertEquals("\"'@x\"", FeedbackService.cell("@x"));
+        assertEquals("\"safe\"", FeedbackService.cell("safe"));
+        assertThrows(ApiException.class, () -> service.exportCsv(viewer, null, 10));
+        assertTrue(service.exportCsv(admin, "idea", 10).lines().count() == 1, "header only when nothing matches");
+    }
 }

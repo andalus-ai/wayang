@@ -123,6 +123,59 @@ public final class FeedbackService {
         return store.list(p.tenantId(), kind, Math.max(1, Math.min(limit, MAX_LIST)), before);
     }
 
+    private static final Pattern ID = Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+
+    /** Marks one entry {@code open} or {@code done} (tenant-wide ADMIN). */
+    public Map<String, Object> setStatus(Principal p, String id, String status) {
+        admin(p);
+        if (id == null || !ID.matcher(id).matches()) {
+            throw ApiException.badRequest("id is not a feedback id");
+        }
+        if (!FeedbackEntry.OPEN.equals(status) && !FeedbackEntry.DONE.equals(status)) {
+            throw ApiException.badRequest("status must be \"open\" or \"done\"");
+        }
+        if (!store.setStatus(p.tenantId(), id, status)) {
+            throw new ApiException(ApiException.Code.NOT_FOUND, "No such feedback");
+        }
+        return Map.of("id", id, "status", status);
+    }
+
+    /**
+     * The tenant's newest feedback as CSV (ADMIN): {@code time,user,kind,rating,status,message,context}, context as {@code key=value; ...}.
+     * Cells that a spreadsheet would run as a formula (starting with {@code = + - @}, tab or return) get a leading apostrophe, and every cell is
+     * quoted, so exported feedback cannot execute anything when opened.
+     */
+    public String exportCsv(Principal p, String kind, int limit) {
+        List<FeedbackEntry> rows = list(p, kind, limit, null);
+        StringBuilder b = new StringBuilder("time,user,kind,rating,status,message,context\r\n");
+        for (FeedbackEntry e : rows) {
+            StringBuilder ctx = new StringBuilder();
+            e.context().entrySet().stream().sorted(Map.Entry.comparingByKey())
+                    .forEach(c -> ctx.append(ctx.length() == 0 ? "" : "; ").append(c.getKey()).append('=').append(c.getValue()));
+            b.append(cell(e.time().toString())).append(',').append(cell(e.user())).append(',').append(cell(e.kind())).append(',')
+                    .append(cell(e.rating() == null ? "" : e.rating())).append(',').append(cell(e.status())).append(',').append(cell(e.message())).append(',')
+                    .append(cell(ctx.toString())).append("\r\n");
+        }
+        return b.toString();
+    }
+
+    static String cell(String s) {
+        String t = s;
+        if (!t.isEmpty() && "=+-@\t\r".indexOf(t.charAt(0)) >= 0) {
+            t = "'" + t;
+        }
+        return '"' + t.replace("\"", "\"\"") + '"';
+    }
+
+    private static void admin(Principal p) {
+        if (p == null) {
+            throw new ApiException(ApiException.Code.UNAUTHORIZED, "Not authenticated");
+        }
+        if (!p.can(Permission.ADMIN)) {
+            throw ApiException.forbidden(Permission.ADMIN);
+        }
+    }
+
     /**
      * Deletes this tenant's feedback older than {@code before} (tenant-wide ADMIN). The cut-off is required and must be at least a day old,
      * so one call cannot wipe what people sent today.

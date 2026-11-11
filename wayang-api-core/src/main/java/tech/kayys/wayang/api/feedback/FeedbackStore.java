@@ -16,6 +16,12 @@ public interface FeedbackStore {
     /** Newest first, at most {@code limit}, strictly before {@code before} (null = from the newest), only {@code kind} when it is not null. */
     List<FeedbackEntry> list(String tenant, String kind, int limit, Instant before);
 
+    /** One entry of this tenant by id. */
+    java.util.Optional<FeedbackEntry> find(String tenant, String id);
+
+    /** Marks one entry {@code open} or {@code done}; false when this tenant has no such entry. */
+    boolean setStatus(String tenant, String id, String status);
+
     /** Removes this tenant's entries strictly older than {@code before}; returns how many went. */
     int purgeBefore(String tenant, Instant before);
 
@@ -35,6 +41,30 @@ public interface FeedbackStore {
             while (d.size() > perTenant) {
                 d.removeLast();
             }
+        }
+
+        @Override
+        public synchronized java.util.Optional<FeedbackEntry> find(String tenant, String id) {
+            return byTenant.getOrDefault(tenant, new ArrayDeque<>()).stream().filter(e -> e.id().equals(id)).findFirst();
+        }
+
+        @Override
+        public synchronized boolean setStatus(String tenant, String id, String status) {
+            Deque<FeedbackEntry> d = byTenant.get(tenant);
+            if (d == null) {
+                return false;
+            }
+            List<FeedbackEntry> all = new ArrayList<>(d);
+            for (int i = 0; i < all.size(); i++) {
+                FeedbackEntry e = all.get(i);
+                if (e.id().equals(id)) {
+                    all.set(i, new FeedbackEntry(e.id(), e.tenant(), e.time(), e.user(), e.kind(), e.rating(), e.message(), e.context(), status));
+                    d.clear();
+                    d.addAll(all);
+                    return true;
+                }
+            }
+            return false;
         }
 
         @Override

@@ -8,7 +8,9 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.PATCH;
 import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
@@ -35,6 +37,24 @@ public class FeedbackResource {
     @Produces(MediaType.APPLICATION_JSON)
     public Map<String, Object> submit(Map<String, Object> body) {
         return feedback.service().submit(principals.current(), body);
+    }
+
+    /** The newest feedback as a CSV download ({@code kind} filters, {@code limit} up to 500); ADMIN only. */
+    @GET
+    @Path("/export")
+    @Produces("text/csv")
+    public jakarta.ws.rs.core.Response export(@QueryParam("kind") String kind, @QueryParam("limit") Integer limit) {
+        String csv = feedback.service().exportCsv(principals.current(), kind == null || kind.isBlank() ? null : kind, limit == null ? 500 : limit);
+        return jakarta.ws.rs.core.Response.ok(csv).header("Content-Disposition", "attachment; filename=\"feedback.csv\"").build();
+    }
+
+    /** {@code {status: "open" | "done"}}: mark one entry as dealt with (or reopen it); ADMIN only. */
+    @PATCH
+    @Path("/{id}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Map<String, Object> status(@PathParam("id") String id, Map<String, Object> body) {
+        return feedback.service().setStatus(principals.current(), id, body == null ? null : String.valueOf(body.get("status")));
     }
 
     @GET
