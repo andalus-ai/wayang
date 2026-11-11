@@ -60,4 +60,50 @@ class RateLimiterTest {
         assertTrue(l.allow("a", T.plusSeconds(86_401)), "the first event left the day");
         assertTrue(l.allow("b", T), "another chat has its own day");
     }
+
+    @Test
+    void aJournalKeepsTheCountAcrossARestart() {
+        var journal = new RateLimiter.MemoryJournal();
+        var before = RateLimiter.fromTriggerConfig(Map.of("rateLimit", Map.of("perDay", 2))).withJournal(journal, "t1");
+        assertTrue(before.allow("chat", T));
+        assertTrue(before.allow("chat", T.plusSeconds(10)));
+        assertFalse(before.allow("chat", T.plusSeconds(20)));
+        assertEquals(2, journal.size(), "only allowed events are written down");
+        // a restart: a brand new limiter over the same journal
+        var after = RateLimiter.fromTriggerConfig(Map.of("rateLimit", Map.of("perDay", 2))).withJournal(journal, "t1");
+        assertFalse(after.allow("chat", T.plusSeconds(60)), "the day's allowance is not handed out again");
+        assertTrue(after.allow("other", T.plusSeconds(60)), "another chat is unaffected");
+        assertTrue(after.allow("chat", T.plusSeconds(86_405)), "the first event left the day");
+    }
+
+    @Test
+    void scopesDoNotShareCounts() {
+        var journal = new RateLimiter.MemoryJournal();
+        var a = new RateLimiter(1, Duration.ofHours(1)).withJournal(journal, "trigger-a");
+        assertTrue(a.allow("chat", T));
+        var b = new RateLimiter(1, Duration.ofHours(1)).withJournal(journal, "trigger-b");
+        assertTrue(b.allow("chat", T.plusSeconds(1)));
+    }
+
+    @Test
+    void aFailingJournalNeverBlocksAndTheLimitStillHoldsInMemory() {
+        RateLimiter.Journal broken = new RateLimiter.Journal() {
+            public java.util.List<Instant> load(String scope, String key, Instant since) { throw new IllegalStateException("down"); }
+            public void record(String scope, String key, Instant at) { throw new IllegalStateException("down"); }
+            public void purgeBefore(Instant before) { throw new IllegalStateException("down"); }
+        };
+        var l = new RateLimiter(2, Duration.ofHours(1)).withJournal(broken, "s");
+        assertTrue(l.allow("a", T));
+        assertTrue(l.allow("a", T.plusSeconds(1)));
+        assertFalse(l.allow("a", T.plusSeconds(2)));
+    }
+
+    @Test
+    void purgeForgetsOldEventsOnly() {
+        var j = new RateLimiter.MemoryJournal();
+        j.record("s", "k", T);
+        j.record("s", "k", T.plusSeconds(1000));
+        j.purgeBefore(T.plusSeconds(500));
+        assertEquals(1, j.size());
+    }
 }

@@ -158,3 +158,12 @@ CREATE TABLE IF NOT EXISTS wayang_agent_memory (
 );
 CREATE INDEX IF NOT EXISTS wayang_agent_memory_conv ON wayang_agent_memory (ns, k, seq);
 CREATE INDEX IF NOT EXISTS wayang_agent_memory_time ON wayang_agent_memory (at_ms);
+
+-- Rate-limit journal: one row per allowed event so trigger limits survive a restart. The key (a chat id, say) is stored as a SHA-256 hash.
+CREATE TABLE IF NOT EXISTS wayang_rate_events (
+    scope   VARCHAR(300) NOT NULL,
+    key_hash CHAR(64)    NOT NULL,
+    at_ms   BIGINT       NOT NULL
+);
+CREATE INDEX IF NOT EXISTS wayang_rate_events_lookup ON wayang_rate_events (scope, key_hash, at_ms);
+CREATE INDEX IF NOT EXISTS wayang_rate_events_time ON wayang_rate_events (at_ms);

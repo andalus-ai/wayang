@@ -165,8 +165,10 @@ public class WayangBeans {
     @ApplicationScoped
     tech.kayys.wayang.api.trigger.TriggerService triggers(tech.kayys.wayang.api.trigger.TriggerStore store, WayangApi api,
             ConnectorsConfig connectors, OAuthConfig secrets, Clock clock, TenantGateConfig gate, FeedbackConfig feedback) {
-        return new tech.kayys.wayang.api.trigger.TriggerService(store, api, connectors.pollers(), connectors.webhookProviders(),
+        var service = new tech.kayys.wayang.api.trigger.TriggerService(store, api, connectors.pollers(), connectors.webhookProviders(),
                 secrets.resolver(), clock).withTenantGate(gate.gate()).withFeedback(feedback.service());
+        // with a database the per-chat limits (hourly and daily caps) survive a restart; in memory mode they are per process like everything else
+        return "jdbc".equals(storeKind) ? service.withRateJournal(new tech.kayys.wayang.store.jdbc.JdbcRateJournal(jdbc())) : service;
     }
 
     /** Hard deadlines for {@code collect} groups with {@code sweepTo}; ticked by {@link TimerTicker}. */
