@@ -39,7 +39,7 @@ class DeploymentLifecycleServiceTest {
         var rollingBack = lifecycle.beginRollback("dep-1", 2, "operator", "restore previous revision", "corr", "rb1");
         var rolledBack = lifecycle.completeRollback("dep-1", 3, "operator", "previous revision restored", "corr", "rb2");
         assertEquals(DeploymentState.ROLLED_BACK, rolledBack.state());
-        assertEquals(4, rollingBack.version() + 1);
+        assertEquals(4, rolledBack.version());
     }
 
     @Test void rejectsIllegalTransitionsAndStaleVersions() {
