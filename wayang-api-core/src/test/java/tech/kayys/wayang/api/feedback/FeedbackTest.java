@@ -147,4 +147,34 @@ class FeedbackTest {
         }
         assertEquals(2, small.list(admin, null, 10, null).size());
     }
+
+    @Test
+    void purgeDeletesOnlyOlderEntriesOfTheCallersTenantAndNeedsAdmin() {
+        var tick = new java.util.concurrent.atomic.AtomicReference<>(Instant.parse("2026-10-01T00:00:00Z"));
+        Clock c = new Clock() {
+            public java.time.ZoneId getZone() { return ZoneOffset.UTC; }
+            public Clock withZone(java.time.ZoneId z) { return this; }
+            public Instant instant() { return tick.get(); }
+        };
+        var s = new FeedbackService(new FeedbackStore.InMemory(100), c, null);
+        s.submit(viewer, req("kind", "comment", "message", "old"));
+        s.submit(other, req("kind", "comment", "message", "other tenant, old"));
+        tick.set(Instant.parse("2026-11-05T00:00:00Z"));
+        s.submit(viewer, req("kind", "comment", "message", "new"));
+        tick.set(Instant.parse("2026-11-09T00:00:00Z"));
+        Principal globexAdmin = new Principal("globex", "gia", Set.of(Role.ADMIN));
+        assertThrows(ApiException.class, () -> s.purge(viewer, Instant.parse("2026-11-01T00:00:00Z")));
+        assertEquals(1, s.purge(admin, Instant.parse("2026-11-01T00:00:00Z")).get("deleted"));
+        assertEquals(List.of("new"), s.list(admin, null, 10, null).stream().map(FeedbackEntry::message).toList());
+        assertEquals(1, s.list(globexAdmin, null, 10, null).size(), "another tenant is untouched");
+        assertEquals(0, s.purge(admin, Instant.parse("2026-11-01T00:00:00Z")).get("deleted"));
+    }
+
+    @Test
+    void purgeNeedsACutOffAtLeastADayOld() {
+        assertThrows(ApiException.class, () -> service.purge(admin, null));
+        assertThrows(ApiException.class, () -> service.purge(admin, Instant.parse("2026-11-09T09:00:00Z")));
+        assertThrows(ApiException.class, () -> service.purge(admin, Instant.parse("2027-01-01T00:00:00Z")));
+        service.purge(admin, Instant.parse("2026-11-08T09:00:00Z"));
+    }
 }

@@ -11,8 +11,10 @@ People can tell the operator what works and what does not, from Studio or the AP
     up to 500 characters (`stack` up to 8000), the message up to 4000. Longer is refused, not cut.
   * 10 submissions a minute per user (in memory, per process; 429 over REST).
 * `GET /api/v1/feedback?kind=&limit=&before=`, tenant-wide ADMIN, newest first, own tenant only.
-* Storage follows `wayang.store`: `jdbc` uses `wayang_feedback` (INSERT/SELECT only, like the audit log); `memory` keeps
-  `wayang.feedback.memory-entries-per-tenant` (default 2000) and loses them on restart. No retention job, and no update or delete.
+* `DELETE /api/v1/feedback?before=<ISO-8601>`, tenant-wide ADMIN: deletes this tenant's entries older than `before` and answers
+  `{deleted}`. `before` is required and must be at least a day ago, so a call cannot wipe today's feedback. Nothing runs it for you.
+* Storage follows `wayang.store`: `jdbc` uses `wayang_feedback` (INSERT/SELECT, plus that age-based DELETE; rows are never edited); `memory` keeps
+  `wayang.feedback.memory-entries-per-tenant` (default 2000) and loses them on restart. There is no automatic retention job: run the DELETE above on whatever schedule you want.
 
 ## Credentials are masked before storage
 
@@ -59,8 +61,8 @@ store, and a press is not a message for the process), so buttons there would onl
 
 ## Not done
 
-* Recording thumbs in generated releases (no feedback store there; presses are dropped).
-* Retention, status (open/done) and export.
+* Thumbs under assistant replies in Slack (Telegram has them, below), and in generated releases (no feedback store there).
+* Automatic retention, status (open/done) and export.
 
 ## Verification
 
