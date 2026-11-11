@@ -21,6 +21,7 @@
         <module>wayang-connectors</module>
         <module>wayang-multimodal</module>
         <module>wayang-publish</module>
+        <module>wayang-deployment</module>
         <module>wayang-mcp</module>
         <module>wayang-store-jdbc</module>
         <module>wayang-api-core</module>
@@ -31,14 +32,8 @@
         <module>wayang-examples</module>
     </modules>
     <profiles>
-        <profile>
-            <id>andalus</id>
-            <modules><module>wayang-adapter-andalus</module></modules>
-        </profile>
-        <profile>
-            <id>wayang-core</id>
-            <modules><module>wayang-adapter-core</module></modules>
-        </profile>
+        <profile><id>andalus</id><modules><module>wayang-adapter-andalus</module></modules></profile>
+        <profile><id>wayang-core</id><modules><module>wayang-adapter-core</module></modules></profile>
     </profiles>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
