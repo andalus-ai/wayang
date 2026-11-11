@@ -31,6 +31,8 @@ class JdbcDeploymentLedgerTest {
                       idempotency_key VARCHAR(200) NOT NULL, occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
                       PRIMARY KEY (deployment_id, sequence), UNIQUE (deployment_id, idempotency_key))
                     """);
+            statement.executeUpdate("DELETE FROM wayang_deployment_event");
+            statement.executeUpdate("DELETE FROM wayang_deployment_snapshot");
         }
         var now = Instant.parse("2026-11-11T00:00:00Z");
         ledger.register(new DeploymentSnapshot("dep-jdbc", "tenant-a", "prod", "target-a", "release-a",
