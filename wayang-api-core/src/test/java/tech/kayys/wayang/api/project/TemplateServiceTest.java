@@ -603,7 +603,12 @@ class TemplateServiceTest {
         assertFalse(off.toString().contains("rate="));
         assertTrue(templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "ratings", "true"), true).ok());
         assertThrows(ApiException.class, () -> templates.instantiate(acme, "assistant-telegram", Map.of("chatId", "1", "ratings", "maybe"), false));
-        assertThrows(ApiException.class, () -> templates.instantiate(acme, "assistant-slack", Map.of("channelId", "C0123456789", "ratings", "true"), false));
+        var slack = TemplateService.assistantSlack("n", "C0123456789", "openai/gpt-4o-mini", "", "", "", "", 10, null, false, null, false, null, true);
+        var sc = (Map<?, ?>) ((Map<?, ?>) ((List<?>) slack.get("triggers")).get(0)).get("config");
+        assertEquals(Boolean.TRUE, sc.get("ratings"));
+        assertEquals(1, slack.toString().split("rate=true", -1).length - 1);
+        assertTrue(templates.instantiate(acme, "assistant-slack", Map.of("channelId", "C0123456789", "ratings", "true"), true).ok());
+        assertFalse(TemplateService.assistantSlack("n", "C0123456789", "openai/gpt-4o-mini", "").toString().contains("rate="));
     }
 
     @Test

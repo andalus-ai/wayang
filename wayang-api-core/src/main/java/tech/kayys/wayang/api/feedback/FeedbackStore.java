@@ -8,13 +8,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Append-only feedback log per tenant. There is deliberately no update or delete. */
+/** Feedback log per tenant: append, read, and drop what is older than a given time. Entries are never edited. */
 public interface FeedbackStore {
 
     void append(FeedbackEntry entry);
 
     /** Newest first, at most {@code limit}, strictly before {@code before} (null = from the newest), only {@code kind} when it is not null. */
     List<FeedbackEntry> list(String tenant, String kind, int limit, Instant before);
+
+    /** Removes this tenant's entries strictly older than {@code before}; returns how many went. */
+    int purgeBefore(String tenant, Instant before);
 
     /** Bounded and per-process: for tests and the default memory store. Oldest entries fall off. */
     final class InMemory implements FeedbackStore {
@@ -32,6 +35,17 @@ public interface FeedbackStore {
             while (d.size() > perTenant) {
                 d.removeLast();
             }
+        }
+
+        @Override
+        public synchronized int purgeBefore(String tenant, Instant before) {
+            Deque<FeedbackEntry> d = byTenant.get(tenant);
+            if (d == null) {
+                return 0;
+            }
+            int n = d.size();
+            d.removeIf(e -> e.time().isBefore(before));
+            return n - d.size();
         }
 
         @Override
