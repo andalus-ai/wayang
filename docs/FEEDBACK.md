@@ -13,6 +13,7 @@ People can tell the operator what works and what does not, from Studio or the AP
 * `GET /api/v1/feedback?kind=&limit=&before=`, tenant-wide ADMIN, newest first, own tenant only.
 * `PATCH /api/v1/feedback/{id}` with `{status: "open" | "done"}`, ADMIN, own tenant: mark an entry as dealt with (or reopen it); entries
   start `open` and every listed entry carries its `status`. JDBC keeps the entry itself untouched and records `done` in `wayang_feedback_status`.
+* `GET /api/v1/feedback/summary`, ADMIN: `{open, byKind, up, down, counted, sampled}` over the newest 500 entries of the tenant (`byKind` counts only open ones; `sampled` means older entries exist and are not counted)
 * `GET /api/v1/feedback/export?kind=&limit=`, ADMIN: the newest entries (up to 500) as `feedback.csv`
   (`time,user,kind,rating,status,message,context`). Every cell is quoted and one that starts with `= + - @`, tab or return gets a leading
   apostrophe, so a bug report that says `=HYPERLINK(...)` is text, not a formula, when opened in a spreadsheet.
