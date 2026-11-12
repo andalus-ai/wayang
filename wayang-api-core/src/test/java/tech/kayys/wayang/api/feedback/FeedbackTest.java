@@ -214,4 +214,20 @@ class FeedbackTest {
         assertThrows(ApiException.class, () -> service.exportCsv(viewer, null, 10));
         assertTrue(service.exportCsv(admin, "idea", 10).lines().count() == 1, "header only when nothing matches");
     }
+
+    @Test
+    void retentionDropsOldEntriesOfEveryTenantAndNothingWhenOff() {
+        Clock past = Clock.fixed(Instant.parse("2026-09-01T10:00:00Z"), ZoneOffset.UTC);
+        var old = new FeedbackService(store, past, null);
+        old.submit(viewer, req("kind", "idea", "message", "old acme"));
+        old.submit(other, req("kind", "idea", "message", "old globex"));
+        service.submit(viewer, req("kind", "idea", "message", "new acme"));
+        assertEquals(0, service.applyRetention(0), "off by default");
+        assertEquals(0, service.applyRetention(-5));
+        assertEquals(2, service.applyRetention(30), "both tenants' entries older than 30 days go");
+        var left = service.list(admin, null, 10, null);
+        assertEquals(1, left.size());
+        assertEquals("new acme", left.get(0).message());
+        assertEquals(0, service.applyRetention(30));
+    }
 }
