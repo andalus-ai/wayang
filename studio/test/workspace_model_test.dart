@@ -241,4 +241,24 @@ void main() {
           {'chatId': '42', 'model': 'ollama/llama3.1', 'notes': 'true', 'persona': 'terse'});
     });
   });
+
+  test('bundle summary names the project, counts, needs and signature', () {
+    final s = bundleSummary({
+      'format': 'wayang.workspace',
+      'formatVersion': 1,
+      'project': {'name': ' Shop '},
+      'definitions': [
+        {'kind': 'PROCESS', 'id': 'a'},
+        {'kind': 'PROCESS', 'id': 'b'},
+        {'kind': 'DECISION', 'id': 'c'},
+        'junk',
+      ],
+      'triggers': [{}],
+      'requires': {'secrets': ['SLACK', 'MAIL'], 'config': ['CHANNEL']},
+      'integrity': {'sha256': 'x', 'hmac': 'y'},
+    });
+    expect(s, 'Shop · 4 definitions (2 process, 1 decision) · 1 trigger · needs secrets: SLACK, MAIL · needs settings: CHANNEL · signed');
+    expect(bundleSummary({'format': 'wayang.workspace', 'formatVersion': 1}), '0 definitions · unsigned');
+    expect(bundleSummary({'definitions': 'x', 'requires': 5, 'triggers': 7}), '0 definitions · unsigned');
+  });
 }
