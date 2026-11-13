@@ -21,3 +21,15 @@ CREATE TABLE IF NOT EXISTS wayang_pressure_event (
 CREATE INDEX IF NOT EXISTS ix_wayang_pressure_event_pending
     ON wayang_pressure_event (stream_id, sequence_no)
     WHERE acknowledged_at IS NULL;
+
+
+CREATE TABLE IF NOT EXISTS wayang_pressure_event_schema (
+    singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton = TRUE),
+    schema_version INTEGER NOT NULL CHECK (schema_version > 0),
+    installed_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+);
+
+INSERT INTO wayang_pressure_event_schema (singleton, schema_version)
+VALUES (TRUE, 1)
+ON CONFLICT (singleton) DO UPDATE SET schema_version = GREATEST(
+    wayang_pressure_event_schema.schema_version, EXCLUDED.schema_version);
