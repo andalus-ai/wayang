@@ -44,8 +44,8 @@ public final class PostgresPressureEventStore implements PressureEventStore {
              WHERE acknowledged_at IS NULL
                AND (claim_token IS NULL OR lease_expires_at <= ?)
              ORDER BY stream_id, sequence_no
-             FOR UPDATE SKIP LOCKED
              LIMIT ?
+             FOR UPDATE SKIP LOCKED
             """;
 
     private final DataSource dataSource;
