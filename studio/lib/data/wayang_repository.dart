@@ -217,6 +217,9 @@ class WayangRepository {
   Future<String> exportFeedbackCsv({String? kind}) =>
       _api.getText('/api/v1/feedback/export', query: {'kind': kind, 'limit': '500'}, accept: 'text/csv');
 
+  /// Open items per kind and the thumbs, over the newest entries (admin only).
+  Future<FeedbackSummary> feedbackSummary() async => FeedbackSummary.fromJson(asMap(await _api.getJson('/api/v1/feedback/summary')));
+
   /// Marks one feedback entry `done` or `open` (admin only).
   Future<void> setFeedbackStatus(String id, {required bool done}) async =>
       _api.sendJson('PATCH', '/api/v1/feedback/${Uri.encodeComponent(id)}', body: {'status': done ? 'done' : 'open'});

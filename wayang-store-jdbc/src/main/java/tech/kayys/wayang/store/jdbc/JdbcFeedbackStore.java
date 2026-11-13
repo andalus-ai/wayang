@@ -133,6 +133,16 @@ public final class JdbcFeedbackStore implements FeedbackStore {
     }
 
     @Override
+    public int purgeAllBefore(Instant before) {
+        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement("DELETE FROM wayang_feedback WHERE at_ms < ?")) {
+            ps.setLong(1, before.toEpochMilli());
+            return ps.executeUpdate();
+        } catch (SQLException ex) {
+            throw failure("purge");
+        }
+    }
+
+    @Override
     @SuppressWarnings("unchecked")
     public List<FeedbackEntry> list(String tenant, String kind, int limit, Instant before) {
         String sql = "SELECT at_ms, entry FROM wayang_feedback WHERE tenant_id = ?" + (kind == null ? "" : " AND kind = ?")

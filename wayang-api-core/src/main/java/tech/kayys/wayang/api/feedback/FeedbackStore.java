@@ -25,6 +25,9 @@ public interface FeedbackStore {
     /** Removes this tenant's entries strictly older than {@code before}; returns how many went. */
     int purgeBefore(String tenant, Instant before);
 
+    /** Removes every tenant's entries strictly older than {@code before} (the retention job); returns how many went. */
+    int purgeAllBefore(Instant before);
+
     /** Bounded and per-process: for tests and the default memory store. Oldest entries fall off. */
     final class InMemory implements FeedbackStore {
         private final int perTenant;
@@ -76,6 +79,17 @@ public interface FeedbackStore {
             int n = d.size();
             d.removeIf(e -> e.time().isBefore(before));
             return n - d.size();
+        }
+
+        @Override
+        public synchronized int purgeAllBefore(Instant before) {
+            int n = 0;
+            for (Deque<FeedbackEntry> d : byTenant.values()) {
+                int size = d.size();
+                d.removeIf(e -> e.time().isBefore(before));
+                n += size - d.size();
+            }
+            return n;
         }
 
         @Override
