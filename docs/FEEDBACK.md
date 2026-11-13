@@ -13,6 +13,7 @@ People can tell the operator what works and what does not, from Studio or the AP
 * `GET /api/v1/feedback?kind=&limit=&before=`, tenant-wide ADMIN, newest first, own tenant only.
 * `PATCH /api/v1/feedback/{id}` with `{status: "open" | "done"}`, ADMIN, own tenant: mark an entry as dealt with (or reopen it); entries
   start `open` and every listed entry carries its `status`. JDBC keeps the entry itself untouched and records `done` in `wayang_feedback_status`.
+* `GET /api/v1/feedback/summary`, ADMIN: `{open, byKind, up, down, counted, sampled}` over the newest 500 entries of the tenant (`byKind` counts only open ones; `sampled` means older entries exist and are not counted)
 * `GET /api/v1/feedback/export?kind=&limit=`, ADMIN: the newest entries (up to 500) as `feedback.csv`
   (`time,user,kind,rating,status,message,context`). Every cell is quoted and one that starts with `= + - @`, tab or return gets a leading
   apostrophe, so a bug report that says `=HYPERLINK(...)` is text, not a formula, when opened in a spreadsheet.
@@ -36,6 +37,8 @@ a guarantee: it errs on the side of masking, and the form tells people not to pa
   automatically, and a successful send clears it.
 * The **Feedback** section lists what was sent (newest first, filter by kind; expand a row for its details and stack). Reading needs the
   ADMIN role, so anyone else sees the server's refusal there but can still use Send feedback.
+* **Export CSV** in the Feedback section copies a `curl` command (for the current kind filter) that downloads the CSV; like the release
+  download it holds no token, your shell supplies `WAYANG_TOKEN`.
 * In the Feedback section each entry has **Mark as done / Reopen**.
 * A failed run has "Report this error": it sends the run's error text and its run id, process id and version, never its variables or outputs.
 
@@ -62,13 +65,12 @@ in the Slack app settings) to the same webhook URL as the Events subscription: W
 `payload`, and handles a press only from an allowed channel and, if `allowedUsers` is set, an allowed person, on our two buttons. A retry of
 the same press (same `action_ts`) counts once. Recorded users are `slack-<id>`; context has `channel` and `messageTs` instead of `chatId` and `messageId`.
 
-A **generated release** drops these presses (it has no feedback
-store, and a press is not a message for the process), so buttons there would only be acknowledged, not recorded.
+A **generated release** has no feedback store: a press is not a message for the process, so it is only *counted* per trigger (up and down, no chat, user or text) and shown by `GET /v1/ratings` (see `docs/RELEASE.md`).
 
 ## Not done
 
 * Thumbs under assistant replies in Slack (Telegram has them, below), and in generated releases (no feedback store there).
-* A download button in Studio (the CSV is an API call today).
+* A way for Studio to download the file itself (it copies a command today).
 
 ## Verification
 

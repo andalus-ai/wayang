@@ -123,6 +123,37 @@ public final class FeedbackService {
         return store.list(p.tenantId(), kind, Math.max(1, Math.min(limit, MAX_LIST)), before);
     }
 
+    /**
+     * What is waiting: counts over the newest {@value #MAX_LIST} entries of the tenant (ADMIN only): {@code open} (all kinds), {@code byKind}
+     * (open ones per kind) and the thumbs {@code up}/{@code down}. {@code sampled} is true when there may be older entries not counted.
+     */
+    public Map<String, Object> summary(Principal p) {
+        List<FeedbackEntry> rows = list(p, null, MAX_LIST, null);
+        Map<String, Object> byKind = new java.util.TreeMap<>();
+        long open = 0, up = 0, down = 0;
+        for (FeedbackEntry e : rows) {
+            if ("rating".equals(e.kind())) {
+                if ("up".equals(e.rating())) {
+                    up++;
+                } else if ("down".equals(e.rating())) {
+                    down++;
+                }
+            }
+            if (FeedbackEntry.OPEN.equals(e.status())) {
+                open++;
+                byKind.merge(e.kind(), 1L, (x, y) -> (Long) x + (Long) y);
+            }
+        }
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        out.put("open", open);
+        out.put("byKind", byKind);
+        out.put("up", up);
+        out.put("down", down);
+        out.put("counted", rows.size());
+        out.put("sampled", rows.size() >= MAX_LIST);
+        return out;
+    }
+
     private static final Pattern ID = Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
 
     /** Marks one entry {@code open} or {@code done} (tenant-wide ADMIN). */

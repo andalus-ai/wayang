@@ -112,6 +112,7 @@ Enabled triggers of the project travel in the bundle and are served by the gener
 * **Poll** (`telegram`, `gmail`, `imap`, `rss`): every `everySeconds` (5..86400), at-least-once (the cursor moves only after the whole batch started runs), exponential backoff on failure up to 1 hour, errors masked of secret values. Set `WAYANG_STATE_DIR` to keep cursors across restarts; without it a restart starts from no cursor.
 * `SCHEDULE` triggers (cron, see `docs/TRIGGERS.md`) are carried too; the release validates the cron at load and keeps the last run in `WAYANG_STATE_DIR`.
 * `GET /v1/triggers` (API key) shows per trigger the last poll time, failure count and last error; never configuration.
+* `GET /v1/ratings` (API key) shows the thumbs up and down pressed on chat replies (triggers with `ratings: true`), per trigger: counts only, no chat ids and no text. Kept in `ratings.log` in `WAYANG_STATE_DIR` when set, so a restart keeps them; otherwise in memory.
 * The generator adds `wayang-connectors` when triggers need it and wires only the poll sources and providers used. Unknown sources or providers refuse the release. `check`/`/readyz` count missing trigger secrets.
 
 Limits: poll cursors are per process (one replica only, or each replica polls the same source and runs every event); webhook runs are in memory like all runs; nothing here has run against real Slack, WhatsApp, GitHub, Telegram, Gmail or IMAP. Only a local RSS feed and a local webhook caller were used in the tests.
