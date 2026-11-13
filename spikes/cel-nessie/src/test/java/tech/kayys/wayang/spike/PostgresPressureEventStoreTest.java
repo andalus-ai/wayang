@@ -156,10 +156,12 @@ class PostgresPressureEventStoreTest {
     void retentionDeletesOnlyAcknowledgedRowsAndHonorsBatchLimit() {
         PressureEventEnvelope acknowledgedOne = envelope("retention-ack", 1);
         PressureEventEnvelope acknowledgedTwo = envelope("retention-ack", 2);
+        PressureEventEnvelope acknowledgedAtCutoff = envelope("retention-cutoff", 1);
         PressureEventEnvelope pending = envelope("retention-pending", 1);
         PressureEventEnvelope claimed = envelope("retention-claimed", 1);
         store.append(acknowledgedOne);
         store.append(acknowledgedTwo);
+        store.append(acknowledgedAtCutoff);
         store.append(pending);
         store.append(claimed);
 
@@ -170,6 +172,12 @@ class PostgresPressureEventStoreTest {
                 NOW.plusSeconds(1), Duration.ofSeconds(30)).getFirst();
         assertTrue(store.acknowledge("retention-worker", second.envelope().eventId(),
                 second.claimToken(), NOW.plusSeconds(1)));
+        ClaimedPressureEvent exactCutoff = store.claim("cutoff-worker", 1,
+                NOW.plusSeconds(1), Duration.ofSeconds(30)).stream()
+                .filter(item -> item.envelope().eventId().equals(acknowledgedAtCutoff.eventId()))
+                .findFirst().orElseThrow();
+        assertTrue(store.acknowledge("cutoff-worker", exactCutoff.envelope().eventId(),
+                exactCutoff.claimToken(), NOW.plusSeconds(2)));
         ClaimedPressureEvent active = store.claim("active-worker", 1,
                 NOW.plusSeconds(1), Duration.ofSeconds(30)).getFirst();
         assertEquals(claimed.eventId(), active.envelope().eventId());
@@ -178,6 +186,7 @@ class PostgresPressureEventStoreTest {
         assertEquals(1, retention.purgeAcknowledgedBefore(NOW.plusSeconds(2), 1));
         assertEquals(1, retention.purgeAcknowledgedBefore(NOW.plusSeconds(2), 10));
         assertEquals(0, retention.purgeAcknowledgedBefore(NOW.plusSeconds(2), 10));
+        assertEquals(1, retention.purgeAcknowledgedBefore(NOW.plusSeconds(3), 10));
 
         assertTrue(store.acknowledge("active-worker", active.envelope().eventId(),
                 active.claimToken(), NOW.plusSeconds(3)));
