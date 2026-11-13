@@ -208,6 +208,19 @@ class PostgresPressureEventStoreTest {
         assertEquals("SCHEMA_UNAVAILABLE", health.failureCode());
     }
 
+
+    @Test
+    void healthFailsClosedOnUnsupportedSchemaVersion() throws Exception {
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute("UPDATE wayang_pressure_event_schema SET schema_version = 99 WHERE singleton = TRUE");
+        }
+        PressureEventStoreHealth health = store.inspectHealth();
+        assertFalse(health.databaseAvailable());
+        assertEquals(99, health.schemaVersion());
+        assertEquals("SCHEMA_VERSION_UNSUPPORTED", health.failureCode());
+    }
+
     private List<ClaimedPressureEvent> claimTogether(
             String consumer, CountDownLatch ready, CountDownLatch start) throws Exception {
         ready.countDown();
