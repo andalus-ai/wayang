@@ -170,10 +170,9 @@ class PostgresPressureEventStoreTest {
                 NOW.plusSeconds(1), Duration.ofSeconds(30)).getFirst();
         assertTrue(store.acknowledge("retention-worker", second.envelope().eventId(),
                 second.claimToken(), NOW.plusSeconds(1)));
-        ClaimedPressureEvent active = store.claim("active-worker", 10,
-                NOW.plusSeconds(1), Duration.ofSeconds(30)).stream()
-                .filter(item -> item.envelope().eventId().equals(claimed.eventId()))
-                .findFirst().orElseThrow();
+        ClaimedPressureEvent active = store.claim("active-worker", 1,
+                NOW.plusSeconds(1), Duration.ofSeconds(30)).getFirst();
+        assertEquals(claimed.eventId(), active.envelope().eventId());
 
         PressureEventRetention retention = store;
         assertEquals(1, retention.purgeAcknowledgedBefore(NOW.plusSeconds(2), 1));
