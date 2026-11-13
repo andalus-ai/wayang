@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS wayang_pressure_event (
     stream_id VARCHAR(256) NOT NULL,
     sequence_no BIGINT NOT NULL CHECK (sequence_no > 0),
     recorded_at TIMESTAMPTZ NOT NULL,
+    recorded_at_nano INTEGER NOT NULL CHECK (recorded_at_nano BETWEEN 0 AND 999999999),
     payload BYTEA NOT NULL,
     consumer_id VARCHAR(256),
     claim_token UUID,
