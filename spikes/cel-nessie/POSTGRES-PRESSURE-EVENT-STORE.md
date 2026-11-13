@@ -48,6 +48,11 @@ untrusted or long-lived event payloads.
 - The adapter is PostgreSQL-specific and remains in the isolated qualification
   spike. It is not wired into the Wayang runtime or selected by default.
 - The reusable in-memory contract remains necessary but is not proof of
-  multi-process correctness. A PostgreSQL service-backed integration workflow
-  must qualify concurrent connections, restart recovery, rollback, ambiguous
-  commits, clock skew, and retention before production use.
+  multi-process correctness. `PostgresPressureEventStoreTest` exercises real
+  PostgreSQL append deduplication/conflicts, concurrent claimers, restart via
+  a new store instance, lease expiry/fencing, durable acknowledgement, and
+  rollback after a decode failure. The dedicated
+  `.github/workflows/cel-postgres-qualification.yml` workflow runs these tests
+  against PostgreSQL 17. Ambiguous network commits, clock skew across hosts,
+  retention operations, failover, and backup/restore still require deployment-
+  level qualification before production use.
