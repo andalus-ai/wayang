@@ -20,6 +20,10 @@ public class TimerTicker {
     tech.kayys.wayang.api.trigger.TriggerService triggers;
     @Inject
     tech.kayys.wayang.api.run.CollectSweepService collects;
+    @Inject
+    FeedbackConfig feedback;
+    @org.eclipse.microprofile.config.inject.ConfigProperty(name = "wayang.feedback.retention-days", defaultValue = "0")
+    int feedbackRetentionDays;
 
     @Scheduled(every = "{wayang.timers.interval:5s}", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void tick() {
@@ -43,5 +47,14 @@ public class TimerTicker {
     @io.smallrye.common.annotation.Blocking
     void collects() {
         collects.sweep();
+    }
+
+    /** Drops feedback older than {@code wayang.feedback.retention-days} (0 = keep everything, the default). */
+    @Scheduled(every = "1h", delayed = "5m", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
+    @io.smallrye.common.annotation.Blocking
+    void feedbackRetention() {
+        if (feedbackRetentionDays > 0) {
+            feedback.service().applyRetention(feedbackRetentionDays);
+        }
     }
 }
