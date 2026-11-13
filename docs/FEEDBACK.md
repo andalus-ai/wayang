@@ -37,6 +37,8 @@ a guarantee: it errs on the side of masking, and the form tells people not to pa
   automatically, and a successful send clears it.
 * The **Feedback** section lists what was sent (newest first, filter by kind; expand a row for its details and stack). Reading needs the
   ADMIN role, so anyone else sees the server's refusal there but can still use Send feedback.
+* **Export CSV** in the Feedback section copies a `curl` command (for the current kind filter) that downloads the CSV; like the release
+  download it holds no token, your shell supplies `WAYANG_TOKEN`.
 * In the Feedback section each entry has **Mark as done / Reopen**.
 * A line under the title shows how many entries are open and the thumbs up/down (from `/feedback/summary`; a `+` means the server counted only its newest 500), and the kind chips show their open counts.
 * A failed run has "Report this error": it sends the run's error text and its run id, process id and version, never its variables or outputs.
@@ -64,13 +66,12 @@ in the Slack app settings) to the same webhook URL as the Events subscription: W
 `payload`, and handles a press only from an allowed channel and, if `allowedUsers` is set, an allowed person, on our two buttons. A retry of
 the same press (same `action_ts`) counts once. Recorded users are `slack-<id>`; context has `channel` and `messageTs` instead of `chatId` and `messageId`.
 
-A **generated release** drops these presses (it has no feedback
-store, and a press is not a message for the process), so buttons there would only be acknowledged, not recorded.
+A **generated release** has no feedback store: a press is not a message for the process, so it is only *counted* per trigger (up and down, no chat, user or text) and shown by `GET /v1/ratings` (see `docs/RELEASE.md`).
 
 ## Not done
 
 * Thumbs under assistant replies in Slack (Telegram has them, below), and in generated releases (no feedback store there).
-* Automatic retention, and a download button in Studio (the CSV is an API call today).
+* Automatic retention, and a way for Studio to download the file itself (it copies a command today).
 
 ## Verification
 

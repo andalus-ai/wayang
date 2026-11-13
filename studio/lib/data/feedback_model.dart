@@ -148,3 +148,11 @@ class FeedbackSummary {
   /// How many open entries of [kind] (0 when none).
   int openOf(String kind) => openByKind[kind] ?? 0;
 }
+
+/// The command that downloads the feedback as CSV (admin). The token is never put in the text: the operator's own shell supplies it.
+/// [kind] narrows it to one kind (it is one of the fixed API names, never free text).
+String feedbackExportCommand(String baseUrl, {String? kind}) {
+  final base = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+  final known = FeedbackKind.values.any((k) => k.api == kind);
+  return "curl -sS '$base/api/v1/feedback/export${known ? '?kind=$kind' : ''}' -H \"Authorization: Bearer \$WAYANG_TOKEN\" -o feedback.csv";
+}

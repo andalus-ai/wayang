@@ -12,6 +12,7 @@ void main() {
     expect(FeedbackSummary.fromJson({'open': 500, 'sampled': true}).line, '500+ open · 👍 0+ · 👎 0+');
     expect(FeedbackSummary.fromJson({}).open, 0);
   });
+  feedbackExportTests();
   test('request trims, cuts to the server limits and drops empty context', () {
     final r = feedbackRequest(
       kind: FeedbackKind.bug,
@@ -58,6 +59,16 @@ void main() {
     expect(p, contains('boom'));
     expect(p, contains('screen: runs'));
     expect(p, contains('runId: r1'));
+  });
+}
+
+void feedbackExportTests() {
+  test('the export command carries no token and only a known kind', () {
+    final all = feedbackExportCommand('https://w.example.com/');
+    expect(all, "curl -sS 'https://w.example.com/api/v1/feedback/export' -H \"Authorization: Bearer \$WAYANG_TOKEN\" -o feedback.csv");
+    expect(feedbackExportCommand('https://w.example.com', kind: 'bug'), contains('export?kind=bug'));
+    expect(feedbackExportCommand('https://w.example.com', kind: "x'; rm -rf /"), isNot(contains('rm')));
+    expect(all, isNot(contains('eyJ')));
   });
 }
 

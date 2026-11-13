@@ -441,3 +441,15 @@ Immediate next work should be Phase 0 followed by Phase 1. Do not create all pro
 - [ ] Verify Wayang and Console against the same released Core compatibility matrix.
 
 See [Shared Core boundary](SHARED-CORE.md) and https://github.com/andalus-ai/wayang-core.
+
+## Deployment lifecycle increment (2026-11-11)
+
+- [x] Add a dedicated engine-neutral `wayang-deployment` module rather than mixing deployment state with package verification or workflow-run execution.
+- [x] Define explicit installed, activating, active, degraded, failed, rolling-back, rolled-back, deactivating, and deactivated states.
+- [x] Add immutable deployment snapshots and append-only lifecycle event records with actor, reason, correlation ID, idempotency key, timestamp, and optimistic version.
+- [x] Add a synchronized in-memory reference ledger and a state-transition service.
+- [x] Add tests for activation/health separation, degraded and unhealthy outcomes, rollback, illegal transitions, stale versions, duplicate registration, and duplicate idempotency keys.
+
+**Remaining:** durable transactional ledger, target adapter SPI and implementations, health-check execution/deadlines, secret/config binding, signed deployment attestation, approval policy, and Console orchestration. This increment records lifecycle facts only; it does not activate or roll back a real target.
+
+**Verification:** tests are committed but not yet executed locally. CI is the verification authority for this PR. The in-memory ledger is not suitable for production or multi-node deployments.
