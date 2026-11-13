@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
@@ -38,6 +39,20 @@ class FeedbackScreen extends ConsumerWidget {
                 onPressed: () => showFeedbackDialog(context),
                 icon: const Icon(Icons.edit_outlined, size: 16),
                 label: const Text('Send feedback'),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  try {
+                    final csv = await ref.read(repositoryProvider).exportFeedbackCsv(kind: filter);
+                    await Clipboard.setData(ClipboardData(text: csv));
+                    if (context.mounted) showToast(context, 'Copied as CSV${filter == null ? '' : ' ($filter only)'}');
+                  } catch (e) {
+                    if (context.mounted) showToast(context, errText(e));
+                  }
+                },
+                icon: const Icon(Icons.content_copy_rounded, size: 16),
+                label: const Text('Copy CSV'),
               ),
               const SizedBox(width: 8),
               IconButton(tooltip: 'Refresh', onPressed: () => ref.invalidate(feedbackListProvider), icon: const Icon(Icons.refresh_rounded, size: 18)),

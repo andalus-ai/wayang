@@ -37,6 +37,7 @@ a guarantee: it errs on the side of masking, and the form tells people not to pa
 * The **Feedback** section lists what was sent (newest first, filter by kind; expand a row for its details and stack). Reading needs the
   ADMIN role, so anyone else sees the server's refusal there but can still use Send feedback.
 * In the Feedback section each entry has **Mark as done / Reopen**.
+* **Copy CSV** (Feedback section) puts the same CSV as the export endpoint on the clipboard (the selected kind, newest 500). It is a copy, not a file save: Studio has no file-saving dependency yet.
 * A failed run has "Report this error": it sends the run's error text and its run id, process id and version, never its variables or outputs.
 
 Server-side failures are already visible in the audit log (`outcome: FAILED`) and the run's own error; this is for the person's
