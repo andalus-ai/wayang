@@ -104,6 +104,7 @@ public final class ReleaseTriggers implements AutoCloseable {
         this.providers = providers == null ? Map.of() : Map.copyOf(providers);
         this.clock = clock;
         this.stateDir = stateDir;
+        this.rateJournal = stateDir == null ? null : new FileRateJournal(stateDir);
         for (ReleaseBundle.Trigger t : bundle.triggers()) {
             if (t.schedule()) {
                 Schedule sc = new Schedule();
@@ -293,13 +294,31 @@ public final class ReleaseTriggers implements AutoCloseable {
     }
 
     private final Map<String, tech.kayys.wayang.runtime.RateLimiter> limiters = new HashMap<>();
+    private final tech.kayys.wayang.runtime.RateLimiter.Journal rateJournal;
+    private Instant journalPurgedAt = Instant.EPOCH;
+
+    /** At most hourly: the day window is the longest a trigger can ask for, so two days of history is plenty. */
+    private void purgeRateJournal(Instant now) {
+        if (rateJournal == null || journalPurgedAt.plus(java.time.Duration.ofHours(1)).isAfter(now)) {
+            return;
+        }
+        journalPurgedAt = now;
+        try {
+            rateJournal.purgeBefore(now.minus(java.time.Duration.ofDays(2)));
+        } catch (RuntimeException e) {
+            // housekeeping only
+        }
+    }
 
     /** The trigger's {@code rateLimit}, per conversation for chat triggers; a message over it is dropped. See the server's TriggerService. */
     private synchronized boolean withinRateLimit(ReleaseBundle.Trigger t, Map<String, Object> ev) {
         if (t.config().get("rateLimit") == null) {
             return true;
         }
-        var limiter = limiters.computeIfAbsent(t.id(), k -> tech.kayys.wayang.runtime.RateLimiter.fromTriggerConfig(t.config()));
+        var limiter = limiters.computeIfAbsent(t.id(), k -> {
+            var l = tech.kayys.wayang.runtime.RateLimiter.fromTriggerConfig(t.config());
+            return rateJournal == null ? l : l.withJournal(rateJournal, k);
+        });
         String field = tech.kayys.wayang.runtime.ChatApproval.conversationField(t.config());
         Object who = field == null ? null : ev.get(field);
         return limiter.allow(who == null ? "*" : String.valueOf(who), clock.instant());
@@ -367,6 +386,7 @@ public final class ReleaseTriggers implements AutoCloseable {
     public synchronized int tick() {
         int started = 0;
         Instant now = clock.instant();
+        purgeRateJournal(now);
         for (Map.Entry<String, PollState> e : polls.entrySet()) {
             ReleaseBundle.Trigger t = byId.get(e.getKey());
             if (due(t, e.getValue(), now)) {
