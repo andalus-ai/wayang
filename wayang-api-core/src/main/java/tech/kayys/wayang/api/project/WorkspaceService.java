@@ -417,8 +417,16 @@ public final class WorkspaceService {
         } else if (!projCfg.isEmpty() || !tenCfg.isEmpty()) {
             warnings.add("config: this server has no settings store; the bundle's settings are ignored");
         }
-        projectSettings.keySet().forEach(k -> items.add(new Item("config", k, "set", "ok", "project")));
-        tenantSettings.keySet().forEach(k -> items.add(new Item("config", k, "set", "ok", "tenant")));
+        // what is already there decides the wording (values are never put in the report): new -> set, different -> overwrite, same -> unchanged
+        Map<String, String> haveProjectSettings = currentSettings(p, projectId, !projectSettings.isEmpty() && projectId != null);
+        Map<String, String> haveTenantSettings = currentSettings(p, null, !tenantSettings.isEmpty());
+        Set<String> sameSettings = new LinkedHashSet<>();
+        for (var e : projectSettings.entrySet()) {
+            settingItem(items, sameSettings, "project", e.getKey(), e.getValue(), haveProjectSettings);
+        }
+        for (var e : tenantSettings.entrySet()) {
+            settingItem(items, sameSettings, "tenant", e.getKey(), e.getValue(), haveTenantSettings);
+        }
 
         // ---- triggers
         List<Map<String, Object>> trigs = new ArrayList<>();
@@ -572,10 +580,16 @@ public final class WorkspaceService {
                 }
             }
             for (var e : projectSettings.entrySet()) {
+                if (sameSettings.contains("project/" + e.getKey())) {
+                    continue;
+                }
                 config.put(p, projectId, e.getKey(), e.getValue());
                 done.add(new Item("config", e.getKey(), "set", "done", "project"));
             }
             for (var e : tenantSettings.entrySet()) {
+                if (sameSettings.contains("tenant/" + e.getKey())) {
+                    continue;
+                }
                 config.put(p, null, e.getKey(), e.getValue());
                 done.add(new Item("config", e.getKey(), "set", "done", "tenant"));
             }
@@ -664,6 +678,31 @@ public final class WorkspaceService {
     }
 
     @SuppressWarnings("unchecked")
+    /** The settings of one scope as they are now (empty when there is nothing to compare, the store is missing or the caller may not read them). */
+    private Map<String, String> currentSettings(Principal p, String scope, boolean needed) {
+        Map<String, String> m = new LinkedHashMap<>();
+        if (!needed || config == null) {
+            return m;
+        }
+        try {
+            config.list(p, scope).forEach(c -> m.put(c.key(), c.value()));
+        } catch (ApiException ignored) {
+            // cannot read: every setting is reported as a plain set
+        }
+        return m;
+    }
+
+    private static void settingItem(List<Item> items, Set<String> same, String scope, String key, String value, Map<String, String> have) {
+        if (!have.containsKey(key)) {
+            items.add(new Item("config", key, "set", "ok", scope));
+        } else if (have.get(key).equals(value)) {
+            same.add(scope + "/" + key);
+            items.add(new Item("config", key, "unchanged", "skipped", scope + ": same as what is there"));
+        } else {
+            items.add(new Item("config", key, "overwrite", "ok", scope + ": replaces the current value"));
+        }
+    }
+
     private static Map<String, Object> withProject(Map<String, Object> doc, String projectId) {
         Map<String, Object> d = new LinkedHashMap<>(doc);
         Map<String, Object> studio = d.get(Studio.KEY) instanceof Map<?, ?> m ? new LinkedHashMap<>((Map<String, Object>) m) : new LinkedHashMap<>();

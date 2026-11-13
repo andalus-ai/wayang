@@ -51,6 +51,8 @@ A **dry run is the default**: nothing is written and the report says what would 
 | `projectConfig` / `tenantConfig` | `true` / `false` | carry the project's settings / the tenant-wide ones |
 | `allowUnsigned` | `false` | accept a bundle without a valid signature on a server that requires one |
 
+Settings are reported by what is already there: `set` (new), `overwrite` (a different value is replaced; this has always been so, whatever `onConflict` says, and is now visible in the dry run) or `unchanged` (same value, not written). The report never shows setting values.
+
 The report: `ok`, `items` (project, each definition, setting, trigger, with action and status), `problems`, `warnings`,
 `missingSecrets` (checked against this tenant's secrets when the caller may list them; otherwise `secretsChecked` is false and it
 lists every secret the bundle needs), `missingConfig`, `oauthConnections`, `webhookSecrets`.
