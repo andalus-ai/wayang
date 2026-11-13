@@ -21,6 +21,7 @@
         <module>wayang-connectors</module>
         <module>wayang-multimodal</module>
         <module>wayang-publish</module>
+        <module>wayang-deployment</module>
         <module>wayang-mcp</module>
         <module>wayang-store-jdbc</module>
         <module>wayang-api-core</module>
