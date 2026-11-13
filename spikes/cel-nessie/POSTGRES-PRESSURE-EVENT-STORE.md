@@ -16,7 +16,7 @@ claim metadata.
 - Append uses one transaction and `INSERT .. ON CONFLICT DO NOTHING`.
   A conflict is read back and accepted as DUPLICATE only when identity,
   stream, sequence, timestamp, and encoded payload match exactly. Conflicting
-  key reuse fails closed.
+  key reuse fails closed. A companion nanosecond field preserves the full Java `Instant` precision beyond PostgreSQL timestamp microseconds.
 - Claim runs in a transaction with `FOR UPDATE SKIP LOCKED`, orders by
   stream and sequence, and assigns a fresh UUID fencing token while incrementing
   delivery attempts. Concurrent claimers use separate row locks and cannot
