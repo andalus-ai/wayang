@@ -151,6 +151,64 @@ class PostgresPressureEventStoreTest {
         assertEquals(1, available.deliveryAttempts());
     }
 
+
+    @Test
+    void retentionDeletesOnlyAcknowledgedRowsAndHonorsBatchLimit() {
+        PressureEventEnvelope acknowledgedOne = envelope("retention-ack", 1);
+        PressureEventEnvelope acknowledgedTwo = envelope("retention-ack", 2);
+        PressureEventEnvelope pending = envelope("retention-pending", 1);
+        PressureEventEnvelope claimed = envelope("retention-claimed", 1);
+        store.append(acknowledgedOne);
+        store.append(acknowledgedTwo);
+        store.append(pending);
+        store.append(claimed);
+
+        ClaimedPressureEvent first = store.claim("retention-worker", 1, NOW, Duration.ofSeconds(30)).getFirst();
+        assertTrue(store.acknowledge("retention-worker", first.envelope().eventId(),
+                first.claimToken(), NOW.plusSeconds(1)));
+        ClaimedPressureEvent second = store.claim("retention-worker", 1,
+                NOW.plusSeconds(1), Duration.ofSeconds(30)).getFirst();
+        assertTrue(store.acknowledge("retention-worker", second.envelope().eventId(),
+                second.claimToken(), NOW.plusSeconds(1)));
+        ClaimedPressureEvent active = store.claim("active-worker", 10,
+                NOW.plusSeconds(1), Duration.ofSeconds(30)).stream()
+                .filter(item -> item.envelope().eventId().equals(claimed.eventId()))
+                .findFirst().orElseThrow();
+
+        PressureEventRetention retention = store;
+        assertEquals(1, retention.purgeAcknowledgedBefore(NOW.plusSeconds(2), 1));
+        assertEquals(1, retention.purgeAcknowledgedBefore(NOW.plusSeconds(2), 10));
+        assertEquals(0, retention.purgeAcknowledgedBefore(NOW.plusSeconds(2), 10));
+
+        assertTrue(store.acknowledge("active-worker", active.envelope().eventId(),
+                active.claimToken(), NOW.plusSeconds(3)));
+        assertEquals(1, store.claim("pending-worker", 10,
+                NOW.plusSeconds(4), Duration.ofSeconds(30)).size());
+    }
+
+    @Test
+    void healthReportsSchemaAndAggregateBacklogWithoutEventDetails() {
+        store.append(envelope("health-stream", 1));
+        PressureEventStoreHealth health = store.inspectHealth();
+        assertTrue(health.databaseAvailable());
+        assertEquals(1, health.schemaVersion());
+        assertEquals(1, health.pendingEvents());
+        assertEquals(0, health.expiredLeases());
+        assertNotNull(health.oldestPendingAt());
+        assertNull(health.failureCode());
+    }
+
+    @Test
+    void healthFailsClosedWhenSchemaMetadataIsMissing() throws Exception {
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute("DROP TABLE wayang_pressure_event_schema");
+        }
+        PressureEventStoreHealth health = store.inspectHealth();
+        assertFalse(health.databaseAvailable());
+        assertEquals("SCHEMA_UNAVAILABLE", health.failureCode());
+    }
+
     private List<ClaimedPressureEvent> claimTogether(
             String consumer, CountDownLatch ready, CountDownLatch start) throws Exception {
         ready.countDown();
