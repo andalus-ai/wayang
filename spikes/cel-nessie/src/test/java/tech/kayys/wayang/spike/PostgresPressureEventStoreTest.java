@@ -172,15 +172,14 @@ class PostgresPressureEventStoreTest {
                 NOW.plusSeconds(1), Duration.ofSeconds(30)).getFirst();
         assertTrue(store.acknowledge("retention-worker", second.envelope().eventId(),
                 second.claimToken(), NOW.plusSeconds(1)));
-        ClaimedPressureEvent exactCutoff = store.claim("cutoff-worker", 1,
-                NOW.plusSeconds(1), Duration.ofSeconds(30)).stream()
-                .filter(item -> item.envelope().eventId().equals(acknowledgedAtCutoff.eventId()))
-                .findFirst().orElseThrow();
-        assertTrue(store.acknowledge("cutoff-worker", exactCutoff.envelope().eventId(),
-                exactCutoff.claimToken(), NOW.plusSeconds(2)));
         ClaimedPressureEvent active = store.claim("active-worker", 1,
                 NOW.plusSeconds(1), Duration.ofSeconds(30)).getFirst();
         assertEquals(claimed.eventId(), active.envelope().eventId());
+        ClaimedPressureEvent exactCutoff = store.claim("cutoff-worker", 1,
+                NOW.plusSeconds(1), Duration.ofSeconds(30)).getFirst();
+        assertEquals(acknowledgedAtCutoff.eventId(), exactCutoff.envelope().eventId());
+        assertTrue(store.acknowledge("cutoff-worker", exactCutoff.envelope().eventId(),
+                exactCutoff.claimToken(), NOW.plusSeconds(2)));
 
         PressureEventRetention retention = store;
         assertEquals(1, retention.purgeAcknowledgedBefore(NOW.plusSeconds(2), 1));
