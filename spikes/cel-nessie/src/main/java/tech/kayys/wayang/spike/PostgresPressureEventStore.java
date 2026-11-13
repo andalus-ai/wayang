@@ -24,7 +24,7 @@ import javax.sql.DataSource;
  * contract. Multi-instance deployments must use a shared, disciplined clock
  * (or a future database-clock SPI revision).</p>
  */
-public final class PostgresPressureEventStore implements PressureEventStore {
+public final class PostgresPressureEventStore implements PressureEventStore, PressureEventRetention {
     private static final String INSERT = """
             INSERT INTO wayang_pressure_event
               (event_id, stream_id, sequence_no, recorded_at, recorded_at_nano, payload)
@@ -222,6 +222,81 @@ public final class PostgresPressureEventStore implements PressureEventStore {
             statement.setString(2, consumerId);
             statement.setObject(3, claimToken);
         }, "release") == 1;
+    }
+
+
+    /**
+     * Delete at most {@code maxEvents} acknowledged rows older than cutoff.
+     * Pending and leased events are never eligible. No automatic scheduler is
+     * created; the host owns retention policy and invocation cadence.
+     */
+    @Override
+    public int purgeAcknowledgedBefore(Instant cutoff, int maxEvents) {
+        Objects.requireNonNull(cutoff, "cutoff");
+        if (maxEvents < 1) throw new IllegalArgumentException("maxEvents must be positive");
+        String sql = """
+                WITH candidates AS (
+                    SELECT event_id
+                      FROM wayang_pressure_event
+                     WHERE acknowledged_at IS NOT NULL AND acknowledged_at < ?
+                     ORDER BY acknowledged_at, event_id
+                     FOR UPDATE SKIP LOCKED
+                     LIMIT ?
+                )
+                DELETE FROM wayang_pressure_event event
+                 USING candidates
+                 WHERE event.event_id = candidates.event_id
+                """;
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setTimestamp(1, Timestamp.from(cutoff));
+            statement.setInt(2, maxEvents);
+            return statement.executeUpdate();
+        } catch (SQLException failure) {
+            throw persistenceFailure("retention purge", failure);
+        }
+    }
+
+    /**
+     * Return a value-free aggregate health snapshot. Failure details are
+     * intentionally reduced to stable codes; SQL messages are not exposed.
+     */
+    public PressureEventStoreHealth inspectHealth() {
+        Instant observedAt = Instant.now();
+        try (Connection connection = dataSource.getConnection()) {
+            int schemaVersion;
+            try (PreparedStatement schema = connection.prepareStatement(
+                    "SELECT schema_version FROM wayang_pressure_event_schema WHERE singleton = TRUE");
+                 ResultSet row = schema.executeQuery()) {
+                if (!row.next()) {
+                    return PressureEventStoreHealth.unavailable("SCHEMA_VERSION_MISSING", observedAt);
+                }
+                schemaVersion = row.getInt(1);
+            }
+            try (PreparedStatement query = connection.prepareStatement("""
+                    SELECT COUNT(*) FILTER (WHERE acknowledged_at IS NULL) AS pending_events,
+                           COUNT(*) FILTER (WHERE acknowledged_at IS NULL
+                               AND claim_token IS NOT NULL AND lease_expires_at <= clock_timestamp()) AS expired_leases,
+                           MIN(recorded_at) FILTER (WHERE acknowledged_at IS NULL) AS oldest_pending_at,
+                           clock_timestamp() AS database_time
+                      FROM wayang_pressure_event
+                    """);
+                 ResultSet row = query.executeQuery()) {
+                if (!row.next()) {
+                    return PressureEventStoreHealth.unavailable("HEALTH_QUERY_EMPTY", observedAt);
+                }
+                Timestamp oldest = row.getTimestamp("oldest_pending_at");
+                Timestamp databaseTime = row.getTimestamp("database_time");
+                return new PressureEventStoreHealth(true, schemaVersion,
+                        row.getLong("pending_events"), row.getLong("expired_leases"),
+                        oldest == null ? null : oldest.toInstant(),
+                        databaseTime == null ? observedAt : databaseTime.toInstant(), null);
+            }
+        } catch (SQLException failure) {
+            String code = failure.getSQLState() != null && failure.getSQLState().startsWith("42")
+                    ? "SCHEMA_UNAVAILABLE" : "DATABASE_UNAVAILABLE";
+            return PressureEventStoreHealth.unavailable(code, observedAt);
+        }
     }
 
     private int update(String sql, SqlBinder binder, String operation) {
