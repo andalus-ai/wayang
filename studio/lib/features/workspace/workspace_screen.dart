@@ -54,7 +54,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         builder: (ctx) => AlertDialog(
           title: const Text('Bundle'),
           content: SizedBox(width: 640, height: 420, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(bundleSummary(b), style: const TextStyle(fontSize: 12)),
+            Text(bundleDigest(b), style: const TextStyle(fontSize: 12)),
             const SizedBox(height: 8),
             Expanded(child: SingleChildScrollView(child: SelectableText(text, style: const TextStyle(fontFamily: 'monospace', fontSize: 11)))),
           ])),
@@ -114,7 +114,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     if (text.trim().isEmpty) return null;
     try {
       final v = jsonDecode(text);
-      return v is Map<String, dynamic> && looksLikeBundle(v) ? bundleSummary(v) : null;
+      return v is Map<String, dynamic> && looksLikeBundle(v) ? bundleDigest(v) : null;
     } catch (_) {
       return null;
     }

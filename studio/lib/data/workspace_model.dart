@@ -190,7 +190,7 @@ bool looksLikeBundle(Map<String, dynamic> m) => m['format'] == 'wayang.workspace
 
 /// One line about what a bundle holds, for showing before it is sent or after it is exported: project, definitions by kind, triggers, what
 /// the target must provide, and whether it is signed. Reads only what is there; nothing is checked (the server does that).
-String bundleSummary(Map<String, dynamic> b) {
+String bundleDigest(Map<String, dynamic> b) {
   int count(Object? v) => v is List ? v.length : 0;
   final parts = <String>[];
   final project = b['project'];

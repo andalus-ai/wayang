@@ -242,8 +242,8 @@ void main() {
     });
   });
 
-  test('bundle summary names the project, counts, needs and signature', () {
-    final s = bundleSummary({
+  test('bundle digest names the project, counts, needs and signature', () {
+    final s = bundleDigest({
       'format': 'wayang.workspace',
       'formatVersion': 1,
       'project': {'name': ' Shop '},
@@ -258,7 +258,7 @@ void main() {
       'integrity': {'sha256': 'x', 'hmac': 'y'},
     });
     expect(s, 'Shop · 4 definitions (2 process, 1 decision) · 1 trigger · needs secrets: SLACK, MAIL · needs settings: CHANNEL · signed');
-    expect(bundleSummary({'format': 'wayang.workspace', 'formatVersion': 1}), '0 definitions · unsigned');
-    expect(bundleSummary({'definitions': 'x', 'requires': 5, 'triggers': 7}), '0 definitions · unsigned');
+    expect(bundleDigest({'format': 'wayang.workspace', 'formatVersion': 1}), '0 definitions · unsigned');
+    expect(bundleDigest({'definitions': 'x', 'requires': 5, 'triggers': 7}), '0 definitions · unsigned');
   });
 }
