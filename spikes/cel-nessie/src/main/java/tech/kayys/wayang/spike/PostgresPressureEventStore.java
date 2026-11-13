@@ -273,6 +273,10 @@ public final class PostgresPressureEventStore implements PressureEventStore, Pre
                 }
                 schemaVersion = row.getInt(1);
             }
+            if (schemaVersion != 1) {
+                return new PressureEventStoreHealth(false, schemaVersion, 0, 0,
+                        null, observedAt, "SCHEMA_VERSION_UNSUPPORTED");
+            }
             try (PreparedStatement query = connection.prepareStatement("""
                     SELECT COUNT(*) FILTER (WHERE acknowledged_at IS NULL) AS pending_events,
                            COUNT(*) FILTER (WHERE acknowledged_at IS NULL
