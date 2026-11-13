@@ -51,6 +51,8 @@ A **dry run is the default**: nothing is written and the report says what would 
 | `projectConfig` / `tenantConfig` | `true` / `false` | carry the project's settings / the tenant-wide ones |
 | `allowUnsigned` | `false` | accept a bundle without a valid signature on a server that requires one |
 
+With `overwrite`, a definition whose current draft (or latest published version when there is no draft) is already exactly the bundle's is reported as `unchanged` (status `skipped`): nothing is written, so no new revision appears, and a dry run shows which definitions would really change. With `publish` on it is still written and published, so the version history stays what you asked for.
+
 The report: `ok`, `items` (project, each definition, setting, trigger, with action and status), `problems`, `warnings`,
 `missingSecrets` (checked against this tenant's secrets when the caller may list them; otherwise `secretsChecked` is false and it
 lists every secret the bundle needs), `missingConfig`, `oauthConnections`, `webhookSecrets`.

@@ -388,8 +388,11 @@ public final class WorkspaceService {
                     warnings.add(key + (i.elementId() == null ? "" : " [" + i.elementId() + "]") + ": " + m);
                 }
             }
-            items.add(new Item(d.kind().name().toLowerCase(), d.id(), action, bad ? "error" : action.equals("skip") ? "skipped" : "ok",
-                    bad ? "Invalid" : ""));
+            if (!bad && action.equals("overwrite") && !o.publish() && sameAsCurrent(p, d.kind(), d.id(), doc)) {
+                action = "unchanged"; // nothing to write: no new revision, and a dry run says so
+            }
+            items.add(new Item(d.kind().name().toLowerCase(), d.id(), action, bad ? "error" : action.equals("skip") || action.equals("unchanged") ? "skipped" : "ok",
+                    bad ? "Invalid" : action.equals("unchanged") ? "Same as what is there" : ""));
             actions.put(key, action);
             if (action.equals("overwrite")) {
                 try {
@@ -552,8 +555,8 @@ public final class WorkspaceService {
                     if (d.kind() != k || action == null) {
                         continue;
                     }
-                    if (action.equals("skip")) {
-                        done.add(new Item(k.name().toLowerCase(), d.id(), "skip", "skipped", ""));
+                    if (action.equals("skip") || action.equals("unchanged")) {
+                        done.add(new Item(k.name().toLowerCase(), d.id(), action, "skipped", action.equals("unchanged") ? "Same as what is there" : ""));
                         continue;
                     }
                     api.saveDraft(p, k, d.id(), withProject(d.doc(), projectId), action.equals("overwrite") ? revisions.get(key) : null);
@@ -664,6 +667,19 @@ public final class WorkspaceService {
     }
 
     @SuppressWarnings("unchecked")
+    /** True when the definition's current draft (or, without one, its latest published version) is exactly {@code doc}. */
+    private boolean sameAsCurrent(Principal p, DefinitionKind kind, String id, Map<String, Object> doc) {
+        try {
+            return api.getDraft(p, kind, id).document().equals(doc);
+        } catch (ApiException e) {
+            try {
+                return api.getVersion(p, kind, id, null).document().equals(doc);
+            } catch (ApiException e2) {
+                return false;
+            }
+        }
+    }
+
     private static Map<String, Object> withProject(Map<String, Object> doc, String projectId) {
         Map<String, Object> d = new LinkedHashMap<>(doc);
         Map<String, Object> studio = d.get(Studio.KEY) instanceof Map<?, ?> m ? new LinkedHashMap<>((Map<String, Object>) m) : new LinkedHashMap<>();
