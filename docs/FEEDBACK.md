@@ -36,6 +36,8 @@ a guarantee: it errs on the side of masking, and the form tells people not to pa
   automatically, and a successful send clears it.
 * The **Feedback** section lists what was sent (newest first, filter by kind; expand a row for its details and stack). Reading needs the
   ADMIN role, so anyone else sees the server's refusal there but can still use Send feedback.
+* **Export CSV** in the Feedback section copies a `curl` command (for the current kind filter) that downloads the CSV; like the release
+  download it holds no token, your shell supplies `WAYANG_TOKEN`.
 * In the Feedback section each entry has **Mark as done / Reopen**.
 * A failed run has "Report this error": it sends the run's error text and its run id, process id and version, never its variables or outputs.
 
@@ -68,7 +70,7 @@ store, and a press is not a message for the process), so buttons there would onl
 ## Not done
 
 * Thumbs under assistant replies in Slack (Telegram has them, below), and in generated releases (no feedback store there).
-* Automatic retention, and a download button in Studio (the CSV is an API call today).
+* Automatic retention, and a way for Studio to download the file itself (it copies a command today).
 
 ## Verification
 
