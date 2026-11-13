@@ -240,8 +240,8 @@ public final class PostgresPressureEventStore implements PressureEventStore, Pre
                       FROM wayang_pressure_event
                      WHERE acknowledged_at IS NOT NULL AND acknowledged_at < ?
                      ORDER BY acknowledged_at, event_id
-                     FOR UPDATE SKIP LOCKED
                      LIMIT ?
+                     FOR UPDATE SKIP LOCKED
                 )
                 DELETE FROM wayang_pressure_event event
                  USING candidates
