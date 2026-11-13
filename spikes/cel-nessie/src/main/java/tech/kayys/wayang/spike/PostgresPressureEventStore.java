@@ -27,19 +27,19 @@ import javax.sql.DataSource;
 public final class PostgresPressureEventStore implements PressureEventStore {
     private static final String INSERT = """
             INSERT INTO wayang_pressure_event
-              (event_id, stream_id, sequence_no, recorded_at, payload)
-            VALUES (?, ?, ?, ?, ?)
+              (event_id, stream_id, sequence_no, recorded_at, recorded_at_nano, payload)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT DO NOTHING
             """;
 
     private static final String FIND_CONFLICT = """
-            SELECT event_id, stream_id, sequence_no, recorded_at, payload
+            SELECT event_id, stream_id, sequence_no, recorded_at, recorded_at_nano, payload
               FROM wayang_pressure_event
              WHERE event_id = ? OR (stream_id = ? AND sequence_no = ?)
             """;
 
     private static final String CLAIM = """
-            SELECT event_id, stream_id, sequence_no, recorded_at, payload, delivery_attempts
+            SELECT event_id, stream_id, sequence_no, recorded_at, recorded_at_nano, payload, delivery_attempts
               FROM wayang_pressure_event
              WHERE acknowledged_at IS NULL
                AND (claim_token IS NULL OR lease_expires_at <= ?)
@@ -69,7 +69,8 @@ public final class PostgresPressureEventStore implements PressureEventStore {
                     statement.setString(2, envelope.streamId());
                     statement.setLong(3, envelope.sequence());
                     statement.setTimestamp(4, Timestamp.from(envelope.recordedAt()));
-                    statement.setBytes(5, payload);
+                    statement.setInt(5, envelope.recordedAt().getNano());
+                    statement.setBytes(6, payload);
                     inserted = statement.executeUpdate();
                 }
                 if (inserted == 1) {
@@ -86,7 +87,9 @@ public final class PostgresPressureEventStore implements PressureEventStore {
                             UUID storedId = rows.getObject("event_id", UUID.class);
                             String storedStream = rows.getString("stream_id");
                             long storedSequence = rows.getLong("sequence_no");
-                            Instant storedAt = rows.getTimestamp("recorded_at").toInstant();
+                            Instant storedAt = Instant.ofEpochSecond(
+                                    rows.getTimestamp("recorded_at").toInstant().getEpochSecond(),
+                                    rows.getInt("recorded_at_nano"));
                             byte[] storedPayload = rows.getBytes("payload");
                             if (storedId.equals(envelope.eventId())
                                     && storedStream.equals(envelope.streamId())
@@ -130,37 +133,47 @@ public final class PostgresPressureEventStore implements PressureEventStore {
             connection.setAutoCommit(false);
             try {
                 var result = new ArrayList<ClaimedPressureEvent>();
+                var candidates = new ArrayList<ClaimCandidate>();
                 try (PreparedStatement select = connection.prepareStatement(CLAIM)) {
                     select.setTimestamp(1, Timestamp.from(now));
                     select.setInt(2, maxEvents);
                     try (ResultSet rows = select.executeQuery()) {
                         while (rows.next()) {
-                            UUID eventId = rows.getObject("event_id", UUID.class);
-                            UUID token = UUID.randomUUID();
-                            int attempts = Math.addExact(rows.getInt("delivery_attempts"), 1);
-                            var envelope = new PressureEventEnvelope(eventId,
-                                    rows.getString("stream_id"), rows.getLong("sequence_no"),
-                                    rows.getTimestamp("recorded_at").toInstant(),
-                                    codec.decode(rows.getBytes("payload")));
-                            try (PreparedStatement update = connection.prepareStatement("""
-                                    UPDATE wayang_pressure_event
-                                       SET consumer_id = ?, claim_token = ?,
-                                           lease_expires_at = ?, delivery_attempts = ?
-                                     WHERE event_id = ?
-                                    """)) {
-                                update.setString(1, consumerId);
-                                update.setObject(2, token);
-                                update.setTimestamp(3, Timestamp.from(expiresAt));
-                                update.setInt(4, attempts);
-                                update.setObject(5, eventId);
-                                if (update.executeUpdate() != 1) {
-                                    throw new IllegalStateException("locked event disappeared during claim");
-                                }
-                            }
-                            result.add(new ClaimedPressureEvent(
-                                    envelope, consumerId, token, expiresAt, attempts));
+                            candidates.add(new ClaimCandidate(
+                                    rows.getObject("event_id", UUID.class),
+                                    rows.getString("stream_id"),
+                                    rows.getLong("sequence_no"),
+                                    Instant.ofEpochSecond(
+                                            rows.getTimestamp("recorded_at").toInstant().getEpochSecond(),
+                                            rows.getInt("recorded_at_nano")),
+                                    rows.getBytes("payload"),
+                                    rows.getInt("delivery_attempts")));
                         }
                     }
+                }
+                for (var candidate : candidates) {
+                    UUID token = UUID.randomUUID();
+                    int attempts = Math.addExact(candidate.deliveryAttempts(), 1);
+                    var envelope = new PressureEventEnvelope(candidate.eventId(),
+                            candidate.streamId(), candidate.sequence(), candidate.recordedAt(),
+                            codec.decode(candidate.payload()));
+                    try (PreparedStatement update = connection.prepareStatement("""
+                            UPDATE wayang_pressure_event
+                               SET consumer_id = ?, claim_token = ?,
+                                   lease_expires_at = ?, delivery_attempts = ?
+                             WHERE event_id = ?
+                            """)) {
+                        update.setString(1, consumerId);
+                        update.setObject(2, token);
+                        update.setTimestamp(3, Timestamp.from(expiresAt));
+                        update.setInt(4, attempts);
+                        update.setObject(5, candidate.eventId());
+                        if (update.executeUpdate() != 1) {
+                            throw new IllegalStateException("locked event disappeared during claim");
+                        }
+                    }
+                    result.add(new ClaimedPressureEvent(
+                            envelope, consumerId, token, expiresAt, attempts));
                 }
                 connection.commit();
                 return List.copyOf(result);
@@ -245,6 +258,9 @@ public final class PostgresPressureEventStore implements PressureEventStore {
     private static IllegalStateException persistenceFailure(String operation, SQLException cause) {
         return new IllegalStateException("pressure event store " + operation + " failed", cause);
     }
+
+    private record ClaimCandidate(UUID eventId, String streamId, long sequence,
+                                  Instant recordedAt, byte[] payload, int deliveryAttempts) { }
 
     @FunctionalInterface
     private interface SqlBinder {
