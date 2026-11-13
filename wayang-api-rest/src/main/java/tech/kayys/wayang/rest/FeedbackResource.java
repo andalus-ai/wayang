@@ -39,6 +39,14 @@ public class FeedbackResource {
         return feedback.service().submit(principals.current(), body);
     }
 
+    /** Open items per kind and thumbs up/down over the newest 500 entries; ADMIN only. */
+    @GET
+    @Path("/summary")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Map<String, Object> summary() {
+        return feedback.service().summary(principals.current());
+    }
+
     /** The newest feedback as a CSV download ({@code kind} filters, {@code limit} up to 500); ADMIN only. */
     @GET
     @Path("/export")

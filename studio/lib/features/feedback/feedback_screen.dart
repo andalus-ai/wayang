@@ -55,6 +55,16 @@ class FeedbackScreen extends ConsumerWidget {
                 label: const Text('Copy CSV'),
               ),
               const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final command = feedbackExportCommand(ref.read(apiConfigProvider).baseUrl, kind: filter);
+                  await Clipboard.setData(ClipboardData(text: command));
+                  if (context.mounted) showToast(context, 'Copied a command that downloads the CSV. It holds no token: set WAYANG_TOKEN in your shell.');
+                },
+                icon: const Icon(Icons.download_rounded, size: 16),
+                label: const Text('Export CSV'),
+              ),
+              const SizedBox(width: 8),
               IconButton(tooltip: 'Refresh', onPressed: () => ref.invalidate(feedbackListProvider), icon: const Icon(Icons.refresh_rounded, size: 18)),
             ],
           ),
