@@ -64,8 +64,7 @@ in the Slack app settings) to the same webhook URL as the Events subscription: W
 `payload`, and handles a press only from an allowed channel and, if `allowedUsers` is set, an allowed person, on our two buttons. A retry of
 the same press (same `action_ts`) counts once. Recorded users are `slack-<id>`; context has `channel` and `messageTs` instead of `chatId` and `messageId`.
 
-A **generated release** drops these presses (it has no feedback
-store, and a press is not a message for the process), so buttons there would only be acknowledged, not recorded.
+A **generated release** has no feedback store: a press is not a message for the process, so it is only *counted* per trigger (up and down, no chat, user or text) and shown by `GET /v1/ratings` (see `docs/RELEASE.md`).
 
 ## Not done
 

@@ -31,6 +31,7 @@ import tech.kayys.wayang.runtime.json.Json;
  * GET  /v1/runs[?processId=&amp;limit=]  newest first
  * GET  /v1/runs/{id}
  * GET  /v1/triggers                  what each trigger is doing (no configuration)
+ * GET  /v1/ratings                   thumbs up and down on chat replies, counted per trigger (no chat ids, no text)
  * GET|POST /hooks/{id}               a webhook trigger; no API key: authenticated by its shared secret or provider signature
  * POST /v1/runs/{id}/cancel          a parked run only
  * POST /v1/tasks/{token}/complete    {"outputs": {...}}
@@ -200,6 +201,9 @@ public final class HttpService implements AutoCloseable {
         } else if (p.length == 1 && p[0].equals("triggers")) {
             only(ex, m, "GET");
             send(ex, 200, Map.of("triggers", triggers == null ? java.util.List.of() : triggers.status()));
+        } else if (p.length == 1 && p[0].equals("ratings")) {
+            only(ex, m, "GET");
+            send(ex, 200, triggers == null ? Map.of("up", 0, "down", 0, "triggers", Map.of()) : triggers.ratings());
         } else if (p.length == 3 && p[0].equals("processes") && p[2].equals("runs")) {
             only(ex, m, "POST");
             String id = id(p[1]);

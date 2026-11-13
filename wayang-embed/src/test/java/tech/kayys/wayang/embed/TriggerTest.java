@@ -332,6 +332,11 @@ class TriggerTest {
             assertEquals(200, list.statusCode());
             assertTrue(list.body().contains("\"feed\"") && list.body().contains("\"hook\""));
             assertFalse(list.body().contains("hook-secret") || list.body().contains("POLL_KEY") || list.body().contains("prov-token"), "no configuration or secret in the listing");
+            assertEquals(401, http.send(HttpRequest.newBuilder(URI.create(base + "/v1/ratings")).GET().build(), HttpResponse.BodyHandlers.ofString()).statusCode());
+            var rated = http.send(HttpRequest.newBuilder(URI.create(base + "/v1/ratings")).header("Authorization", "Bearer api-key").GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, rated.statusCode());
+            assertTrue(rated.body().contains("\"up\":0"), rated.body());
         }
     }
 
@@ -443,8 +448,10 @@ class TriggerTest {
         toEmit.clear();
         toEmit.add(Map.of("kind", "feedback", "rating", "up", "chatId", 7L, "fromId", 5L));
         c.now = c.now.plusSeconds(10);
-        assertEquals(0, t.tick(), "a release has no feedback store: the press is dropped, not run");
+        assertEquals(0, t.tick(), "the press is counted, not run");
         assertEquals(0, rt.list("hello", 10).size());
+        assertEquals(1L, t.ratings().get("up"));
+        assertEquals(0L, t.ratings().get("down"));
         toEmit.clear();
         toEmit.add(Map.of("chatId", 7L, "text", "hello"));
         c.now = c.now.plusSeconds(10);
@@ -500,5 +507,26 @@ class TriggerTest {
         toEmit.add(Map.of("chatId", 9L, "text", "three"));
         c.now = c.now.plusSeconds(10);
         assertEquals(1, boot.get().tick(), "a damaged journal never blocks");
+    }
+
+    @Test
+    void ratingCountsSurviveARestartAndKeepNoChatData() throws Exception {
+        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("rt");
+        Tick c = new Tick();
+        ReleaseBundle b = ReleaseBundle.parse(withTriggers(List.of(
+                trig("chat", "POLL", "hello", Map.of("source", "telegram", "everySeconds", 5, "ratings", true), true))));
+        var rt = rt(b, ENV, c);
+        var t = new ReleaseTriggers(b, rt, ReleaseSecrets.secrets(null, ENV::get), Map.of("telegram", poller), Map.of(), c, dir);
+        toEmit.clear();
+        toEmit.add(Map.of("kind", "feedback", "rating", "up", "chatId", 7L, "fromId", 5L, "reply", "secret words"));
+        toEmit.add(Map.of("kind", "feedback", "rating", "down", "chatId", 7L, "fromId", 5L));
+        toEmit.add(Map.of("kind", "feedback", "rating", "sideways", "chatId", 7L));
+        c.now = c.now.plusSeconds(10);
+        t.tick();
+        var again = new ReleaseTriggers(b, rt, ReleaseSecrets.secrets(null, ENV::get), Map.of("telegram", poller), Map.of(), c, dir);
+        assertEquals(1L, again.ratings().get("up"));
+        assertEquals(1L, again.ratings().get("down"));
+        String log = java.nio.file.Files.readString(dir.resolve("ratings.log"));
+        assertTrue(!log.contains("secret") && !log.contains("\t7") && !log.contains("sideways"), "counts only");
     }
 }
