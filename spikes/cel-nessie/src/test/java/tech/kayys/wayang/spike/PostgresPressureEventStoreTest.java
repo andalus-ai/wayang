@@ -21,9 +21,11 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
 
+@EnabledIfEnvironmentVariable(named = "WAYANG_TEST_POSTGRES_URL", matches = ".+")
 /**
  * Real PostgreSQL qualification tests. The dedicated workflow supplies the
  * database; local runs may use the same WAYANG_TEST_POSTGRES_* variables.
