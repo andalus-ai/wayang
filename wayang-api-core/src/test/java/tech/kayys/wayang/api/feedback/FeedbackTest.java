@@ -214,4 +214,23 @@ class FeedbackTest {
         assertThrows(ApiException.class, () -> service.exportCsv(viewer, null, 10));
         assertTrue(service.exportCsv(admin, "idea", 10).lines().count() == 1, "header only when nothing matches");
     }
+
+    @Test
+    void theSummaryCountsWhatIsOpenAndTheThumbsForTheTenantOnly() {
+        Object bug = service.submit(viewer, req("kind", "bug", "message", "broken")).get("id");
+        service.submit(viewer, req("kind", "bug", "message", "also broken"));
+        service.submit(viewer, req("kind", "idea", "message", "dark mode"));
+        service.submit(viewer, req("kind", "rating", "rating", "up"));
+        service.submit(viewer, req("kind", "rating", "rating", "down"));
+        service.submit(other, req("kind", "bug", "message", "not yours"));
+        service.setStatus(admin, String.valueOf(bug), "done");
+        var s = service.summary(admin);
+        assertEquals(4L, s.get("open"));
+        assertEquals(Map.of("bug", 1L, "idea", 1L, "rating", 2L), s.get("byKind"));
+        assertEquals(1L, s.get("up"));
+        assertEquals(1L, s.get("down"));
+        assertEquals(5, s.get("counted"));
+        assertEquals(false, s.get("sampled"));
+        assertThrows(ApiException.class, () -> service.summary(viewer));
+    }
 }
