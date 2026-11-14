@@ -20,8 +20,8 @@ database.
    WAL.
 4. Record a database-generated UTC recovery target after the base backup.
 5. Commit a second marker after that target and force a WAL segment switch.
-6. Wait for the archiver's last successful archive timestamp to reach/past the
-   recovery target and confirm an archive file exists.
+6. Wait until PostgreSQL reports that the WAL segment containing the post-target
+   transaction has been archived.
 7. Restore the physical backup into a second PostgreSQL 17 container, configure
    `restore_command` and `recovery_target_time`, and let recovery promote.
 8. Verify the server has left recovery, the baseline marker exists, and the
