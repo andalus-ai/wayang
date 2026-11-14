@@ -188,6 +188,37 @@ int n2(Object? v) => v is Map ? v.length : 0;
 /// Whether [text] is worth sending as a bundle at all (the server checks the format and integrity).
 bool looksLikeBundle(Map<String, dynamic> m) => m['format'] == 'wayang.workspace' && m['formatVersion'] != null;
 
+/// One line about what a bundle holds, for showing before it is sent or after it is exported: project, definitions by kind, triggers, what
+/// the target must provide, and whether it is signed. Reads only what is there; nothing is checked (the server does that).
+String bundleDigest(Map<String, dynamic> b) {
+  int count(Object? v) => v is List ? v.length : 0;
+  final parts = <String>[];
+  final project = b['project'];
+  final name = project is Map ? project['name'] : null;
+  if (name is String && name.trim().isNotEmpty) parts.add(name.trim());
+  final byKind = <String, int>{};
+  final defs = b['definitions'];
+  if (defs is List) {
+    for (final d in defs) {
+      if (d is Map && d['kind'] is String) byKind.update((d['kind'] as String).toLowerCase(), (n) => n + 1, ifAbsent: () => 1);
+    }
+  }
+  final total = count(defs);
+  parts.add('$total definition${total == 1 ? '' : 's'}${byKind.isEmpty ? '' : ' (${byKind.entries.map((e) => '${e.value} ${e.key}').join(', ')})'}');
+  final t = count(b['triggers']);
+  if (t > 0) parts.add('$t trigger${t == 1 ? '' : 's'}');
+  final req = b['requires'];
+  if (req is Map) {
+    final secrets = req['secrets'];
+    if (secrets is List && secrets.isNotEmpty) parts.add('needs secrets: ${secrets.whereType<String>().join(', ')}');
+    final cfg = req['config'];
+    if (cfg is List && cfg.isNotEmpty) parts.add('needs settings: ${cfg.whereType<String>().join(', ')}');
+  }
+  final integrity = b['integrity'];
+  parts.add(integrity is Map && integrity['hmac'] is String ? 'signed' : 'unsigned');
+  return parts.join(' · ');
+}
+
 /// How far a master-key rotation has got, from `GET /api/v1/secrets/keys`. No secret data.
 class KeyStatus {
   const KeyStatus({required this.activeKeyId, required this.secretsByKey, required this.needRotation});
