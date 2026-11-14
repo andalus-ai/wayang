@@ -90,6 +90,58 @@ class DeploymentOrchestrationServiceTest {
         assertEquals(DeploymentState.INSTALLED, ledger.find("dep-1").orElseThrow().state());
     }
 
+    @Test void deactivationRecordsCompletionOnlyAfterTargetAcknowledges() {
+        registry.register("target-a", target(TargetOperationResult.Status.SUCCEEDED,
+                new HealthCheckResult(HealthOutcome.HEALTHY, Map.of("ready", true), "healthy", now)));
+        orchestration.activate(command("activate-deactivate"), "operator", "activate", "corr", Duration.ofSeconds(30));
+        DeploymentTargetOperationResult result = orchestration.deactivate(command("deactivate-1"), "operator",
+                "stop release", "corr-stop", Duration.ofSeconds(30));
+        assertEquals(DeploymentState.DEACTIVATED, result.snapshot().state());
+        assertNull(result.healthCheck());
+    }
+
+    @Test void deactivationFailureIsAuditedAsFailed() {
+        registry.register("target-a", new DeploymentTarget() {
+            @Override public TargetOperationResult activate(DeploymentCommand c, Duration t) {
+                return new TargetOperationResult(TargetOperationResult.Status.SUCCEEDED, "a", "activated", now);
+            }
+            @Override public TargetOperationResult deactivate(DeploymentCommand c, Duration t) {
+                return new TargetOperationResult(TargetOperationResult.Status.REJECTED, "d", "target refused", now);
+            }
+            @Override public TargetOperationResult rollback(DeploymentCommand c, Duration t) { return null; }
+            @Override public HealthCheckResult healthCheck(DeploymentCommand c, Duration t) {
+                return new HealthCheckResult(HealthOutcome.HEALTHY, Map.of(), "healthy", now);
+            }
+        });
+        orchestration.activate(command("activate-deactivate-fail"), "operator", "activate", "corr", Duration.ofSeconds(30));
+        DeploymentTargetOperationResult result = orchestration.deactivate(command("deactivate-fail"), "operator",
+                "stop release", "corr-stop", Duration.ofSeconds(30));
+        assertEquals(DeploymentState.FAILED, result.snapshot().state());
+        assertEquals(TargetOperationResult.Status.REJECTED, result.operation().status());
+    }
+
+    @Test void rollbackCompletesOnlyAfterHealthyRestoredRelease() {
+        lifecycle.beginActivation("dep-1", 0, "operator", "activate", "corr", "initial-activate");
+        lifecycle.recordHealth("dep-1", 1, HealthOutcome.UNHEALTHY, "probe", "activation failed", "corr", "initial-health");
+        registry.register("target-a", target(TargetOperationResult.Status.SUCCEEDED,
+                new HealthCheckResult(HealthOutcome.HEALTHY, Map.of("ready", true), "restored release healthy", now)));
+        DeploymentTargetOperationResult result = orchestration.rollback(command("rollback-healthy"), "operator",
+                "restore last known good", "corr-rollback", Duration.ofSeconds(30));
+        assertEquals(DeploymentState.ROLLED_BACK, result.snapshot().state());
+        assertEquals(HealthOutcome.HEALTHY, result.healthCheck().outcome());
+    }
+
+    @Test void rollbackWithUnhealthyReadinessRemainsFailed() {
+        lifecycle.beginActivation("dep-1", 0, "operator", "activate", "corr", "initial-activate");
+        lifecycle.recordHealth("dep-1", 1, HealthOutcome.UNHEALTHY, "probe", "activation failed", "corr", "initial-health");
+        registry.register("target-a", target(TargetOperationResult.Status.SUCCEEDED,
+                new HealthCheckResult(HealthOutcome.UNKNOWN, Map.of(), "restoration uncertain", now)));
+        DeploymentTargetOperationResult result = orchestration.rollback(command("rollback-unknown"), "operator",
+                "restore last known good", "corr-rollback", Duration.ofSeconds(30));
+        assertEquals(DeploymentState.FAILED, result.snapshot().state());
+        assertEquals(HealthOutcome.UNKNOWN, result.healthCheck().outcome());
+    }
+
     private DeploymentCommand command(String key) {
         return new DeploymentCommand("dep-1", "tenant-a", "prod", "target-a", "release-1", key, Map.of());
     }
