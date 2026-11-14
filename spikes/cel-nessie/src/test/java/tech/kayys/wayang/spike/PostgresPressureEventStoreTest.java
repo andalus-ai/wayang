@@ -175,7 +175,7 @@ class PostgresPressureEventStoreTest {
         PressureEventEnvelope event = envelope("ambiguous-claim", 1);
         store.append(event);
         var uncertainStore = new PostgresPressureEventStore(
-                failOnceAfterCommit(dataSource, null), codec);
+                failOnceAfterCommit(dataSource), codec);
 
         assertThrows(IllegalStateException.class,
                 () -> uncertainStore.claim("worker-uncertain", 1, NOW, Duration.ofSeconds(5)));
