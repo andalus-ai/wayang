@@ -11,7 +11,7 @@ copying credentials around.
 
 ## Workspace bundle
 
-`GET /api/v1/projects/{id}/export[?includeTenantConfig=true]` (a read) and `POST /api/v1/workspace/import`
+`GET /api/v1/projects/{id}/export[?includeTenantConfig=true][&only=kind:id,...]` (a read; `only` narrows the bundle to the listed definitions, for example `only=process:orders,decision:risk`, case-insensitive; a selector that matches nothing is a 422 listing it, and a definition a selected one refers to is not added for you; triggers follow the processes that are in) and `POST /api/v1/workspace/import`
 `{bundle, options}`.
 
 ```json

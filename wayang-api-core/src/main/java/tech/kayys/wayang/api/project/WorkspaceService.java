@@ -68,13 +68,32 @@ public final class WorkspaceService {
      *                    no published version stops the export), no triggers, and only the settings the definitions refer to
      */
     public Map<String, Object> export(Principal p, String projectId, boolean includeTenantConfig, boolean releaseMode) {
+        return export(p, projectId, includeTenantConfig, releaseMode, null);
+    }
+
+    /**
+     * @param only {@code kind:id} selectors (for example {@code process:orders}); null or empty exports every definition. A selector that
+     *             matches nothing is an error, so a typo cannot produce a silently smaller bundle. Triggers still follow the processes that
+     *             are in; a definition a selected one refers to is not added for you.
+     */
+    public Map<String, Object> export(Principal p, String projectId, boolean includeTenantConfig, boolean releaseMode, java.util.Collection<String> only) {
         Project project = api.getProject(p, projectId);
+        Set<String> wanted = new LinkedHashSet<>();
+        if (only != null) {
+            only.stream().map(x -> x == null ? "" : x.trim().toLowerCase(java.util.Locale.ROOT)).filter(x -> !x.isEmpty()).forEach(wanted::add);
+        }
+        Set<String> unmatched = new LinkedHashSet<>(wanted);
         List<Object> defs = new ArrayList<>();
         Map<String, Object> processIds = new LinkedHashMap<>();
         List<String> unpublished = new ArrayList<>();
         List<String> newerDrafts = new ArrayList<>();
         for (DefinitionKind kind : DefinitionKind.values()) {
             for (DefinitionSummary s : api.list(p, kind, projectId)) {
+                String selector = kind.name().toLowerCase(java.util.Locale.ROOT) + ":" + s.id().toLowerCase(java.util.Locale.ROOT);
+                if (!wanted.isEmpty() && !wanted.contains(selector)) {
+                    continue;
+                }
+                unmatched.remove(selector);
                 if (releaseMode && s.latestVersion() < 1) {
                     unpublished.add(kind.name().toLowerCase(java.util.Locale.ROOT) + " " + s.id());
                     continue;
@@ -94,6 +113,10 @@ public final class WorkspaceService {
                     processIds.put(s.id(), true);
                 }
             }
+        }
+        if (!unmatched.isEmpty()) {
+            throw new ApiException(ApiException.Code.VALIDATION_FAILED,
+                    "Nothing in this project matches these selectors (use kind:id, for example process:orders)", new ArrayList<>(unmatched));
         }
         if (!unpublished.isEmpty()) {
             throw new ApiException(ApiException.Code.VALIDATION_FAILED,
