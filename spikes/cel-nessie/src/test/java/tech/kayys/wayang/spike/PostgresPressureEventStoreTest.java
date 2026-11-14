@@ -9,7 +9,12 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.sql.Statement;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -151,6 +156,141 @@ class PostgresPressureEventStoreTest {
         assertEquals(1, available.deliveryAttempts());
     }
 
+
+
+    @Test
+    void appendRetryAfterCommitAcknowledgementWasLostIsIdempotent() {
+        PressureEventEnvelope event = envelope("ambiguous-append", 1);
+        DataSource uncertain = failOnceAfterCommit(dataSource);
+        var uncertainStore = new PostgresPressureEventStore(uncertain, codec);
+
+        assertThrows(IllegalStateException.class, () -> uncertainStore.append(event));
+        assertEquals(PressureEventAppendResult.DUPLICATE, store.append(event));
+        assertEquals(1, store.claim("recovery-worker", 10, NOW,
+                Duration.ofSeconds(30)).size());
+    }
+
+    @Test
+    void claimCommitOutcomeCanBeRecoveredOnlyAfterLeaseExpiry() throws Exception {
+        PressureEventEnvelope event = envelope("ambiguous-claim", 1);
+        store.append(event);
+        var uncertainStore = new PostgresPressureEventStore(
+                failOnceAfterCommit(dataSource), codec);
+
+        assertThrows(IllegalStateException.class,
+                () -> uncertainStore.claim("worker-uncertain", 1, NOW, Duration.ofSeconds(5)));
+        UUID committedToken = readClaimToken(event.eventId());
+        assertTrue(store.claim("worker-other", 1, NOW.plusSeconds(1),
+                Duration.ofSeconds(30)).isEmpty());
+
+        ClaimedPressureEvent recovered = store.claim("worker-recovered", 1,
+                NOW.plusSeconds(5), Duration.ofSeconds(30)).getFirst();
+        assertEquals(event.eventId(), recovered.envelope().eventId());
+        assertNotEquals(committedToken, recovered.claimToken());
+        assertEquals(2, recovered.deliveryAttempts());
+    }
+
+    @Test
+    void acknowledgementCommitOutcomeCanBeRecoveredByObservingTerminalState() {
+        PressureEventEnvelope event = envelope("ambiguous-ack", 1);
+        store.append(event);
+        ClaimedPressureEvent claim = store.claim("worker-ack", 1, NOW,
+                Duration.ofSeconds(30)).getFirst();
+        var uncertainStore = new PostgresPressureEventStore(
+                failOnceAfterStatement(dataSource, "SET acknowledged_at"), codec);
+
+        assertThrows(IllegalStateException.class, () -> uncertainStore.acknowledge(
+                "worker-ack", event.eventId(), claim.claimToken(), NOW.plusSeconds(1)));
+        assertFalse(store.acknowledge("worker-ack", event.eventId(),
+                claim.claimToken(), NOW.plusSeconds(2)));
+        assertTrue(store.claim("worker-next", 1, NOW.plusSeconds(3),
+                Duration.ofSeconds(30)).isEmpty());
+    }
+
+    @Test
+    void releaseCommitOutcomeCanBeRecoveredByReclaimingWithFreshFence() {
+        PressureEventEnvelope event = envelope("ambiguous-release", 1);
+        store.append(event);
+        ClaimedPressureEvent oldClaim = store.claim("worker-release", 1, NOW,
+                Duration.ofSeconds(30)).getFirst();
+        var uncertainStore = new PostgresPressureEventStore(
+                failOnceAfterStatement(dataSource, "SET consumer_id = NULL"), codec);
+
+        assertThrows(IllegalStateException.class, () -> uncertainStore.release(
+                "worker-release", event.eventId(), oldClaim.claimToken()));
+        ClaimedPressureEvent next = store.claim("worker-next", 1, NOW.plusSeconds(1),
+                Duration.ofSeconds(30)).getFirst();
+        assertNotEquals(oldClaim.claimToken(), next.claimToken());
+        assertEquals(2, next.deliveryAttempts());
+        assertFalse(store.release("worker-release", event.eventId(), oldClaim.claimToken()));
+    }
+
+    private UUID readClaimToken(UUID eventId) throws Exception {
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT claim_token FROM wayang_pressure_event WHERE event_id = ?")) {
+            statement.setObject(1, eventId);
+            try (var rows = statement.executeQuery()) {
+                assertTrue(rows.next());
+                return rows.getObject(1, UUID.class);
+            }
+        }
+    }
+
+    private static DataSource failOnceAfterCommit(DataSource delegate) {
+        AtomicBoolean armed = new AtomicBoolean(true);
+        return (DataSource) Proxy.newProxyInstance(DataSource.class.getClassLoader(),
+                new Class<?>[]{DataSource.class}, (proxy, method, args) -> {
+                    Object value = invoke(delegate, method, args);
+                    if (!method.getName().equals("getConnection")) return value;
+                    Connection connection = (Connection) value;
+                    return Proxy.newProxyInstance(Connection.class.getClassLoader(),
+                            new Class<?>[]{Connection.class}, (connectionProxy, connectionMethod, connectionArgs) -> {
+                                Object result = invoke(connection, connectionMethod, connectionArgs);
+                                if (connectionMethod.getName().equals("commit")
+                                        && armed.compareAndSet(true, false)) {
+                                    throw new SQLException("injected lost commit response", "08006");
+                                }
+                                return result;
+                            });
+                });
+    }
+
+    private static DataSource failOnceAfterStatement(DataSource delegate, String sqlFragment) {
+        AtomicBoolean armed = new AtomicBoolean(true);
+        return (DataSource) Proxy.newProxyInstance(DataSource.class.getClassLoader(),
+                new Class<?>[]{DataSource.class}, (proxy, method, args) -> {
+                    Object value = invoke(delegate, method, args);
+                    if (!method.getName().equals("getConnection")) return value;
+                    Connection connection = (Connection) value;
+                    return Proxy.newProxyInstance(Connection.class.getClassLoader(),
+                            new Class<?>[]{Connection.class}, (connectionProxy, connectionMethod, connectionArgs) -> {
+                                Object statementValue = invoke(connection, connectionMethod, connectionArgs);
+                                if (!connectionMethod.getName().equals("prepareStatement")
+                                        || connectionArgs == null || connectionArgs.length == 0
+                                        || !(connectionArgs[0] instanceof String sql)
+                                        || !sql.contains(sqlFragment)) return statementValue;
+                                PreparedStatement statement = (PreparedStatement) statementValue;
+                                return Proxy.newProxyInstance(PreparedStatement.class.getClassLoader(),
+                                        new Class<?>[]{PreparedStatement.class}, (statementProxy, statementMethod, statementArgs) -> {
+                                            Object result = invoke(statement, statementMethod, statementArgs);
+                                            if (statementMethod.getName().equals("executeUpdate")
+                                                    && armed.compareAndSet(true, false)) {
+                                                throw new SQLException("injected lost statement response", "08006");
+                                            }
+                                            return result;
+                                        });
+                            });
+                });
+    }
+
+    private static Object invoke(Object target, java.lang.reflect.Method method, Object[] args) throws Throwable {
+        try {
+            return method.invoke(target, args);
+        } catch (InvocationTargetException failure) {
+            throw failure.getCause();
+        }
+    }
 
     @Test
     void retentionDeletesOnlyAcknowledgedRowsAndHonorsBatchLimit() {
