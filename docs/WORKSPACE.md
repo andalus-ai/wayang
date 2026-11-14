@@ -47,7 +47,7 @@ A **dry run is the default**: nothing is written and the report says what would 
 | `targetProject` | none | import into this project; otherwise a new one is created, named as in the bundle |
 | `onConflict` | `fail` | `skip` or `overwrite` for definitions that already exist **in the target project**. A definition with the same id in another project (or none) is always a conflict: it is never moved |
 | `publish` | `false` | publish what was imported, decisions and agents before the processes that use them |
-| `triggers` | `true` | create the bundle's triggers (they are created **disabled**; a new webhook secret is returned once). An existing trigger is never overwritten |
+| `triggers` | `true` | create the bundle's triggers (they are created **disabled**; a new webhook secret is returned once). An existing trigger is never overwritten: one with the same kind, process and configuration is reported as `unchanged` and is no conflict, so re-importing a bundle you exported from here works; one that differs is a conflict and the report names what differs (`kind`, `process`, `config`), never the values |
 | `projectConfig` / `tenantConfig` | `true` / `false` | carry the project's settings / the tenant-wide ones |
 | `allowUnsigned` | `false` | accept a bundle without a valid signature on a server that requires one |
 

@@ -393,9 +393,20 @@ class WorkspaceServiceTest {
         String target = env.api.listProjects(p).get(0).id();
         env.api.deleteDraft(p, DefinitionKind.PROCESS, "orders");
         env.api.deleteDraft(p, DefinitionKind.DECISION, "risk");
+        // the same trigger again is not in the way: nothing to write
+        var same = env.ws(null).importBundle(p, bundle, new WorkspaceService.Options(true, "overwrite", target, false, true, true, false, false));
+        assertTrue(same.ok(), same.problems().toString());
+        assertTrue(same.items().stream().anyMatch(i -> i.type().equals("trigger") && i.action().equals("unchanged")), same.items().toString());
+        assertTrue(env.ws(null).importBundle(p, bundle, apply("overwrite", target)).ok());
+        // a different one is never overwritten, and the report says which part differs without showing values
+        @SuppressWarnings("unchecked")
+        Map<String, Object> t = (Map<String, Object>) ((List<Object>) bundle.get("triggers")).get(0);
+        ((Map<String, Object>) t.get("config")).put("everySeconds", 99);
+        bundle.put("integrity", Map.of("sha256", WorkspaceBundle.sha256(bundle)));
         var r = env.ws(null).importBundle(p, bundle, apply("overwrite", target));
         assertFalse(r.ok());
         assertTrue(r.problems().stream().anyMatch(x -> x.contains("trigger 'poll1' already exists")), r.problems().toString());
+        assertTrue(r.items().stream().anyMatch(i -> i.type().equals("trigger") && i.message().contains("differs (config)")), r.items().toString());
         assertTrue(env.ws(null).importBundle(p, bundle, apply("skip", target)).ok());
     }
 
