@@ -25,6 +25,7 @@ persistent workflow engine.
 | `wayang-runtime` | `NodeRunner`, domain handlers, wait registry, in-memory **reference engine** | the modules above |
 | `wayang-connectors` | Real outbound connectors for service tasks: `http` (methods, headers, query, JSON body, timeouts, size cap, no redirects, retryable vs permanent failures by status) behind an SSRF guard. **Tested against a real local HTTP server and end to end through a process with a `${secret:}` header** | JDK only |
 | `wayang-store-jdbc` | Durable `WaitRegistry` and `DefinitionStore` over plain JDBC + schemas. **Contract-tested on PostgreSQL 16** | JDK `java.sql` only |
+| `wayang-deployment` | Engine-neutral deployment lifecycle ledger, JDBC persistence, trusted target SPI, and audited activation, rollback, deactivation, and health orchestration (`docs/deployment/`) | JDK `java.sql`; H2 tests |
 | `wayang-api-core` | Transport-neutral API: tenant-scoped definition store (draft CAS + immutable versions), publish-time validation, run/task/message/timer operations, RBAC, event bus, WebSocket session protocol, in-memory reference engine. **Tested (15 tests)** | runtime |
 | `wayang-api-rest` | Quarkus shell: REST resources, WebSocket `/ws/events`, gRPC service + `.proto`, OIDC/JWT principal, timer ticker. **Not compiled against real Quarkus/gRPC; see docs/API.md** | Quarkus |
 | `wayang-gamelan-worker` | Plan -> Gamelan `WorkflowDefinition`; six `@Executor`s; wait parking; deploy facade; **`GamelanReleaseEngine`** (durable runs for generated releases) | Gamelan, Mutiny, CDI |
