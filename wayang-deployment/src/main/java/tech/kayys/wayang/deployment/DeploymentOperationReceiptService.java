@@ -19,11 +19,13 @@ public final class DeploymentOperationReceiptService {
         if (lease == null || lease.isZero() || lease.isNegative() || lease.compareTo(Duration.ofMinutes(15)) > 0) {
             throw new IllegalArgumentException("lease must be positive and no greater than 15 minutes");
         }
-        String fingerprint = DeploymentCommandFingerprint.of(operation, command);
+        String safeOperation = boundedRequired(operation, "operation", 40);
+        boundedRequired(command.deploymentId(), "deploymentId", 160);
+        boundedRequired(command.idempotencyKey(), "idempotencyKey", 200);
+        String fingerprint = DeploymentCommandFingerprint.of(safeOperation, command);
         var now = clock.instant();
         return store.claim(command.deploymentId(), command.idempotencyKey(), fingerprint,
-                DeploymentSnapshot.required(operation, "operation"),
-                command.idempotencyKey(), now, now.plus(lease));
+                safeOperation, command.idempotencyKey(), now, now.plus(lease));
     }
 
     public DeploymentOperationReceipt complete(String operation, DeploymentCommand command,
@@ -31,11 +33,20 @@ public final class DeploymentOperationReceiptService {
         if (status != DeploymentOperationStatus.SUCCEEDED && status != DeploymentOperationStatus.FAILED) {
             throw new IllegalArgumentException("completion status must be SUCCEEDED or FAILED");
         }
+        String safeOperation = boundedRequired(operation, "operation", 40);
+        boundedRequired(command.deploymentId(), "deploymentId", 160);
+        boundedRequired(command.idempotencyKey(), "idempotencyKey", 200);
         return store.complete(command.deploymentId(), command.idempotencyKey(),
-                DeploymentCommandFingerprint.of(operation, command), status, resultCode, resultDetail, clock.instant());
+                DeploymentCommandFingerprint.of(safeOperation, command), status, resultCode, resultDetail, clock.instant());
     }
 
     public DeploymentOperationReceipt markUnknown(DeploymentCommand command, String reason) {
         return store.markUnknown(command.deploymentId(), command.idempotencyKey(), reason, clock.instant());
+    }
+
+    private static String boundedRequired(String value, String name, int maxLength) {
+        String normalized = DeploymentSnapshot.required(value, name);
+        if (normalized.length() > maxLength) throw new IllegalArgumentException(name + " exceeds " + maxLength + " characters");
+        return normalized;
     }
 }
