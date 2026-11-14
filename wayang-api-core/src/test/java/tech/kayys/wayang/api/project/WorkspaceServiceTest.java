@@ -373,6 +373,15 @@ class WorkspaceServiceTest {
         assertTrue(over.ok(), over.problems().toString());
         assertEquals("orders", env.api.getDraft(p, DefinitionKind.PROCESS, "orders").document().get("name"));
         assertEquals(3, env.api.getDraft(p, DefinitionKind.PROCESS, "orders").revision());
+        // the same bundle over what is now identical: nothing is written, and a dry run says so
+        var dry = env.ws(null).importBundle(p, bundle, new WorkspaceService.Options(true, "overwrite", target, false, false, true, false, false));
+        assertTrue(dry.items().stream().anyMatch(i -> i.id().equals("orders") && i.action().equals("unchanged") && i.status().equals("skipped")), dry.items().toString());
+        var same = env.ws(null).importBundle(p, bundle, new WorkspaceService.Options(false, "overwrite", target, false, false, true, false, false));
+        assertTrue(same.ok(), same.problems().toString());
+        assertEquals(3, env.api.getDraft(p, DefinitionKind.PROCESS, "orders").revision(), "an identical overwrite creates no revision");
+        // with publish asked for, an identical draft is still written and published
+        var pub = env.ws(null).importBundle(p, bundle, new WorkspaceService.Options(false, "overwrite", target, true, false, true, false, false));
+        assertTrue(pub.items().stream().noneMatch(i -> i.action().equals("unchanged")), pub.items().toString());
     }
 
     @Test
