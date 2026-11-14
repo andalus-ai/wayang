@@ -261,4 +261,14 @@ void main() {
     expect(bundleDigest({'format': 'wayang.workspace', 'formatVersion': 1}), '0 definitions · unsigned');
     expect(bundleDigest({'definitions': 'x', 'requires': 5, 'triggers': 7}), '0 definitions · unsigned');
   });
+
+  test('selectors are parsed loosely and a narrowed bundle is told apart from an ignored selection', () {
+    expect(parseSelectors(' Process:Orders,decision:risk  process:orders\n'), ['process:orders', 'decision:risk']);
+    expect(parseSelectors('  ,, '), isEmpty);
+    final all = {'definitions': [{'kind': 'PROCESS', 'id': 'Orders'}, {'kind': 'DECISION', 'id': 'risk'}]};
+    expect(selectionHonoured(all, []), isTrue);
+    expect(selectionHonoured(all, ['process:orders', 'decision:risk']), isTrue);
+    expect(selectionHonoured(all, ['process:orders']), isFalse, reason: 'the server sent more than asked for');
+    expect(selectionHonoured({}, ['process:orders']), isTrue);
+  });
 }

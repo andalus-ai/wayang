@@ -156,7 +156,7 @@ secret per node execution, so volume follows run volume. An audit store failure 
 
 Sections **Configuration** (settings of the tenant or a project) and **Workspace** (export to a copyable bundle; import with
 "Check (dry run)", then "Apply" only for exactly what was checked, with the report: problems, warnings, what is missing here, new
-webhook secrets shown once). Both the export dialog and the import box show one summary line of the bundle: project, definitions by kind, triggers, the secrets and settings it needs, and `signed` or `unsigned` (read from the text, nothing is checked until the dry run). The **Secrets** section shows where key rotation stands (active key, how many secrets are still under an
+webhook secrets shown once). Both the export dialog and the import box show one summary line of the bundle: project, definitions by kind, triggers, the secrets and settings it needs, and `signed` or `unsigned` (read from the text, nothing is checked until the dry run). The Export card has an optional **Only these definitions** field (`process:orders, decision:risk`) that sends `only`; a server that predates the parameter would ignore it, and Studio then says the bundle holds everything. The **Secrets** section shows where key rotation stands (active key, how many secrets are still under an
 older one), has a "Reload keyring" button (`POST /secrets/keys/reload`, admin), and checks names before saving (`vault.*`, `file.*`
 and `oauth*` are refused, as the server does; so are the cloud prefixes).
 
