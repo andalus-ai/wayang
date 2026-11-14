@@ -687,6 +687,8 @@ public final class WorkspaceService {
             d.add("config");
         }
         return String.join(", ", d);
+    }
+
     /** True when the definition's current draft (or, without one, its latest published version) is exactly {@code doc}. */
     private boolean sameAsCurrent(Principal p, DefinitionKind kind, String id, Map<String, Object> doc) {
         try {
