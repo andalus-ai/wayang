@@ -1,8 +1,8 @@
 # Deployment lifecycle ledger
 
-**Status: implemented reference state machine, in-memory ledger, JDBC ledger, and target adapter contract. Concrete target adapters and production database integration remain unimplemented.**
+**Status: implemented reference state machine, in-memory and JDBC lifecycle ledgers, trusted target SPI, audited orchestration, and JDBC operation receipts. Concrete target adapters and production database integration remain unimplemented.**
 
-The offline package installer establishes that a release has been verified and atomically placed on disk. It does not activate the release. The deployment module provides an engine-neutral lifecycle vocabulary, append-only event contract, durable ledger adapter, target SPI, and orchestration coordinator.
+The offline package installer establishes that a release has been verified and atomically placed on disk. It does not activate the release. The deployment module provides an engine-neutral lifecycle vocabulary, append-only event contract, durable ledger adapter, target SPI, orchestration coordinator, and a separate durable operation-receipt boundary.
 
 ## Responsibilities and boundaries
 
@@ -24,7 +24,7 @@ Transitions are allow-listed in DeploymentLifecycleService; unknown transitions 
 
 ## Concurrency and audit contract
 
-Every accepted transition:
+Every accepted lifecycle transition:
 - carries actor, reason, correlation ID, idempotency key, and timestamp;
 - increments the deployment version exactly once;
 - appends an event with a monotonic per-deployment sequence;
@@ -32,8 +32,8 @@ Every accepted transition:
 
 DeploymentLedger.append is the persistence seam. A production implementation must atomically commit the event and new snapshot, enforce uniqueness for (deploymentId, idempotencyKey), and preserve event ordering. The included InMemoryDeploymentLedger is synchronized but process-local; it is not durable, multi-node safe, or a production audit store.
 
-The in-memory reference ledger rejects duplicate idempotency keys. The JDBC ledger enforces uniqueness with a database constraint; an equivalent retry currently returns a conflict rather than replaying the prior result. The orchestration coordinator derives deterministic phase keys from the command key, so retrying a partially or fully processed command cannot silently start a second activation. Durable response replay and command-fingerprint storage remain future work.
+Lifecycle event idempotency and operation idempotency are separate. The JDBC lifecycle ledger rejects duplicate event keys; it does not replay a previous target-operation result. The durable receipt store adds canonical command fingerprints and replayable terminal outcomes. See [operation-receipts.md](operation-receipts.md).
 
 ## Verification boundary
 
-Unit tests cover allowed and rejected transitions, stale versions, degraded and failed health outcomes, explicit rollback, event ordering, and duplicate registration/key rejection. Orchestration tests use fake targets to exercise activation success/failure, readiness outcomes, scope checks, timeout validation, deactivation success/failure, and rollback success/uncertain readiness. They do not prove production database behavior against PostgreSQL, real runtime activation, adapter deadline enforcement, or rollback of a live service. JDBC tests use H2 to exercise transaction rollback and event ordering.
+Unit tests cover allowed and rejected transitions, stale versions, degraded and failed health outcomes, explicit rollback, event ordering, and duplicate registration/key rejection. Orchestration tests use fake targets to exercise activation success/failure, readiness outcomes, scope checks, timeout validation, deactivation success/failure, and rollback success/uncertain readiness. Receipt tests use H2 to exercise canonical fingerprints, duplicate claim replay, fingerprint mismatch rejection, lease expiry to UNKNOWN, and immutable terminal results. These tests do not prove production database behavior against PostgreSQL, real runtime activation, adapter deadline enforcement, or rollback of a live service.
