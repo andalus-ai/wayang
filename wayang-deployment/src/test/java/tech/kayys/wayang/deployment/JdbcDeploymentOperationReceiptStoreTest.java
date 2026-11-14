@@ -3,6 +3,7 @@ package tech.kayys.wayang.deployment;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.time.Instant;
+import java.util.UUID;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,7 +14,7 @@ class JdbcDeploymentOperationReceiptStoreTest {
 
     @BeforeEach void setUp() throws Exception {
         var source = new JdbcDataSource();
-        source.setURL("jdbc:h2:mem:operation_receipts;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE");
+        source.setURL("jdbc:h2:mem:operation_receipts_" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE");
         try (var c = source.getConnection(); var s = c.createStatement()) {
             s.execute("""
                 CREATE TABLE wayang_deployment_snapshot (
