@@ -31,6 +31,7 @@ jobs:
       WAYANG_TEST_POSTGRES_URL: jdbc:postgresql://localhost:5432/wayang_test
       WAYANG_TEST_POSTGRES_USER: postgres
       WAYANG_TEST_POSTGRES_PASSWORD: postgres
+      PGPASSWORD: postgres
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,6 +41,8 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - name: Apply pressure-event schema migration
+        run: psql -h localhost -U postgres -d wayang_test -v ON_ERROR_STOP=1 -f spikes/cel-nessie/src/main/resources/db/migration/V1__pressure_event_store.sql
       - name: Compile qualification harness and resolve test classpath
         run: >-
           mvn -B -f spikes/cel-nessie/pom.xml
@@ -49,6 +52,18 @@ jobs:
         run: >-
           java -cp "spikes/cel-nessie/target/test-classes:spikes/cel-nessie/target/classes:$(cat spikes/cel-nessie/target/test-classpath.txt)"
           tech.kayys.wayang.spike.PostgresRestartQualification seed
+      - name: Create custom-format backup
+        run: pg_dump -h localhost -U postgres -d wayang_test --format=custom --no-owner --no-acl --file=pressure-events.dump
+      - name: Restore backup into isolated database
+        run: |
+          createdb -h localhost -U postgres wayang_restore_test
+          pg_restore -h localhost -U postgres -d wayang_restore_test --no-owner --no-acl pressure-events.dump
+          restored_count="$(psql -h localhost -U postgres -d wayang_restore_test -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM wayang_pressure_event WHERE acknowledged_at IS NULL")"
+          test "$restored_count" = "1"
+          restored_schema="$(psql -h localhost -U postgres -d wayang_restore_test -At -v ON_ERROR_STOP=1 -c "SELECT schema_version FROM wayang_pressure_event_schema WHERE singleton = TRUE")"
+          test "$restored_schema" = "1"
+          restored_lease="$(psql -h localhost -U postgres -d wayang_restore_test -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM wayang_pressure_event WHERE consumer_id = 'restart-worker-before' AND claim_token IS NOT NULL AND lease_expires_at IS NOT NULL")"
+          test "$restored_lease" = "1"
       - name: Restart PostgreSQL service container
         shell: bash
         run: |
