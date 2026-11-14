@@ -1,18 +1,18 @@
 # Deployment lifecycle ledger
 
-**Status: implemented reference state machine, in-memory ledger, JDBC ledger, and target adapter contract. Concrete target adapters and production database integration remain unimplemented.**
+**Status: implemented reference state machine, in-memory ledger, JDBC ledger, target adapter contract, and audited activation/health orchestration. Concrete target adapters and production database integration remain unimplemented.**
 
-The offline package installer establishes that a release has been verified and atomically placed on disk. It does not activate the release. This module introduces a separate, engine-neutral lifecycle vocabulary and append-only event contract.
+The offline package installer establishes that a release has been verified and atomically placed on disk. It does not activate the release. The deployment module provides an engine-neutral lifecycle vocabulary, append-only event contract, durable ledger adapter, target SPI, and orchestration coordinator.
 
 ## Responsibilities and boundaries
 
 - wayang-publish verifies, assembles, and installs release packages.
-- wayang-deployment models deployment state transitions and records their audit facts.
+- wayang-deployment models deployment state transitions, records audit facts, and coordinates activation with a trusted target adapter.
 - A deployment target adapter is responsible for staging, activating, deactivating a concrete runtime, and performing bounded health checks.
 - Wayang Console remains responsible for fleet orchestration and operator-facing management.
 - Gamelan remains responsible for workflow-run durability and scheduling; this module is not a workflow engine.
 
-The lifecycle service does not execute shell commands, launch containers, run migrations, probe endpoints, or perform rollback itself. Those operations require separately reviewed adapters with explicit permissions and deadlines.
+The orchestration service does not execute shell commands, launch containers, run migrations, or probe endpoints itself. Those operations require separately reviewed adapters with explicit permissions and deadlines. See [orchestration.md](orchestration.md).
 
 ## State model
 
@@ -32,8 +32,8 @@ Every accepted transition:
 
 DeploymentLedger.append is the persistence seam. A production implementation must atomically commit the event and new snapshot, enforce uniqueness for (deploymentId, idempotencyKey), and preserve event ordering. The included InMemoryDeploymentLedger is synchronized but process-local; it is not durable, multi-node safe, or a production audit store.
 
-The in-memory reference ledger rejects duplicate idempotency keys. The JDBC ledger enforces uniqueness with a database constraint; an equivalent retry currently returns a conflict rather than replaying the prior result. A future command service can add safe response replay by persisting a canonical command fingerprint and result.
+The in-memory reference ledger rejects duplicate idempotency keys. The JDBC ledger enforces uniqueness with a database constraint; an equivalent retry currently returns a conflict rather than replaying the prior result. The orchestration coordinator derives deterministic phase keys from the command key, so retrying a partially or fully processed command cannot silently start a second activation. Durable response replay and command-fingerprint storage remain future work.
 
 ## Verification boundary
 
-Unit tests cover allowed and rejected transitions, stale versions, degraded and failed health outcomes, explicit rollback, event ordering, and duplicate registration/key rejection. They do not prove production database behavior against PostgreSQL, real runtime activation, health-check correctness, or rollback of a live service. JDBC tests use H2 to exercise transaction rollback and event ordering.
+Unit tests cover allowed and rejected transitions, stale versions, degraded and failed health outcomes, explicit rollback, event ordering, and duplicate registration/key rejection. Orchestration tests use fake targets to exercise activation success/failure, readiness outcomes, scope checks, and timeout validation. They do not prove production database behavior against PostgreSQL, real runtime activation, adapter deadline enforcement, or rollback of a live service. JDBC tests use H2 to exercise transaction rollback and event ordering.
