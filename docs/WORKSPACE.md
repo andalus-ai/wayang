@@ -11,7 +11,7 @@ copying credentials around.
 
 ## Workspace bundle
 
-`GET /api/v1/projects/{id}/export[?includeTenantConfig=true]` (a read) and `POST /api/v1/workspace/import`
+`GET /api/v1/projects/{id}/export[?includeTenantConfig=true][&only=kind:id,...]` (a read; `only` narrows the bundle to the listed definitions, for example `only=process:orders,decision:risk`, case-insensitive; a selector that matches nothing is a 422 listing it, and a definition a selected one refers to is not added for you; triggers follow the processes that are in) and `POST /api/v1/workspace/import`
 `{bundle, options}`.
 
 ```json
@@ -47,9 +47,13 @@ A **dry run is the default**: nothing is written and the report says what would 
 | `targetProject` | none | import into this project; otherwise a new one is created, named as in the bundle |
 | `onConflict` | `fail` | `skip` or `overwrite` for definitions that already exist **in the target project**. A definition with the same id in another project (or none) is always a conflict: it is never moved |
 | `publish` | `false` | publish what was imported, decisions and agents before the processes that use them |
-| `triggers` | `true` | create the bundle's triggers (they are created **disabled**; a new webhook secret is returned once). An existing trigger is never overwritten |
+| `triggers` | `true` | create the bundle's triggers (they are created **disabled**; a new webhook secret is returned once). An existing trigger is never overwritten: one with the same kind, process and configuration is reported as `unchanged` and is no conflict, so re-importing a bundle you exported from here works; one that differs is a conflict and the report names what differs (`kind`, `process`, `config`), never the values |
 | `projectConfig` / `tenantConfig` | `true` / `false` | carry the project's settings / the tenant-wide ones |
 | `allowUnsigned` | `false` | accept a bundle without a valid signature on a server that requires one |
+
+With `overwrite`, a definition whose current draft (or latest published version when there is no draft) is already exactly the bundle's is reported as `unchanged` (status `skipped`): nothing is written, so no new revision appears, and a dry run shows which definitions would really change. With `publish` on it is still written and published, so the version history stays what you asked for.
+
+Settings are reported by what is already there: `set` (new), `overwrite` (a different value is replaced; this has always been so, whatever `onConflict` says, and is now visible in the dry run) or `unchanged` (same value, not written). The report never shows setting values.
 
 The report: `ok`, `items` (project, each definition, setting, trigger, with action and status), `problems`, `warnings`,
 `missingSecrets` (checked against this tenant's secrets when the caller may list them; otherwise `secretsChecked` is false and it
@@ -152,7 +156,7 @@ secret per node execution, so volume follows run volume. An audit store failure 
 
 Sections **Configuration** (settings of the tenant or a project) and **Workspace** (export to a copyable bundle; import with
 "Check (dry run)", then "Apply" only for exactly what was checked, with the report: problems, warnings, what is missing here, new
-webhook secrets shown once). The **Secrets** section shows where key rotation stands (active key, how many secrets are still under an
+webhook secrets shown once). Both the export dialog and the import box show one summary line of the bundle: project, definitions by kind, triggers, the secrets and settings it needs, and `signed` or `unsigned` (read from the text, nothing is checked until the dry run). The Export card has an optional **Only these definitions** field (`process:orders, decision:risk`) that sends `only`; a server that predates the parameter would ignore it, and Studio then says the bundle holds everything. The **Secrets** section shows where key rotation stands (active key, how many secrets are still under an
 older one), has a "Reload keyring" button (`POST /secrets/keys/reload`, admin), and checks names before saving (`vault.*`, `file.*`
 and `oauth*` are refused, as the server does; so are the cloud prefixes).
 

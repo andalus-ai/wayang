@@ -111,3 +111,48 @@ class FeedbackItem {
   /// The label of [kind] as the form shows it; an unknown kind (a newer server) is shown as it is.
   String get kindLabel => FeedbackKind.values.where((k) => k.api == kind).map((k) => k.label).firstOrNull ?? kind;
 }
+
+/// What `GET /api/v1/feedback/summary` says is waiting: [open] entries (and [openByKind]) and the thumbs. [sampled] means the server counted
+/// only its newest entries, so the numbers are a floor.
+class FeedbackSummary {
+  const FeedbackSummary({required this.open, required this.openByKind, required this.up, required this.down, required this.sampled});
+
+  factory FeedbackSummary.fromJson(Map<String, dynamic> j) {
+    int n(Object? v) => v is num && v >= 0 ? v.toInt() : 0;
+    final by = j['byKind'];
+    return FeedbackSummary(
+      open: n(j['open']),
+      openByKind: {
+        if (by is Map)
+          for (final e in by.entries)
+            if (e.key is String && n(e.value) > 0) e.key as String: n(e.value),
+      },
+      up: n(j['up']),
+      down: n(j['down']),
+      sampled: j['sampled'] == true,
+    );
+  }
+
+  final int open;
+  final Map<String, int> openByKind;
+  final int up;
+  final int down;
+  final bool sampled;
+
+  /// One line for the header, e.g. `3 open · 👍 5 · 👎 2` (with a trailing `+` on counts that may be a floor).
+  String get line {
+    final plus = sampled ? '+' : '';
+    return '$open$plus open · 👍 $up$plus · 👎 $down$plus';
+  }
+
+  /// How many open entries of [kind] (0 when none).
+  int openOf(String kind) => openByKind[kind] ?? 0;
+}
+
+/// The command that downloads the feedback as CSV (admin). The token is never put in the text: the operator's own shell supplies it.
+/// [kind] narrows it to one kind (it is one of the fixed API names, never free text).
+String feedbackExportCommand(String baseUrl, {String? kind}) {
+  final base = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+  final known = FeedbackKind.values.any((k) => k.api == kind);
+  return "curl -sS '$base/api/v1/feedback/export${known ? '?kind=$kind' : ''}' -H \"Authorization: Bearer \$WAYANG_TOKEN\" -o feedback.csv";
+}

@@ -214,4 +214,39 @@ class FeedbackTest {
         assertThrows(ApiException.class, () -> service.exportCsv(viewer, null, 10));
         assertTrue(service.exportCsv(admin, "idea", 10).lines().count() == 1, "header only when nothing matches");
     }
+
+    @Test
+    void retentionDropsOldEntriesOfEveryTenantAndNothingWhenOff() {
+        Clock past = Clock.fixed(Instant.parse("2026-09-01T10:00:00Z"), ZoneOffset.UTC);
+        var old = new FeedbackService(store, past, null);
+        old.submit(viewer, req("kind", "idea", "message", "old acme"));
+        old.submit(other, req("kind", "idea", "message", "old globex"));
+        service.submit(viewer, req("kind", "idea", "message", "new acme"));
+        assertEquals(0, service.applyRetention(0), "off by default");
+        assertEquals(0, service.applyRetention(-5));
+        assertEquals(2, service.applyRetention(30), "both tenants' entries older than 30 days go");
+        var left = service.list(admin, null, 10, null);
+        assertEquals(1, left.size());
+        assertEquals("new acme", left.get(0).message());
+        assertEquals(0, service.applyRetention(30));
+    }
+
+    @Test
+    void theSummaryCountsWhatIsOpenAndTheThumbsForTheTenantOnly() {
+        Object bug = service.submit(viewer, req("kind", "bug", "message", "broken")).get("id");
+        service.submit(viewer, req("kind", "bug", "message", "also broken"));
+        service.submit(viewer, req("kind", "idea", "message", "dark mode"));
+        service.submit(viewer, req("kind", "rating", "rating", "up"));
+        service.submit(viewer, req("kind", "rating", "rating", "down"));
+        service.submit(other, req("kind", "bug", "message", "not yours"));
+        service.setStatus(admin, String.valueOf(bug), "done");
+        var s = service.summary(admin);
+        assertEquals(4L, s.get("open"));
+        assertEquals(Map.of("bug", 1L, "idea", 1L, "rating", 2L), s.get("byKind"));
+        assertEquals(1L, s.get("up"));
+        assertEquals(1L, s.get("down"));
+        assertEquals(5, s.get("counted"));
+        assertEquals(false, s.get("sampled"));
+        assertThrows(ApiException.class, () -> service.summary(viewer));
+    }
 }

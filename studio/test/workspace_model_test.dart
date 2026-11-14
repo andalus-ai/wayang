@@ -241,4 +241,34 @@ void main() {
           {'chatId': '42', 'model': 'ollama/llama3.1', 'notes': 'true', 'persona': 'terse'});
     });
   });
+
+  test('bundle digest names the project, counts, needs and signature', () {
+    final s = bundleDigest({
+      'format': 'wayang.workspace',
+      'formatVersion': 1,
+      'project': {'name': ' Shop '},
+      'definitions': [
+        {'kind': 'PROCESS', 'id': 'a'},
+        {'kind': 'PROCESS', 'id': 'b'},
+        {'kind': 'DECISION', 'id': 'c'},
+        'junk',
+      ],
+      'triggers': [{}],
+      'requires': {'secrets': ['SLACK', 'MAIL'], 'config': ['CHANNEL']},
+      'integrity': {'sha256': 'x', 'hmac': 'y'},
+    });
+    expect(s, 'Shop · 4 definitions (2 process, 1 decision) · 1 trigger · needs secrets: SLACK, MAIL · needs settings: CHANNEL · signed');
+    expect(bundleDigest({'format': 'wayang.workspace', 'formatVersion': 1}), '0 definitions · unsigned');
+    expect(bundleDigest({'definitions': 'x', 'requires': 5, 'triggers': 7}), '0 definitions · unsigned');
+  });
+
+  test('selectors are parsed loosely and a narrowed bundle is told apart from an ignored selection', () {
+    expect(parseSelectors(' Process:Orders,decision:risk  process:orders\n'), ['process:orders', 'decision:risk']);
+    expect(parseSelectors('  ,, '), isEmpty);
+    final all = {'definitions': [{'kind': 'PROCESS', 'id': 'Orders'}, {'kind': 'DECISION', 'id': 'risk'}]};
+    expect(selectionHonoured(all, []), isTrue);
+    expect(selectionHonoured(all, ['process:orders', 'decision:risk']), isTrue);
+    expect(selectionHonoured(all, ['process:orders']), isFalse, reason: 'the server sent more than asked for');
+    expect(selectionHonoured({}, ['process:orders']), isTrue);
+  });
 }

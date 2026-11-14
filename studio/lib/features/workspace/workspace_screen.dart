@@ -24,6 +24,7 @@ class WorkspaceScreen extends ConsumerStatefulWidget {
 class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   String? _exportProject;
   bool _withTenantConfig = false;
+  final _only = TextEditingController();
   final _bundleText = TextEditingController();
   ImportOptions _options = const ImportOptions();
   ImportOptions? _checkedWith;
@@ -38,6 +39,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   @override
   void dispose() {
     _bundleText.dispose();
+    _only.dispose();
     super.dispose();
   }
 
@@ -46,14 +48,22 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     if (id == null) return;
     setState(() => _busy = true);
     try {
-      final b = await ref.read(repositoryProvider).exportProject(id, includeTenantConfig: _withTenantConfig);
+      final only = parseSelectors(_only.text);
+      final b = await ref.read(repositoryProvider).exportProject(id, includeTenantConfig: _withTenantConfig, only: only);
+      if (mounted && !selectionHonoured(b, only)) {
+        showToast(context, 'This server ignored the selection: the bundle holds everything.', isError: true);
+      }
       final text = const JsonEncoder.withIndent('  ').convert(b);
       if (!mounted) return;
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Bundle'),
-          content: SizedBox(width: 640, height: 420, child: SingleChildScrollView(child: SelectableText(text, style: const TextStyle(fontFamily: 'monospace', fontSize: 11)))),
+          content: SizedBox(width: 640, height: 420, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(bundleDigest(b), style: const TextStyle(fontSize: 12)),
+            const SizedBox(height: 8),
+            Expanded(child: SingleChildScrollView(child: SelectableText(text, style: const TextStyle(fontFamily: 'monospace', fontSize: 11)))),
+          ])),
           actions: [
             TextButton(
               onPressed: () async {
@@ -100,6 +110,19 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       }
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// What the pasted bundle holds, or null when it is not one (the check below says why). Parsed when the text changes, not on every build.
+  String? _summary;
+
+  static String? _summaryOf(String text) {
+    if (text.trim().isEmpty) return null;
+    try {
+      final v = jsonDecode(text);
+      return v is Map<String, dynamic> && looksLikeBundle(v) ? bundleDigest(v) : null;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -175,6 +198,16 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   const Spacer(),
                   ElevatedButton(onPressed: _busy || _exportProject == null ? null : _export, child: const Text('Export')),
                 ]),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _only,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    labelText: 'Only these definitions (optional)',
+                    hintText: 'process:orders, decision:risk',
+                    helperText: 'Leave empty for everything. A definition they refer to is not added for you.',
+                  ),
+                ),
               ]),
             ),
           ),
@@ -197,8 +230,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   maxLines: 10,
                   style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
                   decoration: InputDecoration(hintText: 'Paste a bundle here', errorText: _error),
-                  onChanged: (_) => setState(() {}),
+                  onChanged: (_) => setState(() => _summary = _summaryOf(_bundleText.text)),
                 ),
+                if (_summary != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(_summary!, style: const TextStyle(fontSize: 12))),
                 const SizedBox(height: 10),
                 Wrap(spacing: 14, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
                   DropdownButton<String?>(
