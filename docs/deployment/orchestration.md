@@ -2,7 +2,7 @@
 
 **Status: orchestration service and fake-target tests implemented; concrete environment adapters and production integration remain unimplemented.**
 
-The orchestration service is the first executable coordinator above the lifecycle ledger and target SPI. It is transport-neutral and has no dependency on Quarkus, Gamelan, Kubernetes, a local process runner, or Wayang Console.
+The orchestration service is the executable coordinator above the lifecycle ledger and target SPI. It is transport-neutral and has no dependency on Quarkus, Gamelan, Kubernetes, a local process runner, or Wayang Console.
 
 ## Activation protocol
 
@@ -17,6 +17,25 @@ The orchestration service is the first executable coordinator above the lifecycl
 
 Every lifecycle event uses a deterministic phase-specific key derived from the command idempotency key. Reusing the same command key therefore conflicts at the ledger boundary rather than silently executing a second activation.
 
+## Deactivation protocol
+
+1. Verify immutable deployment scope and resolve the trusted target.
+2. Record ACTIVE/DEGRADED -> DEACTIVATING before invoking the adapter.
+3. Invoke the adapter's bounded `deactivate` operation.
+4. Record DEACTIVATED only for a `SUCCEEDED` acknowledgement; rejected, failed, timed-out, unknown, missing, or exceptional outcomes become FAILED.
+5. Deactivation does not run the ordinary readiness probe because a stopped deployment is not expected to be healthy. A target adapter should report success only after it has observed the desired stopped condition.
+
+## Rollback protocol
+
+1. Verify immutable deployment scope and resolve the trusted target.
+2. Record the eligible ACTIVE/DEGRADED/FAILED -> ROLLING_BACK transition.
+3. Invoke the adapter's bounded `rollback` operation.
+4. If the operation is not `SUCCEEDED`, record FAILED and do not claim restoration.
+5. If it succeeds, run the target health check against the restored release.
+6. Record ROLLED_BACK only for HEALTHY; DEGRADED, UNHEALTHY, or UNKNOWN readiness records FAILED.
+
+Rollback is deliberately not automatic after failed activation or unhealthy readiness. The caller must make an explicit, authorized request and supply a reason and correlation ID.
+
 ## Safety properties and limits
 
 - Command tenant/environment/target/release must match the persisted deployment before the target is called.
@@ -29,4 +48,4 @@ Every lifecycle event uses a deterministic phase-specific key derived from the c
 
 ## Verification
 
-Tests use fake in-process target adapters to cover healthy activation, activation rejection, degraded readiness, unknown readiness, scope mismatch, missing target, and invalid timeout. They do not prove a real target's deadline enforcement, process isolation, deployment correctness, or production database behavior. GitHub Actions is the repository validation authority.
+Tests use fake in-process target adapters to cover healthy activation, activation rejection, degraded readiness, unknown readiness, scope mismatch, missing target, invalid timeout, successful/failed deactivation, successful rollback, and rollback with uncertain readiness. They do not prove a real target's deadline enforcement, process isolation, deployment correctness, or production database behavior. GitHub Actions is the repository validation authority.
