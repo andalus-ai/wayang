@@ -55,6 +55,102 @@ public final class DeploymentOrchestrationService {
         return new DeploymentExecutionResult(observed, activation, health);
     }
 
+    /**
+     * Deactivates an ACTIVE or DEGRADED deployment. A successful adapter acknowledgement is
+     * recorded as DEACTIVATED; failed or uncertain outcomes are recorded as FAILED.
+     */
+    public DeploymentTargetOperationResult deactivate(DeploymentCommand command, String actor, String reason,
+            String correlationId, Duration timeout) {
+        validateOperationRequest(command, actor, reason, correlationId, timeout);
+        DeploymentSnapshot current = requireScopedSnapshot(command);
+        DeploymentTarget target = targets.require(command.targetId());
+        DeploymentSnapshot deactivating = lifecycle.beginDeactivation(current.deploymentId(), current.version(),
+                actor, reason, correlationId, eventKey(command.idempotencyKey(), "deactivate-begin"));
+        TargetOperationResult operation = invokeDeactivation(target, command, timeout);
+        DeploymentSnapshot result;
+        if (operation.status() == TargetOperationResult.Status.SUCCEEDED) {
+            result = lifecycle.completeDeactivation(command.deploymentId(), deactivating.version(), actor,
+                    operationReason("target deactivated", operation.detail()), correlationId,
+                    eventKey(command.idempotencyKey(), "deactivate-result"));
+        } else {
+            result = lifecycle.failDeactivation(command.deploymentId(), deactivating.version(), actor,
+                    operationReason("deactivation failed", operation.detail()), correlationId,
+                    eventKey(command.idempotencyKey(), "deactivate-result"));
+        }
+        return new DeploymentTargetOperationResult(result, operation, null);
+    }
+
+    /**
+     * Rolls back an ACTIVE, DEGRADED, or FAILED deployment. ROLLED_BACK is recorded only when
+     * the adapter succeeds and the restored deployment subsequently reports HEALTHY.
+     */
+    public DeploymentTargetOperationResult rollback(DeploymentCommand command, String actor, String reason,
+            String correlationId, Duration timeout) {
+        validateOperationRequest(command, actor, reason, correlationId, timeout);
+        DeploymentSnapshot current = requireScopedSnapshot(command);
+        DeploymentTarget target = targets.require(command.targetId());
+        DeploymentSnapshot rollingBack = lifecycle.beginRollback(current.deploymentId(), current.version(),
+                actor, reason, correlationId, eventKey(command.idempotencyKey(), "rollback-begin"));
+        TargetOperationResult operation = invokeRollback(target, command, timeout);
+        if (operation.status() != TargetOperationResult.Status.SUCCEEDED) {
+            DeploymentSnapshot failed = lifecycle.failRollback(command.deploymentId(), rollingBack.version(), actor,
+                    operationReason("rollback failed", operation.detail()), correlationId,
+                    eventKey(command.idempotencyKey(), "rollback-result"));
+            return new DeploymentTargetOperationResult(failed, operation, null);
+        }
+
+        HealthCheckResult health = invokeHealthCheck(target, command, timeout);
+        DeploymentSnapshot result;
+        if (health.outcome() == HealthOutcome.HEALTHY) {
+            result = lifecycle.completeRollback(command.deploymentId(), rollingBack.version(), actor,
+                    healthReason(health), correlationId, eventKey(command.idempotencyKey(), "rollback-result"));
+        } else {
+            result = lifecycle.failRollback(command.deploymentId(), rollingBack.version(), actor,
+                    operationReason("rollback readiness not healthy", healthReason(health)), correlationId,
+                    eventKey(command.idempotencyKey(), "rollback-result"));
+        }
+        return new DeploymentTargetOperationResult(result, operation, health);
+    }
+
+    private void validateOperationRequest(DeploymentCommand command, String actor, String reason,
+            String correlationId, Duration timeout) {
+        Objects.requireNonNull(command, "command");
+        validateTimeout(timeout);
+        requiredWithin(actor, "actor", 200);
+        requiredWithin(reason, "reason", 2048);
+        requiredWithin(correlationId, "correlationId", 200);
+    }
+
+    private DeploymentSnapshot requireScopedSnapshot(DeploymentCommand command) {
+        DeploymentSnapshot current = ledger.find(command.deploymentId())
+                .orElseThrow(() -> new IllegalArgumentException("Unknown deployment: " + command.deploymentId()));
+        validateScope(command, current);
+        return current;
+    }
+
+    private TargetOperationResult invokeDeactivation(DeploymentTarget target, DeploymentCommand command, Duration timeout) {
+        try {
+            TargetOperationResult result = target.deactivate(command, timeout);
+            return result == null ? failedOperation(command, "deactivate", "Target returned no deactivation result") : result;
+        } catch (RuntimeException failure) {
+            return failedOperation(command, "deactivate", "Target deactivation raised " + failure.getClass().getSimpleName());
+        }
+    }
+
+    private TargetOperationResult invokeRollback(DeploymentTarget target, DeploymentCommand command, Duration timeout) {
+        try {
+            TargetOperationResult result = target.rollback(command, timeout);
+            return result == null ? failedOperation(command, "rollback", "Target returned no rollback result") : result;
+        } catch (RuntimeException failure) {
+            return failedOperation(command, "rollback", "Target rollback raised " + failure.getClass().getSimpleName());
+        }
+    }
+
+    private TargetOperationResult failedOperation(DeploymentCommand command, String operation, String detail) {
+        return new TargetOperationResult(TargetOperationResult.Status.FAILED,
+                eventKey(command.idempotencyKey(), operation), detail, clock.instant());
+    }
+
     private TargetOperationResult invokeActivation(DeploymentTarget target, DeploymentCommand command, Duration timeout) {
         try {
             TargetOperationResult result = target.activate(command, timeout);
