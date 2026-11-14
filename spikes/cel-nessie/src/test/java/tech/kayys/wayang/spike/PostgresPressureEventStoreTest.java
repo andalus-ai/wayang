@@ -369,6 +369,62 @@ class PostgresPressureEventStoreTest {
         assertEquals("SCHEMA_VERSION_UNSUPPORTED", health.failureCode());
     }
 
+    @Test
+    void migrationCanBeReappliedWithoutLosingPendingOrLeasedEvents() throws Exception {
+        PressureEventEnvelope event = envelope("migration-restart-stream", 1);
+        store.append(event);
+        ClaimedPressureEvent original = store.claim(
+                "worker-before-restart", 1, NOW, Duration.ofSeconds(10)).getFirst();
+
+        applyMigration();
+
+        PostgresPressureEventStore reconstructed = new PostgresPressureEventStore(dataSource, codec);
+        PressureEventStoreHealth health = reconstructed.inspectHealth();
+        assertTrue(health.databaseAvailable());
+        assertEquals(1, health.schemaVersion());
+        assertEquals(1, health.pendingEvents());
+        assertTrue(reconstructed.claim("worker-too-early", 1,
+                NOW.plusSeconds(5), Duration.ofSeconds(30)).isEmpty());
+
+        ClaimedPressureEvent recovered = reconstructed.claim("worker-after-expiry", 1,
+                NOW.plusSeconds(10), Duration.ofSeconds(30)).getFirst();
+        assertEquals(event.eventId(), recovered.envelope().eventId());
+        assertEquals(2, recovered.deliveryAttempts());
+        assertNotEquals(original.claimToken(), recovered.claimToken());
+        assertTrue(reconstructed.acknowledge("worker-after-expiry", event.eventId(),
+                recovered.claimToken(), NOW.plusSeconds(11)));
+    }
+
+    @Test
+    void databaseConstraintsRejectInvalidSequenceAndPartialClaimState() throws Exception {
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement()) {
+            assertThrows(SQLException.class, () -> statement.executeUpdate("""
+                    INSERT INTO wayang_pressure_event
+                        (event_id, stream_id, sequence_no, recorded_at, recorded_at_nano, payload)
+                    VALUES (gen_random_uuid(), 'invalid-sequence', 0, CURRENT_TIMESTAMP, 0, decode('00', 'hex'))
+                    """));
+            assertThrows(SQLException.class, () -> statement.executeUpdate("""
+                    INSERT INTO wayang_pressure_event
+                        (event_id, stream_id, sequence_no, recorded_at, recorded_at_nano, payload, consumer_id)
+                    VALUES (gen_random_uuid(), 'partial-claim', 1, CURRENT_TIMESTAMP, 0, decode('00', 'hex'), 'worker')
+                    """));
+        }
+    }
+
+    private void applyMigration() throws Exception {
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement();
+             var migration = getClass().getClassLoader()
+                     .getResourceAsStream("db/migration/V1__pressure_event_store.sql")) {
+            assertNotNull(migration, "pressure event migration must be on the test classpath");
+            String sql = new String(migration.readAllBytes(), StandardCharsets.UTF_8);
+            for (String command : sql.split(";")) {
+                if (!command.isBlank()) statement.execute(command);
+            }
+        }
+    }
+
     private List<ClaimedPressureEvent> claimTogether(
             String consumer, CountDownLatch ready, CountDownLatch start) throws Exception {
         ready.countDown();
