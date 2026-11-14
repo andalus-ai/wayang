@@ -49,13 +49,14 @@ wait_for_postgres() {
 wait_for_postgres
 docker exec --user root "$source_container" chown postgres:postgres /wal-archive /base-backup
 export PGPASSWORD=postgres
+run_sql() {
+  docker exec -e PGPASSWORD=postgres "$source_container" \
+    psql -U postgres -d wayang_wal_retention -v ON_ERROR_STOP=1 "$@"
+}
 
-psql -h 127.0.0.1 -p 5432 -U postgres -d wayang_wal_retention \
-  -v ON_ERROR_STOP=1 -f spikes/cel-nessie/src/main/resources/db/migration/V1__pressure_event_store.sql
-psql -h 127.0.0.1 -p 5432 -U postgres -d wayang_wal_retention \
-  -v ON_ERROR_STOP=1 -c "CREATE TABLE wal_retention_marker (marker TEXT PRIMARY KEY)"
-psql -h 127.0.0.1 -p 5432 -U postgres -d wayang_wal_retention \
-  -v ON_ERROR_STOP=1 -c "INSERT INTO wal_retention_marker VALUES ('retained-backup-baseline')"
+run_sql -f /dev/stdin < spikes/cel-nessie/src/main/resources/db/migration/V1__pressure_event_store.sql
+run_sql -c "CREATE TABLE wal_retention_marker (marker TEXT PRIMARY KEY)"
+run_sql -c "INSERT INTO wal_retention_marker VALUES ('retained-backup-baseline')"
 
 # -X none deliberately leaves backup-required WAL in the archive rather than
 # embedding it in the backup's pg_wal directory.
@@ -64,8 +65,7 @@ docker exec -e PGPASSWORD=postgres "$source_container" pg_basebackup \
 
 # Close the segment containing the backup stop point so archive_command can
 # persist it. pg_verifybackup determines the complete WAL range from manifest.
-psql -h 127.0.0.1 -p 5432 -U postgres -d wayang_wal_retention \
-  -v ON_ERROR_STOP=1 -c "SELECT pg_switch_wal()"
+run_sql -c "SELECT pg_switch_wal()"
 
 verify_output=""
 verified=0
