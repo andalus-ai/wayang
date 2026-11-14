@@ -40,5 +40,32 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
-      - name: Verify PostgreSQL-backed pressure event store
+      - name: Compile qualification harness and resolve test classpath
+        run: >-
+          mvn -B -f spikes/cel-nessie/pom.xml
+          -DskipTests test-compile dependency:build-classpath
+          -Dmdep.outputFile=target/test-classpath.txt
+      - name: Seed pending event and active lease
+        run: >-
+          java -cp "spikes/cel-nessie/target/test-classes:spikes/cel-nessie/target/classes:$(cat spikes/cel-nessie/target/test-classpath.txt)"
+          tech.kayys.wayang.spike.PostgresRestartQualification seed
+      - name: Restart PostgreSQL service container
+        shell: bash
+        run: |
+          container_id="$(docker ps --filter 'ancestor=postgres:17' --format '{{.ID}}' | head -n 1)"
+          test -n "$container_id"
+          docker restart "$container_id"
+          for attempt in $(seq 1 30); do
+            if docker exec "$container_id" pg_isready -U postgres -d wayang_test; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "PostgreSQL did not become healthy after restart" >&2
+          exit 1
+      - name: Recover and acknowledge event after database restart
+        run: >-
+          java -cp "spikes/cel-nessie/target/test-classes:spikes/cel-nessie/target/classes:$(cat spikes/cel-nessie/target/test-classpath.txt)"
+          tech.kayys.wayang.spike.PostgresRestartQualification verify
+      - name: Run PostgreSQL-backed store integration tests
         run: mvn -B -f spikes/cel-nessie/pom.xml -Dtest=PostgresPressureEventStoreTest test
