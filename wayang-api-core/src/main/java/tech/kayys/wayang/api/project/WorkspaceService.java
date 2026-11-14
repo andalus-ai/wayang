@@ -647,6 +647,8 @@ public final class WorkspaceService {
                 }
                 done.add(new Item("trigger", id, "create", "done", "disabled"));
             }
+            // settings and triggers left alone (same as what is there, or skipped) are part of the answer too, as they are for definitions
+            items.stream().filter(i -> (i.type().equals("config") || i.type().equals("trigger")) && i.status().equals("skipped")).forEach(done::add);
         } catch (ApiException e) {
             done.add(new Item("error", "", "stopped", "error", e.getMessage()));
             problems.add("Stopped after a failure: " + e.getMessage() + ". What was written before it is still in place (see items).");
