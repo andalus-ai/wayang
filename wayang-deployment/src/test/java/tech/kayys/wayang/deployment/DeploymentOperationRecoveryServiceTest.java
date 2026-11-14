@@ -6,7 +6,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -16,12 +15,9 @@ class DeploymentOperationRecoveryServiceTest {
     @Test
     void persistsConfirmedTargetSuccessWithoutRedispatch() {
         var store = new FakeStore(receipt());
-        var ledger = ledger();
         var registry = new DeploymentTargetRegistry();
-        var target = target(DeploymentOperationObservation.Status.SUCCEEDED);
-        registry.register("target-a", target);
-        var service = new DeploymentOperationRecoveryService(ledger, store, registry,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+        registry.register("target-a", target(DeploymentOperationObservation.Status.SUCCEEDED));
+        var service = service(store, registry);
 
         var report = service.reconcileExpired(Duration.ofSeconds(10), 10);
 
@@ -35,25 +31,18 @@ class DeploymentOperationRecoveryServiceTest {
         var store = new FakeStore(receipt());
         var registry = new DeploymentTargetRegistry();
         registry.register("target-a", target(DeploymentOperationObservation.Status.IN_PROGRESS));
-        var service = new DeploymentOperationRecoveryService(ledger(), store, registry,
-                Clock.fixed(NOW, ZoneOffset.UTC));
-
-        var report = service.reconcileExpired(Duration.ofSeconds(10), 10);
+        var report = service(store, registry).reconcileExpired(Duration.ofSeconds(10), 10);
 
         assertEquals(1, report.stillRunning());
         assertEquals(DeploymentOperationStatus.RUNNING, store.current.status());
     }
 
     @Test
-    void marksUnobservableOperationUnknownAndNeverRetriesIt() {
+    void defaultObservationFailsClosedAndMarksReceiptUnknown() {
         var store = new FakeStore(receipt());
         var registry = new DeploymentTargetRegistry();
-        // The default observation contract is fail-closed.
-        registry.register("target-a", target(DeploymentOperationObservation.Status.UNKNOWN));
-        var service = new DeploymentOperationRecoveryService(ledger(), store, registry,
-                Clock.fixed(NOW, ZoneOffset.UTC));
-
-        var report = service.reconcileExpired(Duration.ofSeconds(10), 10);
+        registry.register("target-a", target(null));
+        var report = service(store, registry).reconcileExpired(Duration.ofSeconds(10), 10);
 
         assertEquals(1, report.unknown());
         assertEquals(DeploymentOperationStatus.UNKNOWN, store.current.status());
@@ -61,12 +50,13 @@ class DeploymentOperationRecoveryServiceTest {
 
     @Test
     void rejectsUnboundedRecoveryRequests() {
-        var service = new DeploymentOperationRecoveryService(ledger(), new FakeStore(receipt()),
-                new DeploymentTargetRegistry(), Clock.fixed(NOW, ZoneOffset.UTC));
-        assertThrows(IllegalArgumentException.class,
-                () -> service.reconcileExpired(Duration.ofMinutes(11), 10));
-        assertThrows(IllegalArgumentException.class,
-                () -> service.reconcileExpired(Duration.ofSeconds(1), 1001));
+        var service = service(new FakeStore(receipt()), new DeploymentTargetRegistry());
+        assertThrows(IllegalArgumentException.class, () -> service.reconcileExpired(Duration.ofMinutes(11), 10));
+        assertThrows(IllegalArgumentException.class, () -> service.reconcileExpired(Duration.ofSeconds(1), 1001));
+    }
+
+    private static DeploymentOperationRecoveryService service(FakeStore store, DeploymentTargetRegistry registry) {
+        return new DeploymentOperationRecoveryService(ledger(), store, registry, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     private static InMemoryDeploymentLedger ledger() {
@@ -90,7 +80,8 @@ class DeploymentOperationRecoveryServiceTest {
             @Override public TargetOperationResult rollback(DeploymentCommand c, Duration t) { return null; }
             @Override public HealthCheckResult healthCheck(DeploymentCommand c, Duration t) { return null; }
             @Override public DeploymentOperationObservation observeOperation(DeploymentOperationReceipt receipt, Duration timeout) {
-                return new DeploymentOperationObservation(status, "observed by test", NOW);
+                return status == null ? DeploymentTarget.super.observeOperation(receipt, timeout)
+                        : new DeploymentOperationObservation(status, "observed by test", NOW);
             }
         };
     }
