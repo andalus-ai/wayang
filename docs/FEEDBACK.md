@@ -40,6 +40,7 @@ a guarantee: it errs on the side of masking, and the form tells people not to pa
 * **Export CSV** in the Feedback section copies a `curl` command (for the current kind filter) that downloads the CSV; like the release
   download it holds no token, your shell supplies `WAYANG_TOKEN`.
 * In the Feedback section each entry has **Mark as done / Reopen**.
+* **Copy CSV** (Feedback section) puts the same CSV as the export endpoint on the clipboard (the selected kind, newest 500). It is a copy, not a file save: Studio has no file-saving dependency yet.
 * A line under the title shows how many entries are open and the thumbs up/down (from `/feedback/summary`; a `+` means the server counted only its newest 500), and the kind chips show their open counts.
 * A failed run has "Report this error": it sends the run's error text and its run id, process id and version, never its variables or outputs.
 

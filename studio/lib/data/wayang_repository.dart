@@ -213,6 +213,10 @@ class WayangRepository {
           if (f is Map) FeedbackItem.fromJson(asMap(f)),
       ];
 
+  /// The newest feedback (up to 500, optionally one [kind]) as CSV text (admin only).
+  Future<String> exportFeedbackCsv({String? kind}) =>
+      _api.getText('/api/v1/feedback/export', query: {'kind': kind, 'limit': '500'}, accept: 'text/csv');
+
   /// Open items per kind and the thumbs, over the newest entries (admin only).
   Future<FeedbackSummary> feedbackSummary() async => FeedbackSummary.fromJson(asMap(await _api.getJson('/api/v1/feedback/summary')));
 
