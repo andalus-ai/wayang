@@ -93,3 +93,12 @@ jobs:
         uses: actions/checkout@v4
       - name: Qualify physical base backup and point-in-time recovery
         run: bash spikes/cel-nessie/scripts/qualify-postgres-pitr.sh
+
+  postgres-wal-archive-retention:
+    name: PostgreSQL WAL archive integrity and retention safety
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Qualify retained backup WAL dependencies
+        run: bash spikes/cel-nessie/scripts/qualify-postgres-wal-retention.sh
