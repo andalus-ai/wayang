@@ -50,7 +50,7 @@ wait_for_postgres
 docker exec --user root "$source_container" chown postgres:postgres /wal-archive /base-backup
 export PGPASSWORD=postgres
 run_sql() {
-  docker exec -e PGPASSWORD=postgres "$source_container" \
+  docker exec -i -e PGPASSWORD=postgres "$source_container" \
     psql -U postgres -d wayang_wal_retention -v ON_ERROR_STOP=1 "$@"
 }
 
