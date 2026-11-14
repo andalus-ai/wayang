@@ -155,6 +155,28 @@ class WorkspaceServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void exportCanBeNarrowedToSelectedDefinitionsAndATypoIsAnError() {
+        String pid = source();
+        var all = ws().export(acme, pid, false, false, null);
+        assertEquals(2, ((List<Object>) all.get("definitions")).size());
+        assertEquals(all, ws().export(acme, pid, false, false, List.of(" ", "")), "blank selectors select nothing: everything is exported");
+        var one = ws().export(acme, pid, false, false, List.of("Decision:RISK"));
+        var defs = (List<Map<String, Object>>) one.get("definitions");
+        assertEquals(1, defs.size());
+        assertEquals("risk", defs.get(0).get("id"));
+        assertTrue(((List<Object>) one.get("triggers")).isEmpty(), "the trigger belongs to a process that is not in");
+        var proc = ws().export(acme, pid, false, false, List.of("process:orders"));
+        assertEquals(1, ((List<Object>) proc.get("triggers")).size(), "triggers follow the processes that are in");
+        var e = assertThrows(ApiException.class, () -> ws().export(acme, pid, false, false, List.of("process:orders", "process:ordres")));
+        assertTrue(e.getMessage().contains("selectors"), e.getMessage());
+        assertEquals(List.of("process:ordres"), e.details());
+        // a narrowed bundle imports like any other
+        Env env = new Env();
+        assertTrue(env.ws(null).importBundle(other(), viaJson(proc), apply("fail", null)).ok());
+    }
+
+    @Test
     void exportIsDeterministicAndSurvivesAJsonRoundTrip() {
         String pid = source();
         Map<String, Object> a = ws().export(acme, pid, false);
@@ -408,6 +430,31 @@ class WorkspaceServiceTest {
         assertTrue(r.problems().stream().anyMatch(x -> x.contains("trigger 'poll1' already exists")), r.problems().toString());
         assertTrue(r.items().stream().anyMatch(i -> i.type().equals("trigger") && i.message().contains("differs (config)")), r.items().toString());
         assertTrue(env.ws(null).importBundle(p, bundle, apply("skip", target)).ok());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void settingsAreReportedAsNewDifferentOrSameAndTheSameOnesAreNotWritten() {
+        Map<String, Object> bundle = viaJson(ws().export(acme, source(), false));
+        Env env = new Env();
+        Principal p = other();
+        var first = env.ws(null).importBundle(p, bundle, apply("fail", null));
+        assertTrue(first.ok(), first.problems().toString());
+        assertTrue(first.items().stream().anyMatch(i -> i.type().equals("config") && i.action().equals("set") && i.status().equals("done")), "a new setting is set");
+        String target = env.api.listProjects(p).get(0).id();
+        var dry = new WorkspaceService.Options(true, "overwrite", target, false, false, true, false, false);
+        var same = env.ws(null).importBundle(p, bundle, dry);
+        assertTrue(same.items().stream().anyMatch(i -> i.type().equals("config") && i.id().equals("CHANNEL") && i.action().equals("unchanged")), same.items().toString());
+        Map<String, Object> proj = (Map<String, Object>) ((Map<String, Object>) bundle.get("config")).get("project");
+        proj.put("CHANNEL", "#elsewhere");
+        bundle.put("integrity", Map.of("sha256", WorkspaceBundle.sha256(bundle)));
+        var diff = env.ws(null).importBundle(p, bundle, dry);
+        var item = diff.items().stream().filter(i -> i.type().equals("config") && i.id().equals("CHANNEL")).findFirst().orElseThrow();
+        assertEquals("overwrite", item.action());
+        assertTrue(!item.message().contains("#elsewhere") && !item.message().contains("#orders"), "values are not put in the report");
+        var applied = env.ws(null).importBundle(p, bundle, new WorkspaceService.Options(false, "overwrite", target, false, false, true, false, false));
+        assertTrue(applied.ok(), applied.problems().toString());
+        assertEquals("#elsewhere", env.config.list(p, target).stream().filter(c -> c.key().equals("CHANNEL")).findFirst().orElseThrow().value());
     }
 
     @Test

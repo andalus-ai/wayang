@@ -33,8 +33,10 @@ public class WorkspaceResource {
 
     @GET
     @Path("projects/{id}/export")
-    public Map<String, Object> export(@PathParam("id") String id, @QueryParam("includeTenantConfig") boolean includeTenantConfig) {
-        return workspace.service().export(principals.current(), id, includeTenantConfig);
+    public Map<String, Object> export(@PathParam("id") String id, @QueryParam("includeTenantConfig") boolean includeTenantConfig,
+            @QueryParam("only") String only) {
+        return workspace.service().export(principals.current(), id, includeTenantConfig, false,
+                only == null || only.isBlank() ? null : java.util.Arrays.asList(only.split(",")));
     }
 
     @POST

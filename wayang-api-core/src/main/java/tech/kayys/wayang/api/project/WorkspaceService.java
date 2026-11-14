@@ -68,13 +68,32 @@ public final class WorkspaceService {
      *                    no published version stops the export), no triggers, and only the settings the definitions refer to
      */
     public Map<String, Object> export(Principal p, String projectId, boolean includeTenantConfig, boolean releaseMode) {
+        return export(p, projectId, includeTenantConfig, releaseMode, null);
+    }
+
+    /**
+     * @param only {@code kind:id} selectors (for example {@code process:orders}); null or empty exports every definition. A selector that
+     *             matches nothing is an error, so a typo cannot produce a silently smaller bundle. Triggers still follow the processes that
+     *             are in; a definition a selected one refers to is not added for you.
+     */
+    public Map<String, Object> export(Principal p, String projectId, boolean includeTenantConfig, boolean releaseMode, java.util.Collection<String> only) {
         Project project = api.getProject(p, projectId);
+        Set<String> wanted = new LinkedHashSet<>();
+        if (only != null) {
+            only.stream().map(x -> x == null ? "" : x.trim().toLowerCase(java.util.Locale.ROOT)).filter(x -> !x.isEmpty()).forEach(wanted::add);
+        }
+        Set<String> unmatched = new LinkedHashSet<>(wanted);
         List<Object> defs = new ArrayList<>();
         Map<String, Object> processIds = new LinkedHashMap<>();
         List<String> unpublished = new ArrayList<>();
         List<String> newerDrafts = new ArrayList<>();
         for (DefinitionKind kind : DefinitionKind.values()) {
             for (DefinitionSummary s : api.list(p, kind, projectId)) {
+                String selector = kind.name().toLowerCase(java.util.Locale.ROOT) + ":" + s.id().toLowerCase(java.util.Locale.ROOT);
+                if (!wanted.isEmpty() && !wanted.contains(selector)) {
+                    continue;
+                }
+                unmatched.remove(selector);
                 if (releaseMode && s.latestVersion() < 1) {
                     unpublished.add(kind.name().toLowerCase(java.util.Locale.ROOT) + " " + s.id());
                     continue;
@@ -94,6 +113,10 @@ public final class WorkspaceService {
                     processIds.put(s.id(), true);
                 }
             }
+        }
+        if (!unmatched.isEmpty()) {
+            throw new ApiException(ApiException.Code.VALIDATION_FAILED,
+                    "Nothing in this project matches these selectors (use kind:id, for example process:orders)", new ArrayList<>(unmatched));
         }
         if (!unpublished.isEmpty()) {
             throw new ApiException(ApiException.Code.VALIDATION_FAILED,
@@ -420,8 +443,16 @@ public final class WorkspaceService {
         } else if (!projCfg.isEmpty() || !tenCfg.isEmpty()) {
             warnings.add("config: this server has no settings store; the bundle's settings are ignored");
         }
-        projectSettings.keySet().forEach(k -> items.add(new Item("config", k, "set", "ok", "project")));
-        tenantSettings.keySet().forEach(k -> items.add(new Item("config", k, "set", "ok", "tenant")));
+        // what is already there decides the wording (values are never put in the report): new -> set, different -> overwrite, same -> unchanged
+        Map<String, String> haveProjectSettings = currentSettings(p, projectId, !projectSettings.isEmpty() && projectId != null);
+        Map<String, String> haveTenantSettings = currentSettings(p, null, !tenantSettings.isEmpty());
+        Set<String> sameSettings = new LinkedHashSet<>();
+        for (var e : projectSettings.entrySet()) {
+            settingItem(items, sameSettings, "project", e.getKey(), e.getValue(), haveProjectSettings);
+        }
+        for (var e : tenantSettings.entrySet()) {
+            settingItem(items, sameSettings, "tenant", e.getKey(), e.getValue(), haveTenantSettings);
+        }
 
         // ---- triggers
         List<Map<String, Object>> trigs = new ArrayList<>();
@@ -582,10 +613,16 @@ public final class WorkspaceService {
                 }
             }
             for (var e : projectSettings.entrySet()) {
+                if (sameSettings.contains("project/" + e.getKey())) {
+                    continue;
+                }
                 config.put(p, projectId, e.getKey(), e.getValue());
                 done.add(new Item("config", e.getKey(), "set", "done", "project"));
             }
             for (var e : tenantSettings.entrySet()) {
+                if (sameSettings.contains("tenant/" + e.getKey())) {
+                    continue;
+                }
                 config.put(p, null, e.getKey(), e.getValue());
                 done.add(new Item("config", e.getKey(), "set", "done", "tenant"));
             }
@@ -673,7 +710,31 @@ public final class WorkspaceService {
         }
     }
 
-    @SuppressWarnings("unchecked")
+    /** The settings of one scope as they are now (empty when there is nothing to compare, the store is missing or the caller may not read them). */
+    private Map<String, String> currentSettings(Principal p, String scope, boolean needed) {
+        Map<String, String> m = new LinkedHashMap<>();
+        if (!needed || config == null) {
+            return m;
+        }
+        try {
+            config.list(p, scope).forEach(c -> m.put(c.key(), c.value()));
+        } catch (ApiException ignored) {
+            // cannot read: every setting is reported as a plain set
+        }
+        return m;
+    }
+
+    private static void settingItem(List<Item> items, Set<String> same, String scope, String key, String value, Map<String, String> have) {
+        if (!have.containsKey(key)) {
+            items.add(new Item("config", key, "set", "ok", scope));
+        } else if (have.get(key).equals(value)) {
+            same.add(scope + "/" + key);
+            items.add(new Item("config", key, "unchanged", "skipped", scope + ": same as what is there"));
+        } else {
+            items.add(new Item("config", key, "overwrite", "ok", scope + ": replaces the current value"));
+        }
+    }
+
     /** Which parts of an existing trigger differ from the bundle's, by name only (never values: a config may name secrets). */
     private static String differences(Trigger have, String kind, String proc, Map<String, Object> config) {
         List<String> d = new ArrayList<>();
@@ -687,6 +748,8 @@ public final class WorkspaceService {
             d.add("config");
         }
         return String.join(", ", d);
+    }
+
     /** True when the definition's current draft (or, without one, its latest published version) is exactly {@code doc}. */
     private boolean sameAsCurrent(Principal p, DefinitionKind kind, String id, Map<String, Object> doc) {
         try {
@@ -700,6 +763,7 @@ public final class WorkspaceService {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private static Map<String, Object> withProject(Map<String, Object> doc, String projectId) {
         Map<String, Object> d = new LinkedHashMap<>(doc);
         Map<String, Object> studio = d.get(Studio.KEY) instanceof Map<?, ?> m ? new LinkedHashMap<>((Map<String, Object>) m) : new LinkedHashMap<>();

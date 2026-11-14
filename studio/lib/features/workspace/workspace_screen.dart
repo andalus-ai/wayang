@@ -24,6 +24,7 @@ class WorkspaceScreen extends ConsumerStatefulWidget {
 class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   String? _exportProject;
   bool _withTenantConfig = false;
+  final _only = TextEditingController();
   final _bundleText = TextEditingController();
   ImportOptions _options = const ImportOptions();
   ImportOptions? _checkedWith;
@@ -38,6 +39,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   @override
   void dispose() {
     _bundleText.dispose();
+    _only.dispose();
     super.dispose();
   }
 
@@ -46,7 +48,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     if (id == null) return;
     setState(() => _busy = true);
     try {
-      final b = await ref.read(repositoryProvider).exportProject(id, includeTenantConfig: _withTenantConfig);
+      final only = parseSelectors(_only.text);
+      final b = await ref.read(repositoryProvider).exportProject(id, includeTenantConfig: _withTenantConfig, only: only);
+      if (mounted && !selectionHonoured(b, only)) {
+        showToast(context, 'This server ignored the selection: the bundle holds everything.', isError: true);
+      }
       final text = const JsonEncoder.withIndent('  ').convert(b);
       if (!mounted) return;
       await showDialog<void>(
@@ -192,6 +198,16 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   const Spacer(),
                   ElevatedButton(onPressed: _busy || _exportProject == null ? null : _export, child: const Text('Export')),
                 ]),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _only,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    labelText: 'Only these definitions (optional)',
+                    hintText: 'process:orders, decision:risk',
+                    helperText: 'Leave empty for everything. A definition they refer to is not added for you.',
+                  ),
+                ),
               ]),
             ),
           ),

@@ -188,6 +188,25 @@ int n2(Object? v) => v is Map ? v.length : 0;
 /// Whether [text] is worth sending as a bundle at all (the server checks the format and integrity).
 bool looksLikeBundle(Map<String, dynamic> m) => m['format'] == 'wayang.workspace' && m['formatVersion'] != null;
 
+/// `kind:id` selectors from free text (commas, spaces or new lines between them): trimmed, lower-cased, no blanks, no repeats.
+List<String> parseSelectors(String text) => <String>{
+      for (final s in text.split(RegExp(r'[,\s]+'))) if (s.trim().isNotEmpty) s.trim().toLowerCase(),
+    }.toList();
+
+/// Whether a bundle only holds definitions that [selectors] name. A server that does not know the `only` parameter ignores it and sends
+/// everything: this tells Studio so, instead of letting a person believe the bundle is narrowed.
+bool selectionHonoured(Map<String, dynamic> bundle, List<String> selectors) {
+  if (selectors.isEmpty) return true;
+  final defs = bundle['definitions'];
+  if (defs is! List) return true;
+  for (final d in defs) {
+    if (d is! Map) continue;
+    final key = '${d['kind']}:${d['id']}'.toLowerCase();
+    if (!selectors.contains(key)) return false;
+  }
+  return true;
+}
+
 /// One line about what a bundle holds, for showing before it is sent or after it is exported: project, definitions by kind, triggers, what
 /// the target must provide, and whether it is signed. Reads only what is there; nothing is checked (the server does that).
 String bundleDigest(Map<String, dynamic> b) {

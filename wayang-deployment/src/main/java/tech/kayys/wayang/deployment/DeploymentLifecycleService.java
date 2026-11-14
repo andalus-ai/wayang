@@ -45,11 +45,17 @@ public final class DeploymentLifecycleService {
     public DeploymentSnapshot completeRollback(String id, long version, String actor, String reason, String correlation, String key) {
         return transition(id, version, DeploymentState.ROLLED_BACK, actor, reason, correlation, key);
     }
+    public DeploymentSnapshot failRollback(String id, long version, String actor, String reason, String correlation, String key) {
+        return transition(id, version, DeploymentState.FAILED, actor, reason, correlation, key);
+    }
     public DeploymentSnapshot beginDeactivation(String id, long version, String actor, String reason, String correlation, String key) {
         return transition(id, version, DeploymentState.DEACTIVATING, actor, reason, correlation, key);
     }
     public DeploymentSnapshot completeDeactivation(String id, long version, String actor, String reason, String correlation, String key) {
         return transition(id, version, DeploymentState.DEACTIVATED, actor, reason, correlation, key);
+    }
+    public DeploymentSnapshot failDeactivation(String id, long version, String actor, String reason, String correlation, String key) {
+        return transition(id, version, DeploymentState.FAILED, actor, reason, correlation, key);
     }
 
     private DeploymentSnapshot transition(String id, long expectedVersion, DeploymentState next,
