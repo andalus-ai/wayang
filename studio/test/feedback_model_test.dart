@@ -3,6 +3,16 @@ import 'package:wayang_studio/data/feedback_model.dart';
 
 void main() {
   feedbackItemTests();
+  test('summary reads the counts, ignores junk and marks a floor', () {
+    final s = FeedbackSummary.fromJson({'open': 3, 'byKind': {'bug': 2, 'idea': 1, 'x': -4, 'y': 'z'}, 'up': 5, 'down': 2, 'sampled': false});
+    expect(s.line, '3 open · 👍 5 · 👎 2');
+    expect(s.openOf('bug'), 2);
+    expect(s.openOf('error'), 0);
+    expect(s.openByKind.containsKey('x'), isFalse);
+    expect(FeedbackSummary.fromJson({'open': 500, 'sampled': true}).line, '500+ open · 👍 0+ · 👎 0+');
+    expect(FeedbackSummary.fromJson({}).open, 0);
+  });
+  feedbackExportTests();
   test('request trims, cuts to the server limits and drops empty context', () {
     final r = feedbackRequest(
       kind: FeedbackKind.bug,
@@ -49,6 +59,16 @@ void main() {
     expect(p, contains('boom'));
     expect(p, contains('screen: runs'));
     expect(p, contains('runId: r1'));
+  });
+}
+
+void feedbackExportTests() {
+  test('the export command carries no token and only a known kind', () {
+    final all = feedbackExportCommand('https://w.example.com/');
+    expect(all, "curl -sS 'https://w.example.com/api/v1/feedback/export' -H \"Authorization: Bearer \$WAYANG_TOKEN\" -o feedback.csv");
+    expect(feedbackExportCommand('https://w.example.com', kind: 'bug'), contains('export?kind=bug'));
+    expect(feedbackExportCommand('https://w.example.com', kind: "x'; rm -rf /"), isNot(contains('rm')));
+    expect(all, isNot(contains('eyJ')));
   });
 }
 

@@ -68,13 +68,32 @@ public final class WorkspaceService {
      *                    no published version stops the export), no triggers, and only the settings the definitions refer to
      */
     public Map<String, Object> export(Principal p, String projectId, boolean includeTenantConfig, boolean releaseMode) {
+        return export(p, projectId, includeTenantConfig, releaseMode, null);
+    }
+
+    /**
+     * @param only {@code kind:id} selectors (for example {@code process:orders}); null or empty exports every definition. A selector that
+     *             matches nothing is an error, so a typo cannot produce a silently smaller bundle. Triggers still follow the processes that
+     *             are in; a definition a selected one refers to is not added for you.
+     */
+    public Map<String, Object> export(Principal p, String projectId, boolean includeTenantConfig, boolean releaseMode, java.util.Collection<String> only) {
         Project project = api.getProject(p, projectId);
+        Set<String> wanted = new LinkedHashSet<>();
+        if (only != null) {
+            only.stream().map(x -> x == null ? "" : x.trim().toLowerCase(java.util.Locale.ROOT)).filter(x -> !x.isEmpty()).forEach(wanted::add);
+        }
+        Set<String> unmatched = new LinkedHashSet<>(wanted);
         List<Object> defs = new ArrayList<>();
         Map<String, Object> processIds = new LinkedHashMap<>();
         List<String> unpublished = new ArrayList<>();
         List<String> newerDrafts = new ArrayList<>();
         for (DefinitionKind kind : DefinitionKind.values()) {
             for (DefinitionSummary s : api.list(p, kind, projectId)) {
+                String selector = kind.name().toLowerCase(java.util.Locale.ROOT) + ":" + s.id().toLowerCase(java.util.Locale.ROOT);
+                if (!wanted.isEmpty() && !wanted.contains(selector)) {
+                    continue;
+                }
+                unmatched.remove(selector);
                 if (releaseMode && s.latestVersion() < 1) {
                     unpublished.add(kind.name().toLowerCase(java.util.Locale.ROOT) + " " + s.id());
                     continue;
@@ -94,6 +113,10 @@ public final class WorkspaceService {
                     processIds.put(s.id(), true);
                 }
             }
+        }
+        if (!unmatched.isEmpty()) {
+            throw new ApiException(ApiException.Code.VALIDATION_FAILED,
+                    "Nothing in this project matches these selectors (use kind:id, for example process:orders)", new ArrayList<>(unmatched));
         }
         if (!unpublished.isEmpty()) {
             throw new ApiException(ApiException.Code.VALIDATION_FAILED,
@@ -388,8 +411,11 @@ public final class WorkspaceService {
                     warnings.add(key + (i.elementId() == null ? "" : " [" + i.elementId() + "]") + ": " + m);
                 }
             }
-            items.add(new Item(d.kind().name().toLowerCase(), d.id(), action, bad ? "error" : action.equals("skip") ? "skipped" : "ok",
-                    bad ? "Invalid" : ""));
+            if (!bad && action.equals("overwrite") && !o.publish() && sameAsCurrent(p, d.kind(), d.id(), doc)) {
+                action = "unchanged"; // nothing to write: no new revision, and a dry run says so
+            }
+            items.add(new Item(d.kind().name().toLowerCase(), d.id(), action, bad ? "error" : action.equals("skip") || action.equals("unchanged") ? "skipped" : "ok",
+                    bad ? "Invalid" : action.equals("unchanged") ? "Same as what is there" : ""));
             actions.put(key, action);
             if (action.equals("overwrite")) {
                 try {
@@ -417,8 +443,16 @@ public final class WorkspaceService {
         } else if (!projCfg.isEmpty() || !tenCfg.isEmpty()) {
             warnings.add("config: this server has no settings store; the bundle's settings are ignored");
         }
-        projectSettings.keySet().forEach(k -> items.add(new Item("config", k, "set", "ok", "project")));
-        tenantSettings.keySet().forEach(k -> items.add(new Item("config", k, "set", "ok", "tenant")));
+        // what is already there decides the wording (values are never put in the report): new -> set, different -> overwrite, same -> unchanged
+        Map<String, String> haveProjectSettings = currentSettings(p, projectId, !projectSettings.isEmpty() && projectId != null);
+        Map<String, String> haveTenantSettings = currentSettings(p, null, !tenantSettings.isEmpty());
+        Set<String> sameSettings = new LinkedHashSet<>();
+        for (var e : projectSettings.entrySet()) {
+            settingItem(items, sameSettings, "project", e.getKey(), e.getValue(), haveProjectSettings);
+        }
+        for (var e : tenantSettings.entrySet()) {
+            settingItem(items, sameSettings, "tenant", e.getKey(), e.getValue(), haveTenantSettings);
+        }
 
         // ---- triggers
         List<Map<String, Object>> trigs = new ArrayList<>();
@@ -433,9 +467,9 @@ public final class WorkspaceService {
         } else if (!rawTriggers.isEmpty() && !(p.can(Permission.DEFINITION_WRITE) && p.can(Permission.RUN_START))) {
             problems.add("triggers: creating triggers needs tenant-wide definition-write and run-start");
         } else {
-            Set<String> haveTriggers = new LinkedHashSet<>();
+            Map<String, Trigger> haveTriggers = new LinkedHashMap<>();
             if (!rawTriggers.isEmpty() && p.can(Permission.DEFINITION_READ)) {
-                triggers.list(p).forEach(t -> haveTriggers.add(t.id()));
+                triggers.list(p).forEach(t -> haveTriggers.put(t.id(), t));
             }
             Set<String> ids = new LinkedHashSet<>();
             for (Object r : rawTriggers) {
@@ -468,7 +502,13 @@ public final class WorkspaceService {
                 if (bundleRefs.contains("PROCESS/" + proc) && "skip".equals(actions.get("PROCESS/" + proc))) {
                     warnings.add("trigger '" + id + "': its process was skipped; it will point at the existing one");
                 }
-                if (haveTriggers.contains(id)) {
+                Map<String, Object> wantConfig = m.get("config") instanceof Map<?, ?> c ? (Map<String, Object>) c : Map.of();
+                if (haveTriggers.containsKey(id)) {
+                    Trigger have = haveTriggers.get(id);
+                    if (have.kind().name().equals(kind) && have.processId().equals(proc) && have.config().equals(wantConfig)) {
+                        items.add(new Item("trigger", id, "unchanged", "skipped", "Same as what is there")); // nothing to write, nothing in the way
+                        continue;
+                    }
                     switch (o.onConflict()) {
                         case "skip" -> {
                             items.add(new Item("trigger", id, "skip", "skipped", "Already exists"));
@@ -476,7 +516,8 @@ public final class WorkspaceService {
                         }
                         default -> {
                             // a trigger holds a webhook secret hash and a cursor; replacing one silently would break callers
-                            items.add(new Item("trigger", id, "conflict", "error", "Already exists; triggers are never overwritten"));
+                            items.add(new Item("trigger", id, "conflict", "error", "Already exists and differs (" + differences(have, kind, proc, wantConfig)
+                                    + "); triggers are never overwritten"));
                             problems.add("trigger '" + id + "' already exists (use onConflict skip, or delete it first)");
                             continue;
                         }
@@ -552,8 +593,8 @@ public final class WorkspaceService {
                     if (d.kind() != k || action == null) {
                         continue;
                     }
-                    if (action.equals("skip")) {
-                        done.add(new Item(k.name().toLowerCase(), d.id(), "skip", "skipped", ""));
+                    if (action.equals("skip") || action.equals("unchanged")) {
+                        done.add(new Item(k.name().toLowerCase(), d.id(), action, "skipped", action.equals("unchanged") ? "Same as what is there" : ""));
                         continue;
                     }
                     api.saveDraft(p, k, d.id(), withProject(d.doc(), projectId), action.equals("overwrite") ? revisions.get(key) : null);
@@ -572,10 +613,16 @@ public final class WorkspaceService {
                 }
             }
             for (var e : projectSettings.entrySet()) {
+                if (sameSettings.contains("project/" + e.getKey())) {
+                    continue;
+                }
                 config.put(p, projectId, e.getKey(), e.getValue());
                 done.add(new Item("config", e.getKey(), "set", "done", "project"));
             }
             for (var e : tenantSettings.entrySet()) {
+                if (sameSettings.contains("tenant/" + e.getKey())) {
+                    continue;
+                }
                 config.put(p, null, e.getKey(), e.getValue());
                 done.add(new Item("config", e.getKey(), "set", "done", "tenant"));
             }
@@ -659,6 +706,59 @@ public final class WorkspaceService {
                 into.put(e.getKey(), v);
             } catch (ApiException ex) {
                 problems.add(path + "." + e.getKey() + ": " + ex.getMessage());
+            }
+        }
+    }
+
+    /** The settings of one scope as they are now (empty when there is nothing to compare, the store is missing or the caller may not read them). */
+    private Map<String, String> currentSettings(Principal p, String scope, boolean needed) {
+        Map<String, String> m = new LinkedHashMap<>();
+        if (!needed || config == null) {
+            return m;
+        }
+        try {
+            config.list(p, scope).forEach(c -> m.put(c.key(), c.value()));
+        } catch (ApiException ignored) {
+            // cannot read: every setting is reported as a plain set
+        }
+        return m;
+    }
+
+    private static void settingItem(List<Item> items, Set<String> same, String scope, String key, String value, Map<String, String> have) {
+        if (!have.containsKey(key)) {
+            items.add(new Item("config", key, "set", "ok", scope));
+        } else if (have.get(key).equals(value)) {
+            same.add(scope + "/" + key);
+            items.add(new Item("config", key, "unchanged", "skipped", scope + ": same as what is there"));
+        } else {
+            items.add(new Item("config", key, "overwrite", "ok", scope + ": replaces the current value"));
+        }
+    }
+
+    /** Which parts of an existing trigger differ from the bundle's, by name only (never values: a config may name secrets). */
+    private static String differences(Trigger have, String kind, String proc, Map<String, Object> config) {
+        List<String> d = new ArrayList<>();
+        if (!have.kind().name().equals(kind)) {
+            d.add("kind");
+        }
+        if (!have.processId().equals(proc)) {
+            d.add("process");
+        }
+        if (!have.config().equals(config)) {
+            d.add("config");
+        }
+        return String.join(", ", d);
+    }
+
+    /** True when the definition's current draft (or, without one, its latest published version) is exactly {@code doc}. */
+    private boolean sameAsCurrent(Principal p, DefinitionKind kind, String id, Map<String, Object> doc) {
+        try {
+            return api.getDraft(p, kind, id).document().equals(doc);
+        } catch (ApiException e) {
+            try {
+                return api.getVersion(p, kind, id, null).document().equals(doc);
+            } catch (ApiException e2) {
+                return false;
             }
         }
     }

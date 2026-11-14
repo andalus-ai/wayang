@@ -192,8 +192,10 @@ class WayangRepository {
   }
 
   /// The project as a bundle (never any secret value).
-  Future<Map<String, dynamic>> exportProject(String id, {bool includeTenantConfig = false}) async =>
-      asMap(await _api.getJson('/api/v1/projects/$id/export', query: {'includeTenantConfig': includeTenantConfig ? 'true' : null}));
+  /// [only] narrows it to `kind:id` selectors (see [parseSelectors]); an empty list exports everything.
+  Future<Map<String, dynamic>> exportProject(String id, {bool includeTenantConfig = false, List<String> only = const []}) async =>
+      asMap(await _api.getJson('/api/v1/projects/$id/export',
+          query: {'includeTenantConfig': includeTenantConfig ? 'true' : null, 'only': only.isEmpty ? null : only.join(',')}));
 
   Future<ImportReport> importBundle(Map<String, dynamic> bundle, ImportOptions options) async => ImportReport.fromJson(
       asMap(await _api.sendJson('POST', '/api/v1/workspace/import', body: {'bundle': bundle, 'options': options.toJson()})));
@@ -212,6 +214,13 @@ class WayangRepository {
             '${before == null ? '' : '&before=${Uri.encodeQueryComponent(before)}'}')))
           if (f is Map) FeedbackItem.fromJson(asMap(f)),
       ];
+
+  /// The newest feedback (up to 500, optionally one [kind]) as CSV text (admin only).
+  Future<String> exportFeedbackCsv({String? kind}) =>
+      _api.getText('/api/v1/feedback/export', query: {'kind': kind, 'limit': '500'}, accept: 'text/csv');
+
+  /// Open items per kind and the thumbs, over the newest entries (admin only).
+  Future<FeedbackSummary> feedbackSummary() async => FeedbackSummary.fromJson(asMap(await _api.getJson('/api/v1/feedback/summary')));
 
   /// Marks one feedback entry `done` or `open` (admin only).
   Future<void> setFeedbackStatus(String id, {required bool done}) async =>
