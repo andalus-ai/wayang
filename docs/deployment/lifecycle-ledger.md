@@ -1,6 +1,6 @@
 # Deployment lifecycle ledger
 
-**Status: implemented reference state machine, in-memory ledger, JDBC ledger, target adapter contract, and audited activation, rollback, and deactivation orchestration. Concrete target adapters and production database integration remain unimplemented.**
+**Status: implemented reference state machine, in-memory ledger, JDBC ledger, and target adapter contract. Concrete target adapters and production database integration remain unimplemented.**
 
 The offline package installer establishes that a release has been verified and atomically placed on disk. It does not activate the release. The deployment module provides an engine-neutral lifecycle vocabulary, append-only event contract, durable ledger adapter, target SPI, and orchestration coordinator.
 
