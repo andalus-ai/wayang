@@ -87,7 +87,7 @@ for attempt in $(seq 1 60); do
   sleep 2
 done
 archived_file="$(find "$work_dir/wal-archive" -type f -print -quit)"
-if [[ "$archived" -lt 1 ]] || [[ "\${archived_target_wal:-f}" != "t" ]] \
+if [[ "$archived" -lt 1 ]] || [[ "${archived_target_wal:-f}" != "t" ]] \
     || [[ -z "$archived_file" ]]; then
   echo "No WAL segment was archived; refusing to claim PITR qualification" >&2
   docker logs "$source_container" >&2 || true
