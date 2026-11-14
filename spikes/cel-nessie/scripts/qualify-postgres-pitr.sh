@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Real PostgreSQL 17 physical base-backup + WAL point-in-time recovery exercise.
-# Runs on a Docker-capable Linux runner; all state is isolated under mktemp.
-volume_prefix="wayang-pitr-${GITHUB_RUN_ID:-local}-$"
+# Runs on a Docker-capable Linux runner; all state is isolated in disposable Docker named volumes.
+volume_prefix="wayang-pitr-${GITHUB_RUN_ID:-local}"
 source_container="${volume_prefix}-source"
 restore_container="${volume_prefix}-restore"
 source_data_volume="${volume_prefix}-source-data"
@@ -89,7 +89,7 @@ for attempt in $(seq 1 60); do
   fi
   sleep 2
 done
-archived_file="$(find "$work_dir/wal-archive" -type f -print -quit)"
+archived_file="$(docker exec "$source_container" find /wal-archive -type f -print -quit)"
 if [[ "$archived" -lt 1 ]] || [[ "${archived_target_wal:-f}" != "t" ]] \
     || [[ -z "$archived_file" ]]; then
   echo "No WAL segment was archived; refusing to claim PITR qualification" >&2
@@ -97,7 +97,6 @@ if [[ "$archived" -lt 1 ]] || [[ "${archived_target_wal:-f}" != "t" ]] \
   exit 1
 fi
 
-docker stop "$source_container" >/dev/null
 
 # Configure recovery from the physical backup and archived WAL to the target.
 docker exec "$source_container" sh -c "cat >> /base-backup/postgresql.auto.conf" <<EOF
@@ -108,6 +107,7 @@ recovery_target_action = 'promote'
 EOF
 docker exec --user root "$source_container" touch /base-backup/recovery.signal
 docker exec --user root "$source_container" chown postgres:postgres /base-backup/postgresql.auto.conf /base-backup/recovery.signal
+docker stop "$source_container" >/dev/null
 
 docker run --detach --name "$restore_container" \
   --publish "$restore_port:5432" \
