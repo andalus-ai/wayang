@@ -444,9 +444,9 @@ public final class WorkspaceService {
         } else if (!rawTriggers.isEmpty() && !(p.can(Permission.DEFINITION_WRITE) && p.can(Permission.RUN_START))) {
             problems.add("triggers: creating triggers needs tenant-wide definition-write and run-start");
         } else {
-            Set<String> haveTriggers = new LinkedHashSet<>();
+            Map<String, Trigger> haveTriggers = new LinkedHashMap<>();
             if (!rawTriggers.isEmpty() && p.can(Permission.DEFINITION_READ)) {
-                triggers.list(p).forEach(t -> haveTriggers.add(t.id()));
+                triggers.list(p).forEach(t -> haveTriggers.put(t.id(), t));
             }
             Set<String> ids = new LinkedHashSet<>();
             for (Object r : rawTriggers) {
@@ -479,7 +479,13 @@ public final class WorkspaceService {
                 if (bundleRefs.contains("PROCESS/" + proc) && "skip".equals(actions.get("PROCESS/" + proc))) {
                     warnings.add("trigger '" + id + "': its process was skipped; it will point at the existing one");
                 }
-                if (haveTriggers.contains(id)) {
+                Map<String, Object> wantConfig = m.get("config") instanceof Map<?, ?> c ? (Map<String, Object>) c : Map.of();
+                if (haveTriggers.containsKey(id)) {
+                    Trigger have = haveTriggers.get(id);
+                    if (have.kind().name().equals(kind) && have.processId().equals(proc) && have.config().equals(wantConfig)) {
+                        items.add(new Item("trigger", id, "unchanged", "skipped", "Same as what is there")); // nothing to write, nothing in the way
+                        continue;
+                    }
                     switch (o.onConflict()) {
                         case "skip" -> {
                             items.add(new Item("trigger", id, "skip", "skipped", "Already exists"));
@@ -487,7 +493,8 @@ public final class WorkspaceService {
                         }
                         default -> {
                             // a trigger holds a webhook secret hash and a cursor; replacing one silently would break callers
-                            items.add(new Item("trigger", id, "conflict", "error", "Already exists; triggers are never overwritten"));
+                            items.add(new Item("trigger", id, "conflict", "error", "Already exists and differs (" + differences(have, kind, proc, wantConfig)
+                                    + "); triggers are never overwritten"));
                             problems.add("trigger '" + id + "' already exists (use onConflict skip, or delete it first)");
                             continue;
                         }
@@ -703,6 +710,21 @@ public final class WorkspaceService {
         } else {
             items.add(new Item("config", key, "overwrite", "ok", scope + ": replaces the current value"));
         }
+    }
+
+    /** Which parts of an existing trigger differ from the bundle's, by name only (never values: a config may name secrets). */
+    private static String differences(Trigger have, String kind, String proc, Map<String, Object> config) {
+        List<String> d = new ArrayList<>();
+        if (!have.kind().name().equals(kind)) {
+            d.add("kind");
+        }
+        if (!have.processId().equals(proc)) {
+            d.add("process");
+        }
+        if (!have.config().equals(config)) {
+            d.add("config");
+        }
+        return String.join(", ", d);
     }
 
     /** True when the definition's current draft (or, without one, its latest published version) is exactly {@code doc}. */
