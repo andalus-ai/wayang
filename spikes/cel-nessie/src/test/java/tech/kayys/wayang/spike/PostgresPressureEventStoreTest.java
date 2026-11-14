@@ -161,7 +161,7 @@ class PostgresPressureEventStoreTest {
     @Test
     void appendRetryAfterCommitAcknowledgementWasLostIsIdempotent() {
         PressureEventEnvelope event = envelope("ambiguous-append", 1);
-        DataSource uncertain = failOnceAfterCommit(dataSource, null);
+        DataSource uncertain = failOnceAfterCommit(dataSource);
         var uncertainStore = new PostgresPressureEventStore(uncertain, codec);
 
         assertThrows(IllegalStateException.class, () -> uncertainStore.append(event));
@@ -214,8 +214,7 @@ class PostgresPressureEventStoreTest {
         ClaimedPressureEvent oldClaim = store.claim("worker-release", 1, NOW,
                 Duration.ofSeconds(30)).getFirst();
         var uncertainStore = new PostgresPressureEventStore(
-                failOnceAfterStatement("dummy".equals("") ? dataSource : dataSource,
-                        "SET consumer_id = NULL"), codec);
+                failOnceAfterStatement(dataSource, "SET consumer_id = NULL"), codec);
 
         assertThrows(IllegalStateException.class, () -> uncertainStore.release(
                 "worker-release", event.eventId(), oldClaim.claimToken()));
@@ -238,7 +237,7 @@ class PostgresPressureEventStoreTest {
         }
     }
 
-    private static DataSource failOnceAfterCommit(DataSource delegate, String ignored) {
+    private static DataSource failOnceAfterCommit(DataSource delegate) {
         AtomicBoolean armed = new AtomicBoolean(true);
         return (DataSource) Proxy.newProxyInstance(DataSource.class.getClassLoader(),
                 new Class<?>[]{DataSource.class}, (proxy, method, args) -> {
