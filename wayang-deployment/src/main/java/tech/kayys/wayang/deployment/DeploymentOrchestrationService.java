@@ -62,19 +62,22 @@ public final class DeploymentOrchestrationService {
     public DeploymentTargetOperationResult deactivate(DeploymentCommand command, String actor, String reason,
             String correlationId, Duration timeout) {
         validateOperationRequest(command, actor, reason, correlationId, timeout);
+        String safeActor = requiredWithin(actor, "actor", 200);
+        String safeReason = requiredWithin(reason, "reason", 2048);
+        String correlation = requiredWithin(correlationId, "correlationId", 200);
         DeploymentSnapshot current = requireScopedSnapshot(command);
         DeploymentTarget target = targets.require(command.targetId());
         DeploymentSnapshot deactivating = lifecycle.beginDeactivation(current.deploymentId(), current.version(),
-                actor, reason, correlationId, eventKey(command.idempotencyKey(), "deactivate-begin"));
+                safeActor, safeReason, correlation, eventKey(command.idempotencyKey(), "deactivate-begin"));
         TargetOperationResult operation = invokeDeactivation(target, command, timeout);
         DeploymentSnapshot result;
         if (operation.status() == TargetOperationResult.Status.SUCCEEDED) {
-            result = lifecycle.completeDeactivation(command.deploymentId(), deactivating.version(), actor,
-                    operationReason("target deactivated", operation.detail()), correlationId,
+            result = lifecycle.completeDeactivation(command.deploymentId(), deactivating.version(), safeActor,
+                    operationReason("target deactivated", operation.detail()), correlation,
                     eventKey(command.idempotencyKey(), "deactivate-result"));
         } else {
-            result = lifecycle.failDeactivation(command.deploymentId(), deactivating.version(), actor,
-                    operationReason("deactivation failed", operation.detail()), correlationId,
+            result = lifecycle.failDeactivation(command.deploymentId(), deactivating.version(), safeActor,
+                    operationReason("deactivation failed", operation.detail()), correlation,
                     eventKey(command.idempotencyKey(), "deactivate-result"));
         }
         return new DeploymentTargetOperationResult(result, operation, null);
@@ -87,14 +90,17 @@ public final class DeploymentOrchestrationService {
     public DeploymentTargetOperationResult rollback(DeploymentCommand command, String actor, String reason,
             String correlationId, Duration timeout) {
         validateOperationRequest(command, actor, reason, correlationId, timeout);
+        String safeActor = requiredWithin(actor, "actor", 200);
+        String safeReason = requiredWithin(reason, "reason", 2048);
+        String correlation = requiredWithin(correlationId, "correlationId", 200);
         DeploymentSnapshot current = requireScopedSnapshot(command);
         DeploymentTarget target = targets.require(command.targetId());
         DeploymentSnapshot rollingBack = lifecycle.beginRollback(current.deploymentId(), current.version(),
-                actor, reason, correlationId, eventKey(command.idempotencyKey(), "rollback-begin"));
+                safeActor, safeReason, correlation, eventKey(command.idempotencyKey(), "rollback-begin"));
         TargetOperationResult operation = invokeRollback(target, command, timeout);
         if (operation.status() != TargetOperationResult.Status.SUCCEEDED) {
-            DeploymentSnapshot failed = lifecycle.failRollback(command.deploymentId(), rollingBack.version(), actor,
-                    operationReason("rollback failed", operation.detail()), correlationId,
+            DeploymentSnapshot failed = lifecycle.failRollback(command.deploymentId(), rollingBack.version(), safeActor,
+                    operationReason("rollback failed", operation.detail()), correlation,
                     eventKey(command.idempotencyKey(), "rollback-result"));
             return new DeploymentTargetOperationResult(failed, operation, null);
         }
@@ -102,11 +108,11 @@ public final class DeploymentOrchestrationService {
         HealthCheckResult health = invokeHealthCheck(target, command, timeout);
         DeploymentSnapshot result;
         if (health.outcome() == HealthOutcome.HEALTHY) {
-            result = lifecycle.completeRollback(command.deploymentId(), rollingBack.version(), actor,
-                    healthReason(health), correlationId, eventKey(command.idempotencyKey(), "rollback-result"));
+            result = lifecycle.completeRollback(command.deploymentId(), rollingBack.version(), safeActor,
+                    healthReason(health), correlation, eventKey(command.idempotencyKey(), "rollback-result"));
         } else {
-            result = lifecycle.failRollback(command.deploymentId(), rollingBack.version(), actor,
-                    operationReason("rollback readiness not healthy", healthReason(health)), correlationId,
+            result = lifecycle.failRollback(command.deploymentId(), rollingBack.version(), safeActor,
+                    operationReason("rollback readiness not healthy", healthReason(health)), correlation,
                     eventKey(command.idempotencyKey(), "rollback-result"));
         }
         return new DeploymentTargetOperationResult(result, operation, health);
@@ -173,7 +179,7 @@ public final class DeploymentOrchestrationService {
 
     private TargetOperationResult failedActivation(DeploymentCommand command, String detail) {
         return new TargetOperationResult(TargetOperationResult.Status.FAILED,
-                command.idempotencyKey() + ":activate", detail, clock.instant());
+                eventKey(command.idempotencyKey(), "activate"), detail, clock.instant());
     }
 
     private static void validateScope(DeploymentCommand command, DeploymentSnapshot snapshot) {
