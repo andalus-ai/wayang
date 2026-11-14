@@ -34,6 +34,7 @@ public final class PostgresRestartQualification {
         var store = new PostgresPressureEventStore(source, new Codec());
 
         if (args[0].equals("seed")) {
+            recordPostgresStart(source);
             var envelope = new PressureEventEnvelope(EVENT_ID, STREAM, 1, NOW, event());
             PressureEventAppendResult appended = store.append(envelope);
             if (appended != PressureEventAppendResult.APPENDED) {
@@ -45,6 +46,12 @@ public final class PostgresRestartQualification {
             }
             System.out.println("SEEDED event=" + EVENT_ID + " token=" + claimed.getFirst().claimToken());
             return;
+        }
+
+        Instant previousStart = readRecordedPostgresStart(source);
+        Instant currentStart = readCurrentPostgresStart(source);
+        if (!currentStart.isAfter(previousStart)) {
+            throw new IllegalStateException("PostgreSQL postmaster start time did not advance; service restart was not proven");
         }
 
         var health = store.inspectHealth();
@@ -67,6 +74,48 @@ public final class PostgresRestartQualification {
             throw new IllegalStateException("recovered event could not be acknowledged");
         }
         System.out.println("RECOVERED_AND_ACKNOWLEDGED event=" + EVENT_ID);
+    }
+
+    private static void recordPostgresStart(PGSimpleDataSource source) {
+        try (var connection = source.getConnection();
+             var statement = connection.createStatement()) {
+            statement.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS wayang_restart_probe (
+                        singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton = TRUE),
+                        server_started_at TIMESTAMPTZ NOT NULL
+                    )
+                    """);
+            statement.executeUpdate("TRUNCATE TABLE wayang_restart_probe");
+            statement.executeUpdate("""
+                    INSERT INTO wayang_restart_probe (singleton, server_started_at)
+                    SELECT TRUE, pg_postmaster_start_time()
+                    """);
+        } catch (Exception failure) {
+            throw new IllegalStateException("could not record PostgreSQL pre-restart start time", failure);
+        }
+    }
+
+    private static Instant readRecordedPostgresStart(PGSimpleDataSource source) {
+        try (var connection = source.getConnection();
+             var statement = connection.createStatement();
+             var rows = statement.executeQuery(
+                     "SELECT server_started_at FROM wayang_restart_probe WHERE singleton = TRUE")) {
+            if (!rows.next()) throw new IllegalStateException("PostgreSQL restart probe marker is missing");
+            return rows.getTimestamp(1).toInstant();
+        } catch (Exception failure) {
+            throw new IllegalStateException("could not read PostgreSQL pre-restart start time", failure);
+        }
+    }
+
+    private static Instant readCurrentPostgresStart(PGSimpleDataSource source) {
+        try (var connection = source.getConnection();
+             var statement = connection.createStatement();
+             var rows = statement.executeQuery("SELECT pg_postmaster_start_time()")) {
+            if (!rows.next()) throw new IllegalStateException("PostgreSQL did not return its start time");
+            return rows.getTimestamp(1).toInstant();
+        } catch (Exception failure) {
+            throw new IllegalStateException("could not read current PostgreSQL start time", failure);
+        }
     }
 
     private static EvaluationPressureEvent event() {
