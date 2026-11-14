@@ -59,6 +59,8 @@ The report: `ok`, `items` (project, each definition, setting, trigger, with acti
 `missingSecrets` (checked against this tenant's secrets when the caller may list them; otherwise `secretsChecked` is false and it
 lists every secret the bundle needs), `missingConfig`, `oauthConnections`, `webhookSecrets`.
 
+Studio adds one line counting the items (`3 new · 1 replaced · 4 unchanged · 1 skipped · 1 problem`) and marks the ones left alone with a dash instead of a tick.
+
 Everything goes through the normal services, so every permission, size limit and id rule applies as if the calls were made one by
 one: a project-only editor can import definitions into their project but not triggers or tenant settings; a definition invalid in
 a way a draft cannot hide (structure, node configuration) blocks the import; a reference to a decision or agent that is in the

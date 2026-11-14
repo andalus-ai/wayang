@@ -36,12 +36,13 @@ class ReportView extends StatelessWidget {
         const Text('New webhook secrets (shown once)', style: TextStyle(fontWeight: FontWeight.w700)),
         for (final e in report.webhookSecrets.entries) SelectableText('${e.key}: ${e.value}', style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
       ],
+      if (report.tally != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(report.tally!, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
       const SizedBox(height: 8),
       for (final i in report.items)
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 1),
-          child: Text('${i.status == 'error' ? '✗' : '✓'} ${i.type} ${i.id}: ${i.action}${i.message.isEmpty ? '' : ' (${i.message})'}',
-              style: TextStyle(fontSize: 12, color: i.isError ? scheme.error : null)),
+          child: Text('${i.isError ? '✗' : i.isLeftAlone ? '–' : '✓'} ${i.type} ${i.id}: ${i.action}${i.message.isEmpty ? '' : ' (${i.message})'}',
+              style: TextStyle(fontSize: 12, color: i.isError ? scheme.error : (i.isLeftAlone ? scheme.outline : null))),
         ),
     ]);
   }

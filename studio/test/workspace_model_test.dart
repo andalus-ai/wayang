@@ -271,4 +271,24 @@ void main() {
     expect(selectionHonoured(all, ['process:orders']), isFalse, reason: 'the server sent more than asked for');
     expect(selectionHonoured({}, ['process:orders']), isTrue);
   });
+
+  test('the report tally tells new, replaced, unchanged, skipped and problems apart', () {
+    ImportItem item(String action, String status) => ImportItem(type: 'process', id: action, action: action, status: status);
+    ImportReport report(List<ImportItem> items) => ImportReport(
+          dryRun: true, ok: true, items: items, problems: const [], warnings: const [], missingSecrets: const [], secretsChecked: true,
+          missingConfig: const [], oauthConnections: const [], webhookSecrets: const {});
+    final r = report([
+      item('create', 'ok'),
+      item('create', 'ok'),
+      item('overwrite', 'ok'),
+      item('unchanged', 'skipped'),
+      item('unchanged', 'skipped'),
+      item('skip', 'skipped'),
+      item('conflict', 'error'),
+    ]);
+    expect(r.tally, '2 new · 1 replaced · 2 unchanged · 1 skipped · 1 problem');
+    expect(report([]).tally, isNull);
+    expect(report([item('create', 'done')]).tally, '1 new');
+    expect(report([item('overwrite', 'error')]).tally, '1 problem');
+  });
 }
