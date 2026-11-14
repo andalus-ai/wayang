@@ -43,7 +43,7 @@ class DeploymentOrchestrationServiceTest {
                 "activate release", "corr-activate", Duration.ofSeconds(30));
         assertEquals(DeploymentState.FAILED, result.snapshot().state());
         assertNull(result.healthCheck());
-        assertEquals(2, ledger.events("dep-1").size());
+        assertEquals(3, ledger.events("dep-1").size());
     }
 
     @Test void degradedReadinessIsNotPromotedToActive() {
