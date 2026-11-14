@@ -3,25 +3,29 @@ set -euo pipefail
 
 # Real PostgreSQL 17 physical base-backup + WAL point-in-time recovery exercise.
 # Runs on a Docker-capable Linux runner; all state is isolated under mktemp.
-work_dir="$(mktemp -d)"
-source_container="wayang-pitr-source"
-restore_container="wayang-pitr-restore"
+volume_prefix="wayang-pitr-${GITHUB_RUN_ID:-local}-$"
+source_container="${volume_prefix}-source"
+restore_container="${volume_prefix}-restore"
+source_data_volume="${volume_prefix}-source-data"
+wal_archive_volume="${volume_prefix}-wal-archive"
+base_backup_volume="${volume_prefix}-base-backup"
 source_port="55432"
 restore_port="55433"
 cleanup() {
   docker rm -f "$restore_container" "$source_container" >/dev/null 2>&1 || true
-  rm -rf "$work_dir"
+  docker volume rm "$source_data_volume" "$wal_archive_volume" "$base_backup_volume" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
-mkdir -p "$work_dir/source-data" "$work_dir/wal-archive" "$work_dir/base-backup"
-chmod 0777 "$work_dir/source-data" "$work_dir/wal-archive" "$work_dir/base-backup"
+docker volume create "$source_data_volume" >/dev/null
+docker volume create "$wal_archive_volume" >/dev/null
+docker volume create "$base_backup_volume" >/dev/null
 
 docker run --detach --name "$source_container" \
   --publish "$source_port:5432" \
-  --volume "$work_dir/source-data:/var/lib/postgresql/data" \
-  --volume "$work_dir/wal-archive:/wal-archive" \
-  --volume "$work_dir/base-backup:/base-backup" \
+  --volume "$source_data_volume:/var/lib/postgresql/data" \
+  --volume "$wal_archive_volume:/wal-archive" \
+  --volume "$base_backup_volume:/base-backup" \
   --env POSTGRES_DB=wayang_pitr \
   --env POSTGRES_USER=postgres \
   --env POSTGRES_PASSWORD=postgres \
@@ -46,6 +50,7 @@ wait_for_postgres() {
 }
 
 wait_for_postgres "$source_container" "$source_port"
+docker exec --user root "$source_container" chown postgres:postgres /wal-archive /base-backup
 export PGPASSWORD=postgres
 
 # Install the real adapter schema and establish data that must survive PITR.
@@ -59,8 +64,6 @@ psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
 # A physical base backup is the recovery starting point.
 docker exec -e PGPASSWORD=postgres "$source_container" pg_basebackup \
   -h 127.0.0.1 -U postgres -D /base-backup -Fp -Xs -P
-chown -R "$(docker exec "$source_container" id -u postgres):$(docker exec "$source_container" id -g postgres)" \
-  "$work_dir/base-backup"
 
 # Choose a target after the base backup but immediately before the later commit.
 target_time="$(psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
@@ -79,7 +82,7 @@ for attempt in $(seq 1 60); do
     -At -v ON_ERROR_STOP=1 -c "SELECT archived_count FROM pg_stat_archiver")"
   archived_target_wal="$(psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
     -At -v ON_ERROR_STOP=1 -c "SELECT COALESCE(last_archived_wal >= '$target_wal', FALSE) FROM pg_stat_archiver")"
-  archived_file="$(find "$work_dir/wal-archive" -type f -print -quit)"
+  archived_file="$(docker exec "$source_container" find /wal-archive -type f -print -quit)"
   if [[ "$archived" -gt 0 ]] && [[ "$archived_target_wal" = "t" ]] \
       && [[ -n "$archived_file" ]]; then
     break
@@ -97,18 +100,19 @@ fi
 docker stop "$source_container" >/dev/null
 
 # Configure recovery from the physical backup and archived WAL to the target.
-cat >> "$work_dir/base-backup/postgresql.auto.conf" <<EOF
+docker exec "$source_container" sh -c "cat >> /base-backup/postgresql.auto.conf" <<EOF
 restore_command = 'cp /wal-archive/%f %p'
 recovery_target_time = '$target_time'
 recovery_target_inclusive = 'false'
 recovery_target_action = 'promote'
 EOF
-touch "$work_dir/base-backup/recovery.signal"
+docker exec --user root "$source_container" touch /base-backup/recovery.signal
+docker exec --user root "$source_container" chown postgres:postgres /base-backup/postgresql.auto.conf /base-backup/recovery.signal
 
 docker run --detach --name "$restore_container" \
   --publish "$restore_port:5432" \
-  --volume "$work_dir/base-backup:/var/lib/postgresql/data" \
-  --volume "$work_dir/wal-archive:/wal-archive:ro" \
+  --volume "$base_backup_volume:/var/lib/postgresql/data" \
+  --volume "$wal_archive_volume:/wal-archive:ro" \
   postgres:17
 
 wait_for_postgres "$restore_container" "$restore_port"
