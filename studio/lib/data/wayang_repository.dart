@@ -192,8 +192,10 @@ class WayangRepository {
   }
 
   /// The project as a bundle (never any secret value).
-  Future<Map<String, dynamic>> exportProject(String id, {bool includeTenantConfig = false}) async =>
-      asMap(await _api.getJson('/api/v1/projects/$id/export', query: {'includeTenantConfig': includeTenantConfig ? 'true' : null}));
+  /// [only] narrows it to `kind:id` selectors (see [parseSelectors]); an empty list exports everything.
+  Future<Map<String, dynamic>> exportProject(String id, {bool includeTenantConfig = false, List<String> only = const []}) async =>
+      asMap(await _api.getJson('/api/v1/projects/$id/export',
+          query: {'includeTenantConfig': includeTenantConfig ? 'true' : null, 'only': only.isEmpty ? null : only.join(',')}));
 
   Future<ImportReport> importBundle(Map<String, dynamic> bundle, ImportOptions options) async => ImportReport.fromJson(
       asMap(await _api.sendJson('POST', '/api/v1/workspace/import', body: {'bundle': bundle, 'options': options.toJson()})));
