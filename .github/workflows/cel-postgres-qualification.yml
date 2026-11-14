@@ -44,7 +44,7 @@ jobs:
         run: >-
           mvn -B -f spikes/cel-nessie/pom.xml
           -DskipTests test-compile dependency:build-classpath
-          -Dmdep.outputFile=target/test-classpath.txt
+          -Dmdep.includeScope=test -Dmdep.outputFile=target/test-classpath.txt
       - name: Seed pending event and active lease
         run: >-
           java -cp "spikes/cel-nessie/target/test-classes:spikes/cel-nessie/target/classes:$(cat spikes/cel-nessie/target/test-classpath.txt)"
