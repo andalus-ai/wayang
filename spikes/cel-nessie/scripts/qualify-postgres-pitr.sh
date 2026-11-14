@@ -77,14 +77,16 @@ for attempt in $(seq 1 60); do
     -At -v ON_ERROR_STOP=1 -c "SELECT archived_count FROM pg_stat_archiver")"
   archive_after_target="$(psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
     -At -v ON_ERROR_STOP=1 -c "SELECT COALESCE(last_archived_time >= TIMESTAMPTZ '$target_time', FALSE) FROM pg_stat_archiver")"
+  archived_file="$(find "$work_dir/wal-archive" -type f -print -quit)"
   if [[ "$archived" -gt 0 ]] && [[ "$archive_after_target" = "t" ]] \
-      && find "$work_dir/wal-archive" -type f | grep -q .; then
+      && [[ -n "$archived_file" ]]; then
     break
   fi
   sleep 2
 done
+archived_file="$(find "$work_dir/wal-archive" -type f -print -quit)"
 if [[ "$archived" -lt 1 ]] || [[ "\${archive_after_target:-f}" != "t" ]] \
-    || ! find "$work_dir/wal-archive" -type f | grep -q .; then
+    || [[ -z "$archived_file" ]]; then
   echo "No WAL segment was archived; refusing to claim PITR qualification" >&2
   docker logs "$source_container" >&2 || true
   exit 1
