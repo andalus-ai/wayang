@@ -1,6 +1,6 @@
 # Deployment lifecycle ledger
 
-**Status: implemented reference state machine and in-memory ledger; durable persistence and target adapters are not implemented.**
+**Status: implemented reference state machine, in-memory ledger, JDBC ledger, and target adapter contract. Concrete target adapters and production database integration remain unimplemented.**
 
 The offline package installer establishes that a release has been verified and atomically placed on disk. It does not activate the release. This module introduces a separate, engine-neutral lifecycle vocabulary and append-only event contract.
 
@@ -32,8 +32,8 @@ Every accepted transition:
 
 DeploymentLedger.append is the persistence seam. A production implementation must atomically commit the event and new snapshot, enforce uniqueness for (deploymentId, idempotencyKey), and preserve event ordering. The included InMemoryDeploymentLedger is synchronized but process-local; it is not durable, multi-node safe, or a production audit store.
 
-The current reference ledger rejects duplicate idempotency keys rather than silently replaying a result. A durable adapter may return the original command result for a byte-for-byte equivalent replay, but must reject key reuse with different command content.
+The in-memory reference ledger rejects duplicate idempotency keys. The JDBC ledger enforces uniqueness with a database constraint; an equivalent retry currently returns a conflict rather than replaying the prior result. A future command service can add safe response replay by persisting a canonical command fingerprint and result.
 
 ## Verification boundary
 
-Unit tests cover allowed and rejected transitions, stale versions, degraded and failed health outcomes, explicit rollback, event ordering, and duplicate registration/key rejection. They do not prove durable database transactions, real runtime activation, health-check correctness, or rollback of a live service.
+Unit tests cover allowed and rejected transitions, stale versions, degraded and failed health outcomes, explicit rollback, event ordering, and duplicate registration/key rejection. They do not prove production database behavior against PostgreSQL, real runtime activation, health-check correctness, or rollback of a live service. JDBC tests use H2 to exercise transaction rollback and event ordering.

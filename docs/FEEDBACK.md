@@ -20,7 +20,7 @@ People can tell the operator what works and what does not, from Studio or the AP
 * `DELETE /api/v1/feedback?before=<ISO-8601>`, tenant-wide ADMIN: deletes this tenant's entries older than `before` and answers
   `{deleted}`. `before` is required and must be at least a day ago, so a call cannot wipe today's feedback. Nothing runs it for you.
 * Storage follows `wayang.store`: `jdbc` uses `wayang_feedback` (INSERT/SELECT, plus that age-based DELETE; rows are never edited); `memory` keeps
-  `wayang.feedback.memory-entries-per-tenant` (default 2000) and loses them on restart. There is no automatic retention job: run the DELETE above on whatever schedule you want.
+  `wayang.feedback.memory-entries-per-tenant` (default 2000) and loses them on restart. Retention is off by default; set `wayang.feedback.retention-days` (1 or more) and an hourly job drops every tenant's entries older than that (the first run is five minutes after start). Without it, run the DELETE above on whatever schedule you want. With several nodes the job runs on each; it is a plain DELETE by age, so that is harmless. In the JDBC store the small `wayang_feedback_status` rows of purged entries stay behind (they hold only an id and `done`).
 
 ## Credentials are masked before storage
 
@@ -40,6 +40,7 @@ a guarantee: it errs on the side of masking, and the form tells people not to pa
 * **Export CSV** in the Feedback section copies a `curl` command (for the current kind filter) that downloads the CSV; like the release
   download it holds no token, your shell supplies `WAYANG_TOKEN`.
 * In the Feedback section each entry has **Mark as done / Reopen**.
+* **Copy CSV** (Feedback section) puts the same CSV as the export endpoint on the clipboard (the selected kind, newest 500). It is a copy, not a file save: Studio has no file-saving dependency yet.
 * A line under the title shows how many entries are open and the thumbs up/down (from `/feedback/summary`; a `+` means the server counted only its newest 500), and the kind chips show their open counts.
 * A failed run has "Report this error": it sends the run's error text and its run id, process id and version, never its variables or outputs.
 
@@ -71,7 +72,7 @@ A **generated release** has no feedback store: a press is not a message for the 
 ## Not done
 
 * Thumbs under assistant replies in Slack (Telegram has them, below), and in generated releases (no feedback store there).
-* Automatic retention, and a way for Studio to download the file itself (it copies a command today).
+* A way for Studio to download the file itself (it copies a command today).
 
 ## Verification
 

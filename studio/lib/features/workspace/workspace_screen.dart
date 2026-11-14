@@ -53,7 +53,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Bundle'),
-          content: SizedBox(width: 640, height: 420, child: SingleChildScrollView(child: SelectableText(text, style: const TextStyle(fontFamily: 'monospace', fontSize: 11)))),
+          content: SizedBox(width: 640, height: 420, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(bundleDigest(b), style: const TextStyle(fontSize: 12)),
+            const SizedBox(height: 8),
+            Expanded(child: SingleChildScrollView(child: SelectableText(text, style: const TextStyle(fontFamily: 'monospace', fontSize: 11)))),
+          ])),
           actions: [
             TextButton(
               onPressed: () async {
@@ -100,6 +104,19 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       }
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// What the pasted bundle holds, or null when it is not one (the check below says why). Parsed when the text changes, not on every build.
+  String? _summary;
+
+  static String? _summaryOf(String text) {
+    if (text.trim().isEmpty) return null;
+    try {
+      final v = jsonDecode(text);
+      return v is Map<String, dynamic> && looksLikeBundle(v) ? bundleDigest(v) : null;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -197,8 +214,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   maxLines: 10,
                   style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
                   decoration: InputDecoration(hintText: 'Paste a bundle here', errorText: _error),
-                  onChanged: (_) => setState(() {}),
+                  onChanged: (_) => setState(() => _summary = _summaryOf(_bundleText.text)),
                 ),
+                if (_summary != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(_summary!, style: const TextStyle(fontSize: 12))),
                 const SizedBox(height: 10),
                 Wrap(spacing: 14, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
                   DropdownButton<String?>(

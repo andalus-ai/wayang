@@ -230,6 +230,21 @@ public final class FeedbackService {
     }
 
     /**
+     * The retention job (no caller identity: it is not an API): drops every tenant's entries older than {@code days} days. {@code days} below
+     * 1 means keep everything and does nothing. Returns how many went; never throws, so a store hiccup cannot break the scheduler.
+     */
+    public int applyRetention(int days) {
+        if (days < 1) {
+            return 0;
+        }
+        try {
+            return store.purgeAllBefore(Instant.now(clock).minus(java.time.Duration.ofDays(days)));
+        } catch (RuntimeException e) {
+            return 0;
+        }
+    }
+
+    /**
      * Masks what looks like a credential: Authorization/Bearer values, {@code token=...}-style pairs, URL passwords and query strings, JWTs and
      * well-known token shapes, and any 40+ character run of token characters. It is a safety net for text people paste, not a guarantee, and
      * it errs on the side of masking. Control characters other than newline and tab are dropped.
