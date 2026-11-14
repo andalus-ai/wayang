@@ -155,6 +155,28 @@ class WorkspaceServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void exportCanBeNarrowedToSelectedDefinitionsAndATypoIsAnError() {
+        String pid = source();
+        var all = ws().export(acme, pid, false, false, null);
+        assertEquals(2, ((List<Object>) all.get("definitions")).size());
+        assertEquals(all, ws().export(acme, pid, false, false, List.of(" ", "")), "blank selectors select nothing: everything is exported");
+        var one = ws().export(acme, pid, false, false, List.of("Decision:RISK"));
+        var defs = (List<Map<String, Object>>) one.get("definitions");
+        assertEquals(1, defs.size());
+        assertEquals("risk", defs.get(0).get("id"));
+        assertTrue(((List<Object>) one.get("triggers")).isEmpty(), "the trigger belongs to a process that is not in");
+        var proc = ws().export(acme, pid, false, false, List.of("process:orders"));
+        assertEquals(1, ((List<Object>) proc.get("triggers")).size(), "triggers follow the processes that are in");
+        var e = assertThrows(ApiException.class, () -> ws().export(acme, pid, false, false, List.of("process:orders", "process:ordres")));
+        assertTrue(e.getMessage().contains("selectors"), e.getMessage());
+        assertEquals(List.of("process:ordres"), e.details());
+        // a narrowed bundle imports like any other
+        Env env = new Env();
+        assertTrue(env.ws(null).importBundle(other(), viaJson(proc), apply("fail", null)).ok());
+    }
+
+    @Test
     void exportIsDeterministicAndSurvivesAJsonRoundTrip() {
         String pid = source();
         Map<String, Object> a = ws().export(acme, pid, false);
