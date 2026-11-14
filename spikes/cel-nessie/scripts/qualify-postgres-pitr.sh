@@ -67,6 +67,8 @@ target_time="$(psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
   -At -v ON_ERROR_STOP=1 -c "SELECT to_char(clock_timestamp(), 'YYYY-MM-DD HH24:MI:SS.USOF')")"
 psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
   -v ON_ERROR_STOP=1 -c "INSERT INTO pitr_qualification_marker VALUES ('must-not-exist-at-target')"
+target_wal="$(psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
+  -At -v ON_ERROR_STOP=1 -c "SELECT pg_walfile_name(pg_current_wal_lsn())")"
 psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
   -v ON_ERROR_STOP=1 -c "SELECT pg_switch_wal()"
 
@@ -75,17 +77,17 @@ archived=0
 for attempt in $(seq 1 60); do
   archived="$(psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
     -At -v ON_ERROR_STOP=1 -c "SELECT archived_count FROM pg_stat_archiver")"
-  archive_after_target="$(psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
-    -At -v ON_ERROR_STOP=1 -c "SELECT COALESCE(last_archived_time >= TIMESTAMPTZ '$target_time', FALSE) FROM pg_stat_archiver")"
+  archived_target_wal="$(psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
+    -At -v ON_ERROR_STOP=1 -c "SELECT COALESCE(last_archived_wal >= '$target_wal', FALSE) FROM pg_stat_archiver")"
   archived_file="$(find "$work_dir/wal-archive" -type f -print -quit)"
-  if [[ "$archived" -gt 0 ]] && [[ "$archive_after_target" = "t" ]] \
+  if [[ "$archived" -gt 0 ]] && [[ "$archived_target_wal" = "t" ]] \
       && [[ -n "$archived_file" ]]; then
     break
   fi
   sleep 2
 done
 archived_file="$(find "$work_dir/wal-archive" -type f -print -quit)"
-if [[ "$archived" -lt 1 ]] || [[ "\${archive_after_target:-f}" != "t" ]] \
+if [[ "$archived" -lt 1 ]] || [[ "\${archived_target_wal:-f}" != "t" ]] \
     || [[ -z "$archived_file" ]]; then
   echo "No WAL segment was archived; refusing to claim PITR qualification" >&2
   docker logs "$source_container" >&2 || true
@@ -129,4 +131,4 @@ test "$in_recovery" = "f"
 test "$baseline_count" = "1"
 test "$post_target_count" = "0"
 
-echo "PITR_QUALIFICATION_SUCCESS target=$target_time archived_wal_count=$archived baseline=$baseline_count post_target=$post_target_count"
+echo "PITR_QUALIFICATION_SUCCESS target=$target_time target_wal=$target_wal archived_wal_count=$archived baseline=$baseline_count post_target=$post_target_count"
