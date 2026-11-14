@@ -199,7 +199,13 @@ public final class DeploymentOrchestrationService {
 
     private static String eventKey(String key, String phase) {
         // Stable, bounded database key even when the caller supplies a long idempotency token.
-        return java.util.UUID.nameUUIDFromBytes((key + ":" + phase).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest((key + ":" + phase).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(digest);
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is required by the Java runtime", impossible);
+        }
     }
     private static String requiredWithin(String value, String name, int maxLength) {
         String normalized = DeploymentSnapshot.required(value, name);
