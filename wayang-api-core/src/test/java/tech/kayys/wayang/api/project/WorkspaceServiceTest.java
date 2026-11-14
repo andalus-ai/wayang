@@ -548,6 +548,29 @@ class WorkspaceServiceTest {
     }
 
     @Test
+    void aDifferentTenantWideSettingFollowsOnConflict() {
+        Map<String, Object> bundle = viaJson(ws().export(acme, source(), true));
+        Env env = new Env();
+        Principal p = other();
+        env.config.put(p, null, "REGION", "zz-current");
+        assertTrue(env.ws(null).importBundle(p, bundle, apply("fail", null)).ok());
+        String target = env.api.listProjects(p).get(0).id();
+        java.util.function.Function<String, WorkspaceService.Report> run = c ->
+                env.ws(null).importBundle(p, bundle, new WorkspaceService.Options(false, c, target, false, false, false, true, false));
+        var failed = run.apply("fail");
+        assertFalse(failed.ok());
+        assertTrue(failed.problems().stream().anyMatch(x -> x.contains("tenant setting 'REGION'") && !x.contains("zz-current") && !x.contains("=eu")), failed.problems().toString());
+        assertEquals("zz-current", env.config.list(p, null).get(0).value(), "nothing was written");
+        var skipped = run.apply("skip");
+        assertTrue(skipped.ok(), skipped.problems().toString());
+        assertEquals("zz-current", env.config.list(p, null).get(0).value(), "skip keeps the current value");
+        var over = run.apply("overwrite");
+        assertTrue(over.ok(), over.problems().toString());
+        assertEquals("eu", env.config.list(p, null).get(0).value());
+        assertTrue(env.ws(null).importBundle(p, bundle, new WorkspaceService.Options(true, "fail", target, false, false, false, true, false)).items().stream().anyMatch(x -> x.id().equals("REGION") && x.action().equals("unchanged")), "the same value is no conflict");
+    }
+
+    @Test
     void missingSettingsAreReportedWhenTheBundleDoesNotBringThem() {
         Map<String, Object> bundle = viaJson(ws().export(acme, source(), false));
         var r = new Env().ws(null).importBundle(other(), bundle, new WorkspaceService.Options(true, "fail", null, false, true, false, false, false));

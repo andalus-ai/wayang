@@ -451,6 +451,17 @@ public final class WorkspaceService {
             settingItem(items, sameSettings, "project", e.getKey(), e.getValue(), haveProjectSettings);
         }
         for (var e : tenantSettings.entrySet()) {
+            // tenant-wide values are shared by every project, so a different existing one follows onConflict (project settings always overwrite)
+            if (haveTenantSettings.containsKey(e.getKey()) && !haveTenantSettings.get(e.getKey()).equals(e.getValue()) && !o.onConflict().equals("overwrite")) {
+                if (o.onConflict().equals("skip")) {
+                    sameSettings.add("tenant/" + e.getKey());
+                    items.add(new Item("config", e.getKey(), "skip", "skipped", "tenant: keeps the current value"));
+                } else {
+                    items.add(new Item("config", e.getKey(), "conflict", "error", "tenant: already has a different value"));
+                    problems.add("tenant setting '" + e.getKey() + "' already has a different value; use onConflict=overwrite to replace it or skip to keep it");
+                }
+                continue;
+            }
             settingItem(items, sameSettings, "tenant", e.getKey(), e.getValue(), haveTenantSettings);
         }
 
