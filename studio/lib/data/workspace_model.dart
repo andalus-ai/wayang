@@ -82,6 +82,12 @@ class ImportItem {
 
   bool get isError => status == 'error';
 
+  /// Left alone on purpose: identical to what is there, or skipped by `onConflict`.
+  bool get isLeftAlone => status == 'skipped';
+
+  /// A different existing value or definition is replaced.
+  bool get isReplace => action == 'overwrite' && !isError;
+
   factory ImportItem.fromJson(Map<String, dynamic> j) => ImportItem(
         type: '${j['type'] ?? ''}',
         id: '${j['id'] ?? ''}',
@@ -122,6 +128,33 @@ class ImportReport {
 
   /// A dry run that found nothing wrong: the only thing "Apply" is offered after.
   bool get canApply => dryRun && ok;
+
+  /// One line counting the items: `3 new · 1 replaced · 4 unchanged · 1 skipped · 1 problem` (parts with a zero count are left out; null
+  /// when there are no items). "Unchanged" is what the server found identical; "skipped" is what `onConflict` left alone.
+  String? get tally {
+    var fresh = 0, replaced = 0, unchanged = 0, skipped = 0, errors = 0;
+    for (final i in items) {
+      if (i.isError) {
+        errors++;
+      } else if (i.action == 'unchanged') {
+        unchanged++;
+      } else if (i.isLeftAlone) {
+        skipped++;
+      } else if (i.isReplace) {
+        replaced++;
+      } else {
+        fresh++;
+      }
+    }
+    final parts = [
+      if (fresh > 0) '$fresh new',
+      if (replaced > 0) '$replaced replaced',
+      if (unchanged > 0) '$unchanged unchanged',
+      if (skipped > 0) '$skipped skipped',
+      if (errors > 0) '$errors problem${errors == 1 ? '' : 's'}',
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
 
   /// What the target environment still needs before the imported workflows can run.
   bool get needsSetup => missingSecrets.isNotEmpty || missingConfig.isNotEmpty || oauthConnections.isNotEmpty;
