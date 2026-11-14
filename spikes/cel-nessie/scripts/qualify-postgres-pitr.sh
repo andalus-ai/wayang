@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Real PostgreSQL 17 physical base-backup + WAL point-in-time recovery exercise.
+# Runs on a Docker-capable Linux runner; all state is isolated in disposable Docker named volumes.
+volume_prefix="wayang-pitr-${GITHUB_RUN_ID:-local}"
+source_container="${volume_prefix}-source"
+restore_container="${volume_prefix}-restore"
+source_data_volume="${volume_prefix}-source-data"
+wal_archive_volume="${volume_prefix}-wal-archive"
+base_backup_volume="${volume_prefix}-base-backup"
+source_port="55432"
+restore_port="55433"
+cleanup() {
+  docker rm -f "$restore_container" "$source_container" >/dev/null 2>&1 || true
+  docker volume rm "$source_data_volume" "$wal_archive_volume" "$base_backup_volume" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+docker volume create "$source_data_volume" >/dev/null
+docker volume create "$wal_archive_volume" >/dev/null
+docker volume create "$base_backup_volume" >/dev/null
+
+docker run --detach --name "$source_container" \
+  --publish "$source_port:5432" \
+  --volume "$source_data_volume:/var/lib/postgresql/data" \
+  --volume "$wal_archive_volume:/wal-archive" \
+  --volume "$base_backup_volume:/base-backup" \
+  --env POSTGRES_DB=wayang_pitr \
+  --env POSTGRES_USER=postgres \
+  --env POSTGRES_PASSWORD=postgres \
+  postgres:17 \
+  -c wal_level=replica \
+  -c archive_mode=on \
+  -c archive_timeout=1s \
+  -c "archive_command=test ! -f /wal-archive/%f && cp %p /wal-archive/%f"
+
+wait_for_postgres() {
+  local container="$1"
+  local port="$2"
+  for attempt in $(seq 1 60); do
+    if docker exec "$container" pg_isready -U postgres -d wayang_pitr >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "PostgreSQL did not become ready on port $port" >&2
+  docker logs "$container" >&2 || true
+  return 1
+}
+
+wait_for_postgres "$source_container" "$source_port"
+docker exec --user root "$source_container" chown postgres:postgres /wal-archive /base-backup
+export PGPASSWORD=postgres
+
+# Install the real adapter schema and establish data that must survive PITR.
+psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
+  -v ON_ERROR_STOP=1 -f spikes/cel-nessie/src/main/resources/db/migration/V1__pressure_event_store.sql
+psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
+  -v ON_ERROR_STOP=1 -c "CREATE TABLE pitr_qualification_marker (marker TEXT PRIMARY KEY)"
+psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
+  -v ON_ERROR_STOP=1 -c "INSERT INTO pitr_qualification_marker VALUES ('present-in-base-backup')"
+
+# A physical base backup is the recovery starting point.
+docker exec -e PGPASSWORD=postgres "$source_container" pg_basebackup \
+  -h 127.0.0.1 -U postgres -D /base-backup -Fp -Xs -P
+
+# Choose a target after the base backup but immediately before the later commit.
+target_time="$(psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
+  -At -v ON_ERROR_STOP=1 -c "SELECT to_char(clock_timestamp(), 'YYYY-MM-DD HH24:MI:SS.USOF')")"
+psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
+  -v ON_ERROR_STOP=1 -c "INSERT INTO pitr_qualification_marker VALUES ('must-not-exist-at-target')"
+target_wal="$(psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
+  -At -v ON_ERROR_STOP=1 -c "SELECT pg_walfile_name(pg_current_wal_lsn())")"
+psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
+  -v ON_ERROR_STOP=1 -c "SELECT pg_switch_wal()"
+
+# Wait until WAL containing the post-target commit has been archived.
+archived=0
+for attempt in $(seq 1 60); do
+  archived="$(psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
+    -At -v ON_ERROR_STOP=1 -c "SELECT archived_count FROM pg_stat_archiver")"
+  archived_target_wal="$(psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
+    -At -v ON_ERROR_STOP=1 -c "SELECT COALESCE(last_archived_wal >= '$target_wal', FALSE) FROM pg_stat_archiver")"
+  archived_file="$(docker exec "$source_container" find /wal-archive -type f -print -quit)"
+  if [[ "$archived" -gt 0 ]] && [[ "$archived_target_wal" = "t" ]] \
+      && [[ -n "$archived_file" ]]; then
+    break
+  fi
+  sleep 2
+done
+archived_file="$(docker exec "$source_container" find /wal-archive -type f -print -quit)"
+if [[ "$archived" -lt 1 ]] || [[ "${archived_target_wal:-f}" != "t" ]] \
+    || [[ -z "$archived_file" ]]; then
+  echo "No WAL segment was archived; refusing to claim PITR qualification" >&2
+  docker logs "$source_container" >&2 || true
+  exit 1
+fi
+
+
+# Configure recovery from the physical backup and archived WAL to the target.
+docker exec "$source_container" sh -c "cat >> /base-backup/postgresql.auto.conf" <<EOF
+restore_command = 'cp /wal-archive/%f %p'
+recovery_target_time = '$target_time'
+recovery_target_inclusive = 'false'
+recovery_target_action = 'promote'
+EOF
+docker exec --user root "$source_container" touch /base-backup/recovery.signal
+docker exec --user root "$source_container" chown postgres:postgres /base-backup/postgresql.auto.conf /base-backup/recovery.signal
+docker stop "$source_container" >/dev/null
+
+docker run --detach --name "$restore_container" \
+  --publish "$restore_port:5432" \
+  --volume "$base_backup_volume:/var/lib/postgresql/data" \
+  --volume "$wal_archive_volume:/wal-archive:ro" \
+  postgres:17
+
+wait_for_postgres "$restore_container" "$restore_port"
+
+# Recovery must have reached the target and promoted, preserve baseline data,
+# and exclude the transaction committed after the requested recovery point.
+in_recovery="t"
+for attempt in $(seq 1 60); do
+  in_recovery="$(psql -h 127.0.0.1 -p "$restore_port" -U postgres -d wayang_pitr \
+    -At -v ON_ERROR_STOP=1 -c "SELECT pg_is_in_recovery()")"
+  [[ "$in_recovery" = "f" ]] && break
+  sleep 1
+done
+baseline_count="$(psql -h 127.0.0.1 -p "$restore_port" -U postgres -d wayang_pitr \
+  -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM pitr_qualification_marker WHERE marker = 'present-in-base-backup'")"
+post_target_count="$(psql -h 127.0.0.1 -p "$restore_port" -U postgres -d wayang_pitr \
+  -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM pitr_qualification_marker WHERE marker = 'must-not-exist-at-target'")"
+
+test "$in_recovery" = "f"
+test "$baseline_count" = "1"
+test "$post_target_count" = "0"
+
+echo "PITR_QUALIFICATION_SUCCESS target=$target_time target_wal=$target_wal archived_wal_count=$archived baseline=$baseline_count post_target=$post_target_count"
