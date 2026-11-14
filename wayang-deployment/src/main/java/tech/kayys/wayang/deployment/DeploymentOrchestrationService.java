@@ -29,9 +29,9 @@ public final class DeploymentOrchestrationService {
             String correlationId, Duration timeout) {
         Objects.requireNonNull(command, "command");
         validateTimeout(timeout);
-        String safeActor = DeploymentSnapshot.required(actor, "actor");
-        String safeReason = DeploymentSnapshot.required(reason, "reason");
-        String correlation = DeploymentSnapshot.required(correlationId, "correlationId");
+        String safeActor = requiredWithin(actor, "actor", 200);
+        String safeReason = requiredWithin(reason, "reason", 2048);
+        String correlation = requiredWithin(correlationId, "correlationId", 200);
 
         DeploymentSnapshot current = ledger.find(command.deploymentId())
                 .orElseThrow(() -> new IllegalArgumentException("Unknown deployment: " + command.deploymentId()));
@@ -95,9 +95,18 @@ public final class DeploymentOrchestrationService {
         }
     }
 
-    private static String eventKey(String key, String phase) { return key + ":" + phase; }
+    private static String eventKey(String key, String phase) {
+        // Stable, bounded database key even when the caller supplies a long idempotency token.
+        return java.util.UUID.nameUUIDFromBytes((key + ":" + phase).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+    }
+    private static String requiredWithin(String value, String name, int maxLength) {
+        String normalized = DeploymentSnapshot.required(value, name);
+        if (normalized.length() > maxLength) throw new IllegalArgumentException(name + " exceeds " + maxLength + " characters");
+        return normalized;
+    }
     private static String operationReason(String prefix, String detail) {
-        return detail == null || detail.isBlank() ? prefix : prefix + ": " + detail;
+        String value = detail == null || detail.isBlank() ? prefix : prefix + ": " + detail;
+        return value.length() <= 2048 ? value : value.substring(0, 2048);
     }
     private static String healthReason(HealthCheckResult health) {
         return operationReason("health outcome " + health.outcome(), health.detail());
