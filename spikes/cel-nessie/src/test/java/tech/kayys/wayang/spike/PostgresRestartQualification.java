@@ -16,7 +16,7 @@ import org.postgresql.ds.PGSimpleDataSource;
  * Two-process PostgreSQL restart qualification. Invoke with "seed" before
  * restarting the database container and "verify" after it becomes healthy.
  */
-public final class PostgresRestartQualification {
+public public final class PostgresRestartQualification {
     private static final UUID EVENT_ID = UUID.fromString("4f8dd0b5-61d1-4c77-9b91-000000000041");
     private static final String STREAM = "physical-restart-qualification";
     private static final Instant NOW = Instant.parse("2026-11-14T00:00:00Z");
