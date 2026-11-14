@@ -56,8 +56,9 @@ class JdbcDeploymentOperationReceiptStoreTest {
                 now.plusSeconds(11), now.plusSeconds(41));
         assertEquals(DeploymentOperationStatus.UNKNOWN, recovered.status());
         assertEquals(0, store.findExpiredRunning(now.plusSeconds(20), 100).size());
-        assertThrows(IllegalStateException.class, () -> store.claim("dep", "key", "fingerprint", "ACTIVATE",
-                "target-key", now.plusSeconds(20), now.plusSeconds(50)));
+        var replay = store.claim("dep", "key", "fingerprint", "ACTIVATE",
+                "target-key", now.plusSeconds(20), now.plusSeconds(50));
+        assertEquals(DeploymentOperationStatus.UNKNOWN, replay.status());
     }
 
     @Test void terminalResultIsReplayableAndCannotBeOverwritten() {
