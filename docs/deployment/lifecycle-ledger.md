@@ -1,6 +1,6 @@
 # Deployment lifecycle ledger
 
-**Status: implemented reference state machine, in-memory ledger, JDBC ledger, target adapter contract, and audited activation/health orchestration. Concrete target adapters and production database integration remain unimplemented.**
+**Status: implemented reference state machine, in-memory ledger, JDBC ledger, target adapter contract, and audited activation, rollback, and deactivation orchestration. Concrete target adapters and production database integration remain unimplemented.**
 
 The offline package installer establishes that a release has been verified and atomically placed on disk. It does not activate the release. The deployment module provides an engine-neutral lifecycle vocabulary, append-only event contract, durable ledger adapter, target SPI, and orchestration coordinator.
 
@@ -36,4 +36,4 @@ The in-memory reference ledger rejects duplicate idempotency keys. The JDBC ledg
 
 ## Verification boundary
 
-Unit tests cover allowed and rejected transitions, stale versions, degraded and failed health outcomes, explicit rollback, event ordering, and duplicate registration/key rejection. Orchestration tests use fake targets to exercise activation success/failure, readiness outcomes, scope checks, and timeout validation. They do not prove production database behavior against PostgreSQL, real runtime activation, adapter deadline enforcement, or rollback of a live service. JDBC tests use H2 to exercise transaction rollback and event ordering.
+Unit tests cover allowed and rejected transitions, stale versions, degraded and failed health outcomes, explicit rollback, event ordering, and duplicate registration/key rejection. Orchestration tests use fake targets to exercise activation success/failure, readiness outcomes, scope checks, timeout validation, deactivation success/failure, and rollback success/uncertain readiness. They do not prove production database behavior against PostgreSQL, real runtime activation, adapter deadline enforcement, or rollback of a live service. JDBC tests use H2 to exercise transaction rollback and event ordering.
