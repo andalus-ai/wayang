@@ -58,9 +58,24 @@ public final class JdbcDeploymentOperationReceiptStore implements DeploymentOper
                 }
                 c.commit();
                 return find(deploymentId, operationKey).orElseThrow();
-            } catch (SQLException | RuntimeException failure) {
+            } catch (SQLException failure) {
                 rollback(c, failure);
+                // Two workers can both observe an absent key before either inserts. The unique
+                // constraint elects one winner; the loser re-reads and replays that durable claim.
+                if (failure.getSQLState() != null && failure.getSQLState().startsWith("23")) {
+                    Optional<DeploymentOperationReceipt> raced = find(deploymentId, operationKey);
+                    if (raced.isPresent()) {
+                        DeploymentOperationReceipt existing = raced.get();
+                        if (!existing.commandFingerprint().equals(fingerprint) || !existing.operation().equals(operation)) {
+                            throw new SecurityException("Idempotency key was already used for a different deployment command");
+                        }
+                        return existing;
+                    }
+                }
                 throw translate("Unable to claim deployment operation", failure);
+            } catch (RuntimeException failure) {
+                rollback(c, failure);
+                throw failure;
             }
         } catch (SQLException failure) {
             throw new IllegalStateException("Unable to open operation receipt transaction", failure);
