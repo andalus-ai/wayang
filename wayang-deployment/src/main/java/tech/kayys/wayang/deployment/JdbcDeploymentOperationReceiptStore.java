@@ -132,6 +132,23 @@ public final class JdbcDeploymentOperationReceiptStore implements DeploymentOper
         return find(deploymentId, operationKey).orElseThrow();
     }
 
+    private static void updateUnknown(Connection c, String deploymentId, String operationKey,
+            String reason, Instant now) throws SQLException {
+        String sql = """
+                UPDATE wayang_deployment_operation_receipt
+                SET status = 'UNKNOWN', result_code = 'OUTCOME_UNCERTAIN', result_detail = ?,
+                    lease_until = NULL, updated_at = ?
+                WHERE deployment_id = ? AND operation_key = ? AND status IN ('ACCEPTED', 'RUNNING')
+                """;
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, bounded(reason, 2048));
+            ps.setTimestamp(2, Timestamp.from(now));
+            ps.setString(3, deploymentId);
+            ps.setString(4, operationKey);
+            if (ps.executeUpdate() != 1) throw new IllegalStateException("Operation is missing or already terminal");
+        }
+    }
+
     private void updateUnknown(String deploymentId, String operationKey, String reason, Instant now) {
         String sql = """
                 UPDATE wayang_deployment_operation_receipt
