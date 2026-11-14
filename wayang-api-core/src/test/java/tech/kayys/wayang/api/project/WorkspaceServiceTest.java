@@ -411,6 +411,31 @@ class WorkspaceServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void settingsAreReportedAsNewDifferentOrSameAndTheSameOnesAreNotWritten() {
+        Map<String, Object> bundle = viaJson(ws().export(acme, source(), false));
+        Env env = new Env();
+        Principal p = other();
+        var first = env.ws(null).importBundle(p, bundle, apply("fail", null));
+        assertTrue(first.ok(), first.problems().toString());
+        assertTrue(first.items().stream().anyMatch(i -> i.type().equals("config") && i.action().equals("set") && i.status().equals("done")), "a new setting is set");
+        String target = env.api.listProjects(p).get(0).id();
+        var dry = new WorkspaceService.Options(true, "overwrite", target, false, false, true, false, false);
+        var same = env.ws(null).importBundle(p, bundle, dry);
+        assertTrue(same.items().stream().anyMatch(i -> i.type().equals("config") && i.id().equals("CHANNEL") && i.action().equals("unchanged")), same.items().toString());
+        Map<String, Object> proj = (Map<String, Object>) ((Map<String, Object>) bundle.get("config")).get("project");
+        proj.put("CHANNEL", "#elsewhere");
+        bundle.put("integrity", Map.of("sha256", WorkspaceBundle.sha256(bundle)));
+        var diff = env.ws(null).importBundle(p, bundle, dry);
+        var item = diff.items().stream().filter(i -> i.type().equals("config") && i.id().equals("CHANNEL")).findFirst().orElseThrow();
+        assertEquals("overwrite", item.action());
+        assertTrue(!item.message().contains("#elsewhere") && !item.message().contains("#orders"), "values are not put in the report");
+        var applied = env.ws(null).importBundle(p, bundle, new WorkspaceService.Options(false, "overwrite", target, false, false, true, false, false));
+        assertTrue(applied.ok(), applied.problems().toString());
+        assertEquals("#elsewhere", env.config.list(p, target).stream().filter(c -> c.key().equals("CHANNEL")).findFirst().orElseThrow().value());
+    }
+
+    @Test
     void anImportThatFailsHalfwayStopsAndSaysWhatIsAlreadyInPlace() {
         Map<String, Object> bundle = viaJson(ws().export(acme, source(), false));
         @SuppressWarnings("unchecked")
