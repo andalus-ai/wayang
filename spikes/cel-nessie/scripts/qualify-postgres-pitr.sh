@@ -57,7 +57,7 @@ psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
   -v ON_ERROR_STOP=1 -c "INSERT INTO pitr_qualification_marker VALUES ('present-in-base-backup')"
 
 # A physical base backup is the recovery starting point.
-docker exec "$source_container" pg_basebackup \
+docker exec -e PGPASSWORD=postgres "$source_container" pg_basebackup \
   -h 127.0.0.1 -U postgres -D /base-backup -Fp -Xs -P
 chown -R "$(docker exec "$source_container" id -u postgres):$(docker exec "$source_container" id -g postgres)" \
   "$work_dir/base-backup"
@@ -75,12 +75,16 @@ archived=0
 for attempt in $(seq 1 60); do
   archived="$(psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
     -At -v ON_ERROR_STOP=1 -c "SELECT archived_count FROM pg_stat_archiver")"
-  if [[ "$archived" -gt 0 ]] && find "$work_dir/wal-archive" -type f | grep -q .; then
+  archive_after_target="$(psql -h 127.0.0.1 -p "$source_port" -U postgres -d wayang_pitr \
+    -At -v ON_ERROR_STOP=1 -c "SELECT COALESCE(last_archived_time >= TIMESTAMPTZ '$target_time', FALSE) FROM pg_stat_archiver")"
+  if [[ "$archived" -gt 0 ]] && [[ "$archive_after_target" = "t" ]] \
+      && find "$work_dir/wal-archive" -type f | grep -q .; then
     break
   fi
   sleep 2
 done
-if [[ "$archived" -lt 1 ]] || ! find "$work_dir/wal-archive" -type f | grep -q .; then
+if [[ "$archived" -lt 1 ]] || [[ "\${archive_after_target:-f}" != "t" ]] \
+    || ! find "$work_dir/wal-archive" -type f | grep -q .; then
   echo "No WAL segment was archived; refusing to claim PITR qualification" >&2
   docker logs "$source_container" >&2 || true
   exit 1
@@ -107,8 +111,13 @@ wait_for_postgres "$restore_container" "$restore_port"
 
 # Recovery must have reached the target and promoted, preserve baseline data,
 # and exclude the transaction committed after the requested recovery point.
-in_recovery="$(psql -h 127.0.0.1 -p "$restore_port" -U postgres -d wayang_pitr \
-  -At -v ON_ERROR_STOP=1 -c "SELECT pg_is_in_recovery()")"
+in_recovery="t"
+for attempt in $(seq 1 60); do
+  in_recovery="$(psql -h 127.0.0.1 -p "$restore_port" -U postgres -d wayang_pitr \
+    -At -v ON_ERROR_STOP=1 -c "SELECT pg_is_in_recovery()")"
+  [[ "$in_recovery" = "f" ]] && break
+  sleep 1
+done
 baseline_count="$(psql -h 127.0.0.1 -p "$restore_port" -U postgres -d wayang_pitr \
   -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM pitr_qualification_marker WHERE marker = 'present-in-base-backup'")"
 post_target_count="$(psql -h 127.0.0.1 -p "$restore_port" -U postgres -d wayang_pitr \
