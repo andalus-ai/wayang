@@ -18,6 +18,15 @@ refused too (an image would make Studio fetch a URL chosen by the surface's auth
 
 Limits: depth 8, 300 nodes, 10,000 characters per text, 200 table rows, 20 columns, 20 metadata entries.
 
+## A2UI standard-catalog input
+
+The validate endpoint also accepts the flat shape the Andalus framework's `andalus-a2ui` module writes:
+`{"id", "title", "root": "<component id>", "components": [{"id": "...", "component": {"Text": {...}}}]}`. It is converted to the form above
+and checked the same way. Understood: `Text` (`usageHint` h1-h5 becomes a heading), `Column`, `Row`, `List` and `Card`, with `literalString`
+text and `explicitList` children. Data-model `path` bindings, child templates, `Button` (its action goes back to an agent) and all other
+types are reported as problems. Cycles, unknown ids and more than 300 components are problems too. This is a hand-written reader of the wire
+shape, not a dependency on the framework module; it does not run the A2UI JSONL message protocol.
+
 ## Where it is enforced
 
 - Server: `POST /api/v1/ui/surfaces/validate` (signed-in users) returns `{ok, problems, surface}`. The surface is rebuilt from known
