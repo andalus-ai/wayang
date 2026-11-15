@@ -80,14 +80,15 @@ class _SurfacesScreenState extends ConsumerState<SurfacesScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: FilledButton.icon(
+                Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                  FilledButton.icon(
                     onPressed: _busy ? null : _run,
                     icon: const Icon(Icons.check_rounded, size: 18),
                     label: Text(_busy ? 'Checking…' : 'Check and render'),
                   ),
-                ),
+                  TextButton(onPressed: () => setState(() => _input.text = sampleSurfaceJson), child: const Text('Sample')),
+                  TextButton(onPressed: () => setState(() => _input.text = sampleA2uiJson), child: const Text('A2UI sample')),
+                ]),
               ]),
             ),
             const SizedBox(width: 16),

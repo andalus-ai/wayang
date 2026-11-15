@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wayang_studio/data/surface_model.dart';
 
@@ -66,5 +68,10 @@ void main() {
     expect(c.problems, ['bad']);
     expect(c.surface, isNull);
     expect(UiSurface.parse({'rootNode': {'_type': 'text', 'text': 't'}}), isNotNull);
+  });
+
+  test('both samples are valid JSON; the first parses as a surface', () {
+    expect(UiSurface.parse(jsonDecode(sampleSurfaceJson)), isNotNull);
+    expect((jsonDecode(sampleA2uiJson) as Map)['components'], isA<List>());
   });
 }
