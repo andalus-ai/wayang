@@ -31,7 +31,24 @@ public final class DeploymentOperationExecutionGate {
             Function<T, DeploymentOperationStatus> statusClassifier,
             Function<T, String> resultCode,
             Function<T, String> resultDetail) {
+        return execute(operation, command, lease, () -> { }, dispatch, statusClassifier, resultCode, resultDetail);
+    }
+
+    /**
+     * Variant that commits a local pre-dispatch transition after the exclusive claim and before
+     * invoking the external target. The callback must not perform the external side effect.
+     */
+    public <T> DeploymentOperationExecutionResult<T> execute(
+            String operation,
+            DeploymentCommand command,
+            Duration lease,
+            Runnable beforeDispatch,
+            Supplier<T> dispatch,
+            Function<T, DeploymentOperationStatus> statusClassifier,
+            Function<T, String> resultCode,
+            Function<T, String> resultDetail) {
         Objects.requireNonNull(command, "command");
+        Objects.requireNonNull(beforeDispatch, "beforeDispatch");
         Objects.requireNonNull(dispatch, "dispatch");
         Objects.requireNonNull(statusClassifier, "statusClassifier");
         Objects.requireNonNull(resultCode, "resultCode");
@@ -40,6 +57,15 @@ public final class DeploymentOperationExecutionGate {
         DeploymentOperationClaim claim = receipts.claimExclusive(operation, command, lease);
         if (!claim.acquired()) {
             return new DeploymentOperationExecutionResult<>(false, null, claim.receipt());
+        }
+
+        try {
+            beforeDispatch.run();
+        } catch (RuntimeException failure) {
+            // The target has not been invoked. Record a terminal local rejection, then propagate.
+            receipts.complete(operation, command, DeploymentOperationStatus.FAILED,
+                    "PRE_DISPATCH_REJECTED", failure.getClass().getSimpleName());
+            throw failure;
         }
 
         final T result;
