@@ -1,6 +1,6 @@
 # Durable deployment operation receipts and recovery
 
-**Status: JDBC receipt store, target observation/reconciliation, atomic exclusive claims, and a reusable durable execution gate are implemented. The existing synchronous orchestration service is not yet automatically receipt-wired; callers must route side effects through the execution gate until that integration is completed.**
+**Status: JDBC receipt store, target observation/reconciliation, atomic exclusive claims, a reusable execution gate, and additive receipt-aware activation/deactivation/rollback methods are implemented. The legacy orchestration methods remain available for compatibility and do not use receipts.**
 
 ## Why receipts are separate from lifecycle events
 
@@ -55,6 +55,22 @@ if (!outcome.dispatched()) {
 
 The gate is intentionally not a replacement for lifecycle orchestration. Its caller remains responsible for scope authorization, lifecycle transition policy, and reconciling a crash between external side effects and lifecycle updates. A receipt may become terminal while the lifecycle snapshot still needs reconciliation if the process crashes between those writes.
 
+## Receipt-aware orchestration API
+
+Construct `DeploymentOrchestrationService` with a `DeploymentOperationReceiptService` and use:
+
+- `activateDurably(...)`
+- `deactivateDurably(...)`
+- `rollbackDurably(...)`
+
+These methods validate deployment scope, acquire the exclusive receipt, then perform the lifecycle pre-transition in the gate's pre-dispatch callback. Only after that transition succeeds does the winner invoke the target. A duplicate returns `DeploymentOrchestrationExecution` with `dispatched=false`, the current snapshot, and the existing receipt; its `result` is null by design.
+
+A target `TIMED_OUT` or `UNKNOWN` result is not converted into a definitive failure. The receipt becomes UNKNOWN and the lifecycle remains in its in-progress state for reconciliation. Explicit `REJECTED`/`FAILED` target results are persisted as FAILED and recorded as lifecycle failure.
+
+The pre-dispatch callback is deliberately after the durable claim. This prevents duplicate requests from attempting lifecycle transitions and ensures a competing command cannot invoke a target if its lifecycle version transition loses.
+
+The older `activate`, `deactivate`, and `rollback` methods remain source-compatible but bypass the receipt gate. Callers requiring durable at-most-once dispatch must migrate to the `*Durably` methods and supply the receipt service.
+
 ## Crash recovery
 
 A recovery worker scans expired RUNNING receipts using `findExpiredRunning(now, limit)`. It resolves the deployment's registered target and invokes the read-only `observeOperation(receipt, timeout)` method. The receipt's stable `targetOperationKey` is the adapter lookup key.
@@ -72,7 +88,7 @@ The default target observation implementation returns UNKNOWN. An adapter must e
 - Pass the stable `target_operation_key` to adapters that support remote idempotency.
 - Authenticate and authorize before claiming; a receipt fingerprint is not authorization.
 - The recovery service reconciles receipt state only; it does not currently reconstruct or advance lifecycle transitions.
-- The legacy synchronous orchestration methods are not automatically wrapped by the execution gate yet. Direct callers that bypass the gate do not receive durable dispatch protection.
+- The legacy synchronous orchestration methods are not wrapped by the execution gate. Direct callers that continue using them do not receive durable dispatch protection.
 - Exactly-once execution across a database and an independent target system is not claimed. The protocol provides durable at-most-once dispatch by Wayang plus explicit uncertainty handling, provided all dispatch paths use the gate and the receipt database's uniqueness constraint is enforced.
 - If the target cannot support idempotency or observation, a crash in the side-effect/result gap remains UNKNOWN and needs reconciliation.
 - Migration execution remains the operator's responsibility.
