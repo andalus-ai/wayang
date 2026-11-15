@@ -16,13 +16,26 @@ public final class DeploymentOrchestrationService {
     private final DeploymentLifecycleService lifecycle;
     private final DeploymentTargetRegistry targets;
     private final Clock clock;
+    private final DeploymentOperationExecutionGate executionGate;
 
     public DeploymentOrchestrationService(DeploymentLedger ledger, DeploymentLifecycleService lifecycle,
             DeploymentTargetRegistry targets, Clock clock) {
         this.ledger = Objects.requireNonNull(ledger, "ledger");
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
+        this(ledger, lifecycle, targets, clock, null);
+    }
+
+    /**
+     * Receipt-aware constructor. Use the durable methods below for side-effecting operations.
+     * The legacy methods remain available for source compatibility and do not use receipts.
+     */
+    public DeploymentOrchestrationService(DeploymentLedger ledger, DeploymentLifecycleService lifecycle,
+            DeploymentTargetRegistry targets, Clock clock, DeploymentOperationReceiptService receipts) {
+        this.ledger = Objects.requireNonNull(ledger, "ledger");
+        this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.targets = Objects.requireNonNull(targets, "targets");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.executionGate = receipts == null ? null : new DeploymentOperationExecutionGate(receipts);
     }
 
     public DeploymentExecutionResult activate(DeploymentCommand command, String actor, String reason,
@@ -116,6 +129,140 @@ public final class DeploymentOrchestrationService {
                     eventKey(command.idempotencyKey(), "rollback-result"));
         }
         return new DeploymentTargetOperationResult(result, operation, health);
+    }
+
+
+    /**
+     * Receipt-protected activation. Only a newly acquired operation receipt may invoke the target.
+     * A duplicate returns dispatched=false and the existing receipt without inventing a target result.
+     */
+    public DeploymentOrchestrationExecution<DeploymentExecutionResult> activateDurably(
+            DeploymentCommand command, String actor, String reason, String correlationId, Duration timeout) {
+        requireExecutionGate();
+        Objects.requireNonNull(command, "command");
+        validateTimeout(timeout);
+        String safeActor = requiredWithin(actor, "actor", 200);
+        String safeReason = requiredWithin(reason, "reason", 2048);
+        String correlation = requiredWithin(correlationId, "correlationId", 200);
+        DeploymentSnapshot current = requireScopedSnapshot(command);
+        if (!DeploymentLifecycleService.allowed(current.state(), DeploymentState.ACTIVATING)) {
+            throw new IllegalStateException("Deployment cannot be activated from " + current.state());
+        }
+        DeploymentTarget target = targets.require(command.targetId());
+        var execution = executionGate.execute("ACTIVATE", command, Duration.ofMinutes(15),
+                () -> Objects.requireNonNull(target.activate(command, timeout), "target activation result"),
+                DeploymentOrchestrationService::classifyTargetResult,
+                result -> result.status().name(), TargetOperationResult::detail);
+        if (!execution.dispatched()) {
+            return new DeploymentOrchestrationExecution<>(false, null, current, execution.receipt());
+        }
+
+        DeploymentSnapshot activating = lifecycle.beginActivation(current.deploymentId(), current.version(),
+                safeActor, safeReason, correlation, eventKey(command.idempotencyKey(), "begin"));
+        TargetOperationResult activation = execution.result();
+        if (activation.status() != TargetOperationResult.Status.SUCCEEDED) {
+            DeploymentSnapshot failed = lifecycle.recordHealth(command.deploymentId(), activating.version(),
+                    HealthOutcome.UNHEALTHY, safeActor, operationReason("activation failed", activation.detail()),
+                    correlation, eventKey(command.idempotencyKey(), "activation-result"));
+            return new DeploymentOrchestrationExecution<>(true,
+                    new DeploymentExecutionResult(failed, activation, null), failed, execution.receipt());
+        }
+        HealthCheckResult health = invokeHealthCheck(target, command, timeout);
+        DeploymentSnapshot observed = lifecycle.recordHealth(command.deploymentId(), activating.version(),
+                health.outcome(), safeActor, healthReason(health), correlation,
+                eventKey(command.idempotencyKey(), "health-result"));
+        return new DeploymentOrchestrationExecution<>(true,
+                new DeploymentExecutionResult(observed, activation, health), observed, execution.receipt());
+    }
+
+    /** Receipt-protected deactivation; duplicate requests never call the target adapter. */
+    public DeploymentOrchestrationExecution<DeploymentTargetOperationResult> deactivateDurably(
+            DeploymentCommand command, String actor, String reason, String correlationId, Duration timeout) {
+        requireExecutionGate();
+        validateOperationRequest(command, actor, reason, correlationId, timeout);
+        String safeActor = requiredWithin(actor, "actor", 200);
+        String safeReason = requiredWithin(reason, "reason", 2048);
+        String correlation = requiredWithin(correlationId, "correlationId", 200);
+        DeploymentSnapshot current = requireScopedSnapshot(command);
+        if (!DeploymentLifecycleService.allowed(current.state(), DeploymentState.DEACTIVATING)) {
+            throw new IllegalStateException("Deployment cannot be deactivated from " + current.state());
+        }
+        DeploymentTarget target = targets.require(command.targetId());
+        var execution = executionGate.execute("DEACTIVATE", command, Duration.ofMinutes(15),
+                () -> Objects.requireNonNull(target.deactivate(command, timeout), "target deactivation result"),
+                DeploymentOrchestrationService::classifyTargetResult,
+                result -> result.status().name(), TargetOperationResult::detail);
+        if (!execution.dispatched()) {
+            return new DeploymentOrchestrationExecution<>(false, null, current, execution.receipt());
+        }
+        DeploymentSnapshot deactivating = lifecycle.beginDeactivation(current.deploymentId(), current.version(),
+                safeActor, safeReason, correlation, eventKey(command.idempotencyKey(), "deactivate-begin"));
+        TargetOperationResult operation = execution.result();
+        DeploymentSnapshot result = operation.status() == TargetOperationResult.Status.SUCCEEDED
+                ? lifecycle.completeDeactivation(command.deploymentId(), deactivating.version(), safeActor,
+                        operationReason("target deactivated", operation.detail()), correlation,
+                        eventKey(command.idempotencyKey(), "deactivate-result"))
+                : lifecycle.failDeactivation(command.deploymentId(), deactivating.version(), safeActor,
+                        operationReason("deactivation failed", operation.detail()), correlation,
+                        eventKey(command.idempotencyKey(), "deactivate-result"));
+        return new DeploymentOrchestrationExecution<>(true,
+                new DeploymentTargetOperationResult(result, operation, null), result, execution.receipt());
+    }
+
+    /** Receipt-protected rollback; restoration is complete only after a HEALTHY readiness check. */
+    public DeploymentOrchestrationExecution<DeploymentTargetOperationResult> rollbackDurably(
+            DeploymentCommand command, String actor, String reason, String correlationId, Duration timeout) {
+        requireExecutionGate();
+        validateOperationRequest(command, actor, reason, correlationId, timeout);
+        String safeActor = requiredWithin(actor, "actor", 200);
+        String safeReason = requiredWithin(reason, "reason", 2048);
+        String correlation = requiredWithin(correlationId, "correlationId", 200);
+        DeploymentSnapshot current = requireScopedSnapshot(command);
+        if (!DeploymentLifecycleService.allowed(current.state(), DeploymentState.ROLLING_BACK)) {
+            throw new IllegalStateException("Deployment cannot be rolled back from " + current.state());
+        }
+        DeploymentTarget target = targets.require(command.targetId());
+        var execution = executionGate.execute("ROLLBACK", command, Duration.ofMinutes(15),
+                () -> Objects.requireNonNull(target.rollback(command, timeout), "target rollback result"),
+                DeploymentOrchestrationService::classifyTargetResult,
+                result -> result.status().name(), TargetOperationResult::detail);
+        if (!execution.dispatched()) {
+            return new DeploymentOrchestrationExecution<>(false, null, current, execution.receipt());
+        }
+        DeploymentSnapshot rollingBack = lifecycle.beginRollback(current.deploymentId(), current.version(),
+                safeActor, safeReason, correlation, eventKey(command.idempotencyKey(), "rollback-begin"));
+        TargetOperationResult operation = execution.result();
+        if (operation.status() != TargetOperationResult.Status.SUCCEEDED) {
+            DeploymentSnapshot failed = lifecycle.failRollback(command.deploymentId(), rollingBack.version(), safeActor,
+                    operationReason("rollback failed", operation.detail()), correlation,
+                    eventKey(command.idempotencyKey(), "rollback-result"));
+            return new DeploymentOrchestrationExecution<>(true,
+                    new DeploymentTargetOperationResult(failed, operation, null), failed, execution.receipt());
+        }
+        HealthCheckResult health = invokeHealthCheck(target, command, timeout);
+        DeploymentSnapshot result = health.outcome() == HealthOutcome.HEALTHY
+                ? lifecycle.completeRollback(command.deploymentId(), rollingBack.version(), safeActor,
+                        healthReason(health), correlation, eventKey(command.idempotencyKey(), "rollback-result"))
+                : lifecycle.failRollback(command.deploymentId(), rollingBack.version(), safeActor,
+                        operationReason("rollback readiness not healthy", healthReason(health)), correlation,
+                        eventKey(command.idempotencyKey(), "rollback-result"));
+        return new DeploymentOrchestrationExecution<>(true,
+                new DeploymentTargetOperationResult(result, operation, health), result, execution.receipt());
+    }
+
+    private void requireExecutionGate() {
+        if (executionGate == null) {
+            throw new IllegalStateException("Receipt-aware orchestration requires DeploymentOperationReceiptService");
+        }
+    }
+
+    private static DeploymentOperationStatus classifyTargetResult(TargetOperationResult result) {
+        return switch (result.status()) {
+            case SUCCEEDED -> DeploymentOperationStatus.SUCCEEDED;
+            case REJECTED, FAILED -> DeploymentOperationStatus.FAILED;
+            case TIMED_OUT, UNKNOWN -> throw new IllegalStateException(
+                    "Target operation outcome is ambiguous: " + result.status());
+        };
     }
 
     private void validateOperationRequest(DeploymentCommand command, String actor, String reason,
