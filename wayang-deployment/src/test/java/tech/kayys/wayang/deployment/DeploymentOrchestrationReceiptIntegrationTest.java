@@ -75,6 +75,26 @@ class DeploymentOrchestrationReceiptIntegrationTest {
     }
 
     @Test
+    void rollbackReplayDoesNotInvokeTargetTwice() {
+        lifecycle.beginActivation("dep-1", 0, "operator", "initial activation", "corr", "initial-activate");
+        lifecycle.recordHealth("dep-1", 1, HealthOutcome.UNHEALTHY, "operator",
+                "initial activation failed", "corr", "initial-health");
+        var calls = new AtomicInteger();
+        targets.register("target-a", target(calls));
+
+        var first = orchestration.rollbackDurably(command("rollback-once"), "operator",
+                "restore last known good", "corr", Duration.ofSeconds(30));
+        var replay = orchestration.rollbackDurably(command("rollback-once"), "operator",
+                "restore last known good", "corr", Duration.ofSeconds(30));
+
+        assertTrue(first.dispatched());
+        assertEquals(DeploymentState.ROLLED_BACK, first.snapshot().state());
+        assertFalse(replay.dispatched());
+        assertNull(replay.result());
+        assertEquals(1, calls.get());
+    }
+
+    @Test
     void ambiguousTargetOutcomeLeavesLifecycleInProgressAndReceiptUnknown() {
         targets.register("target-a", new DeploymentTarget() {
             @Override public TargetOperationResult activate(DeploymentCommand c, Duration t) {
