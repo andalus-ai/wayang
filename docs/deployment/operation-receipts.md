@@ -42,3 +42,14 @@ The default target observation implementation returns UNKNOWN. An adapter must e
 - Exactly-once execution across a database and an independent target system is not claimed. The intended guarantee is durable at-most-once dispatch by Wayang plus explicit uncertainty handling.
 - If the target cannot support idempotency or observation, a crash in the side-effect/result gap remains UNKNOWN and needs operator/policy resolution.
 - Migration execution remains the operator's responsibility.
+
+## Exclusive dispatch claims
+
+Receipt-aware dispatchers must use `DeploymentOperationReceiptService.claimExclusive`, not the legacy replaying `claim` method. The returned `DeploymentOperationClaim` has an `acquired` flag:
+
+- `acquired=true`: this caller won the atomic insert and is the only caller permitted to invoke the target for this operation key.
+- `acquired=false`: the receipt already existed or its lease had expired. The caller must not invoke the target. It should surface the existing RUNNING/terminal/UNKNOWN state to the caller or route it to reconciliation.
+
+The JDBC implementation uses the database uniqueness constraint as the cross-process election point. Concurrent inserts for the same deployment/key yield one winner; the losing transaction re-reads the durable receipt and returns `acquired=false`. Stores that do not implement this atomic primitive fail closed rather than falling back to a racy read-then-write claim.
+
+The existing orchestration service is not yet wired to this exclusive claim API. This primitive is the safe prerequisite for that integration, not a claim that deployment commands are already protected end-to-end.

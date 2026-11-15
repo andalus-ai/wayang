@@ -82,6 +82,74 @@ public final class JdbcDeploymentOperationReceiptStore implements DeploymentOper
         }
     }
 
+
+    /**
+     * Atomic dispatch claim. A unique-key race is resolved by the database constraint; the losing
+     * caller receives acquired=false and therefore must not invoke the target adapter.
+     */
+    @Override
+    public DeploymentOperationClaim claimExclusive(String deploymentId, String operationKey, String fingerprint,
+            String operation, String targetOperationKey, Instant now, Instant leaseUntil) {
+        try (Connection c = dataSource.getConnection()) {
+            c.setAutoCommit(false);
+            try {
+                DeploymentOperationReceipt current = select(c, deploymentId, operationKey, true).orElse(null);
+                if (current != null) {
+                    verifyIdentity(current, fingerprint, operation);
+                    if (current.status() == DeploymentOperationStatus.RUNNING
+                            && current.leaseUntil() != null && !current.leaseUntil().isAfter(now)) {
+                        updateUnknown(c, deploymentId, operationKey,
+                                "Operation lease expired; target outcome requires reconciliation", now);
+                        c.commit();
+                        return new DeploymentOperationClaim(find(deploymentId, operationKey).orElseThrow(), false);
+                    }
+                    c.commit();
+                    return new DeploymentOperationClaim(current, false);
+                }
+                String sql = """
+                        INSERT INTO wayang_deployment_operation_receipt
+                        (deployment_id, operation_key, command_fingerprint, operation, status, attempt,
+                         target_operation_key, result_code, result_detail, lease_until, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, 'RUNNING', 1, ?, NULL, NULL, ?, ?, ?)
+                        """;
+                try (PreparedStatement ps = c.prepareStatement(sql)) {
+                    ps.setString(1, deploymentId);
+                    ps.setString(2, operationKey);
+                    ps.setString(3, fingerprint);
+                    ps.setString(4, operation);
+                    ps.setString(5, targetOperationKey);
+                    ps.setTimestamp(6, Timestamp.from(leaseUntil));
+                    ps.setTimestamp(7, Timestamp.from(now));
+                    ps.setTimestamp(8, Timestamp.from(now));
+                    ps.executeUpdate();
+                }
+                c.commit();
+                return new DeploymentOperationClaim(find(deploymentId, operationKey).orElseThrow(), true);
+            } catch (SQLException failure) {
+                rollback(c, failure);
+                if (failure.getSQLState() != null && failure.getSQLState().startsWith("23")) {
+                    DeploymentOperationReceipt raced = find(deploymentId, operationKey).orElse(null);
+                    if (raced != null) {
+                        verifyIdentity(raced, fingerprint, operation);
+                        return new DeploymentOperationClaim(raced, false);
+                    }
+                }
+                throw translate("Unable to exclusively claim deployment operation", failure);
+            } catch (RuntimeException failure) {
+                rollback(c, failure);
+                throw failure;
+            }
+        } catch (SQLException failure) {
+            throw new IllegalStateException("Unable to open exclusive operation receipt transaction", failure);
+        }
+    }
+
+    private static void verifyIdentity(DeploymentOperationReceipt receipt, String fingerprint, String operation) {
+        if (!receipt.commandFingerprint().equals(fingerprint) || !receipt.operation().equals(operation)) {
+            throw new SecurityException("Idempotency key was already used for a different deployment command");
+        }
+    }
+
     @Override
     public DeploymentOperationReceipt complete(String deploymentId, String operationKey, String fingerprint,
             DeploymentOperationStatus status, String resultCode, String resultDetail, Instant now) {

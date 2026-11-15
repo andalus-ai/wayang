@@ -7,11 +7,20 @@ import java.util.Optional;
 /** Atomic persistence boundary for deployment operation idempotency and recovery. */
 public interface DeploymentOperationReceiptStore {
     /**
-     * Atomically creates and starts an operation, or returns the existing receipt.
-     * A RUNNING receipt whose lease has expired is changed to UNKNOWN, never re-executed implicitly.
+     * Legacy replaying claim. Returns the existing receipt for a duplicate key and must not dispatch it.
      */
     DeploymentOperationReceipt claim(String deploymentId, String operationKey, String fingerprint,
             String operation, String targetOperationKey, Instant now, Instant leaseUntil);
+
+    /**
+     * Atomically claims a new operation. Implementations must guarantee exactly one acquired=true
+     * result across concurrent callers. The default deliberately fails closed: stores must implement
+     * the atomic primitive before being used by a receipt-aware dispatcher.
+     */
+    default DeploymentOperationClaim claimExclusive(String deploymentId, String operationKey, String fingerprint,
+            String operation, String targetOperationKey, Instant now, Instant leaseUntil) {
+        throw new UnsupportedOperationException("This receipt store does not implement atomic exclusive claims");
+    }
 
     DeploymentOperationReceipt complete(String deploymentId, String operationKey, String fingerprint,
             DeploymentOperationStatus terminalStatus, String resultCode, String resultDetail, Instant now);

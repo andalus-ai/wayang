@@ -28,6 +28,25 @@ public final class DeploymentOperationReceiptService {
                 safeOperation, command.idempotencyKey(), now, now.plus(lease));
     }
 
+
+    /**
+     * Acquires the right to dispatch a side effect. Callers must invoke the target only when
+     * the returned claim has acquired=true. Existing RUNNING/terminal/UNKNOWN receipts are replays.
+     */
+    public DeploymentOperationClaim claimExclusive(String operation, DeploymentCommand command, Duration lease) {
+        Objects.requireNonNull(command, "command");
+        if (lease == null || lease.isZero() || lease.isNegative() || lease.compareTo(Duration.ofMinutes(15)) > 0) {
+            throw new IllegalArgumentException("lease must be positive and no greater than 15 minutes");
+        }
+        String safeOperation = boundedRequired(operation, "operation", 40);
+        boundedRequired(command.deploymentId(), "deploymentId", 160);
+        boundedRequired(command.idempotencyKey(), "idempotencyKey", 200);
+        String fingerprint = DeploymentCommandFingerprint.of(safeOperation, command);
+        var now = clock.instant();
+        return store.claimExclusive(command.deploymentId(), command.idempotencyKey(), fingerprint,
+                safeOperation, command.idempotencyKey(), now, now.plus(lease));
+    }
+
     public DeploymentOperationReceipt complete(String operation, DeploymentCommand command,
             DeploymentOperationStatus status, String resultCode, String resultDetail) {
         if (status != DeploymentOperationStatus.SUCCEEDED && status != DeploymentOperationStatus.FAILED) {

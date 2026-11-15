@@ -71,4 +71,32 @@ class JdbcDeploymentOperationReceiptStoreTest {
         assertThrows(IllegalStateException.class, () -> store.complete("dep", "key", "fingerprint",
                 DeploymentOperationStatus.FAILED, "ERROR", "late overwrite", now.plusSeconds(3)));
     }
+    @Test void exclusiveClaimAllowsOnlyTheFirstCallerToDispatch() {
+        var first = store.claimExclusive("dep", "exclusive", "fingerprint", "ACTIVATE",
+                "target-exclusive", now, now.plusSeconds(30));
+        var second = store.claimExclusive("dep", "exclusive", "fingerprint", "ACTIVATE",
+                "target-exclusive", now.plusSeconds(1), now.plusSeconds(31));
+
+        assertTrue(first.acquired());
+        assertFalse(second.acquired());
+        assertEquals(first.receipt(), second.receipt());
+    }
+
+    @Test void exclusiveClaimRejectsReusedKeyWithDifferentCommand() {
+        store.claimExclusive("dep", "exclusive-mismatch", "fingerprint-a", "ACTIVATE",
+                "target-exclusive", now, now.plusSeconds(30));
+        assertThrows(SecurityException.class, () -> store.claimExclusive("dep", "exclusive-mismatch",
+                "fingerprint-b", "ACTIVATE", "target-exclusive", now, now.plusSeconds(30)));
+    }
+
+    @Test void expiredExclusiveClaimIsNeverGrantedAgain() {
+        store.claimExclusive("dep", "exclusive-expired", "fingerprint", "ACTIVATE",
+                "target-exclusive", now, now.plusSeconds(5));
+        var expired = store.claimExclusive("dep", "exclusive-expired", "fingerprint", "ACTIVATE",
+                "target-exclusive", now.plusSeconds(6), now.plusSeconds(30));
+
+        assertFalse(expired.acquired());
+        assertEquals(DeploymentOperationStatus.UNKNOWN, expired.receipt().status());
+    }
+
 }
