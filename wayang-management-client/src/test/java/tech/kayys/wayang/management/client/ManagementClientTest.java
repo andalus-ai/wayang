@@ -128,7 +128,8 @@ class ManagementClientTest {
                     "expiresAt":"2030-01-01T00:30:00Z","attemptCount":3}]}
                     """);
         } else if (path.endsWith("/ack")) {
-            String commandId = path.substring(path.lastIndexOf('/') + 1, path.length() - "/ack".length());
+            String commandPath = path.substring(0, path.length() - "/ack".length());
+            String commandId = commandPath.substring(commandPath.lastIndexOf('/') + 1);
             respond(exchange, 200, "{\"commandId\":\"" + commandId
                     + "\",\"status\":\"SUCCEEDED\",\"accepted\":true,\"completedAt\":\"2030-01-01T00:00:00Z\","
                     + "\"verifiedArtifactDigest\":\"sha256:" + "b".repeat(64) + "\"}");
