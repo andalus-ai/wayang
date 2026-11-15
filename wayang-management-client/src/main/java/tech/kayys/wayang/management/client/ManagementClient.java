@@ -31,13 +31,17 @@ public final class ManagementClient {
     private final ObjectMapper json;
 
     public ManagementClient(URI baseUri, Duration connectTimeout, Duration requestTimeout) {
-        this(baseUri, connectTimeout, requestTimeout,
-                HttpClient.newBuilder().connectTimeout(positive(connectTimeout, "connectTimeout")).build(),
-                new ObjectMapper().findAndRegisterModules());
+        this.baseUri = validateBaseUri(baseUri);
+        this.requestTimeout = positive(requestTimeout, "requestTimeout");
+        this.http = HttpClient.newBuilder().connectTimeout(positive(connectTimeout, "connectTimeout")).build();
+        this.json = new ObjectMapper().findAndRegisterModules();
     }
 
     ManagementClient(URI baseUri, Duration requestTimeout, HttpClient http, ObjectMapper json) {
-        this(baseUri, Duration.ofSeconds(5), requestTimeout, http, json);
+        this.baseUri = validateBaseUri(baseUri);
+        this.requestTimeout = positive(requestTimeout, "requestTimeout");
+        this.http = Objects.requireNonNull(http, "http");
+        this.json = Objects.requireNonNull(json, "json");
     }
 
     private ManagementClient(URI baseUri, Duration connectTimeout, Duration requestTimeout,
@@ -54,24 +58,29 @@ public final class ManagementClient {
     }
 
     public HeartbeatResponse heartbeat(String registrationToken, String health) throws IOException {
-        return post("heartbeat", registrationToken, new HeartbeatRequest(health), HeartbeatResponse.class);
+        return post("heartbeat", requiredBearer(registrationToken), new HeartbeatRequest(health), HeartbeatResponse.class);
     }
 
     public InventoryResponse reportInventory(String registrationToken, InventoryRequest inventory) throws IOException {
         Objects.requireNonNull(inventory, "inventory");
-        return post("inventory", registrationToken, inventory, InventoryResponse.class);
+        return post("inventory", requiredBearer(registrationToken), inventory, InventoryResponse.class);
     }
 
     public CommandPage pollCommands(String registrationToken, int limit) throws IOException {
         if (limit < 1 || limit > 50) throw new IllegalArgumentException("limit must be between 1 and 50");
-        return post("commands/poll", registrationToken, new PollRequest(limit), CommandPage.class);
+        return post("commands/poll", requiredBearer(registrationToken), new PollRequest(limit), CommandPage.class);
     }
 
     public AckResponse acknowledge(String registrationToken, UUID commandId, AckRequest acknowledgement)
             throws IOException {
         Objects.requireNonNull(commandId, "commandId");
         Objects.requireNonNull(acknowledgement, "acknowledgement");
-        return post("commands/" + commandId + "/ack", registrationToken, acknowledgement, AckResponse.class);
+        return post("commands/" + commandId + "/ack", requiredBearer(registrationToken), acknowledgement, AckResponse.class);
+    }
+
+    private static String requiredBearer(String token) {
+        if (token == null || token.isBlank()) throw new IllegalArgumentException("registrationToken must not be blank");
+        return token;
     }
 
     private <T> T post(String path, String bearer, Object body, Class<T> responseType) throws IOException {
