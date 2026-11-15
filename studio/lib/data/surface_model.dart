@@ -203,3 +203,18 @@ const String sampleSurfaceJson = '''{
     ]
   }
 }''';
+
+/// The same idea in the A2UI standard-catalog shape (flat components by id), which the server also accepts.
+const String sampleA2uiJson = '''{
+  "id": "hello",
+  "title": "Hello (A2UI)",
+  "root": "col",
+  "components": [
+    {"id": "col", "component": {"Column": {"children": {"explicitList": ["h", "card"]}}}},
+    {"id": "h", "component": {"Text": {"text": {"literalString": "Order 42"}, "usageHint": "h2"}}},
+    {"id": "card", "component": {"Card": {"child": "row"}}},
+    {"id": "row", "component": {"Row": {"children": {"explicitList": ["a", "b"]}}}},
+    {"id": "a", "component": {"Text": {"text": {"literalString": "Customer: Acme"}}}},
+    {"id": "b", "component": {"Text": {"text": {"literalString": "Needs review"}}}}
+  ]
+}''';
