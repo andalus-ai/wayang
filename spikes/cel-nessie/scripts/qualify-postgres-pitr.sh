@@ -98,22 +98,22 @@ if [[ "$archived" -lt 1 ]] || [[ "${archived_target_wal:-f}" != "t" ]] \
 fi
 
 
-# Configure recovery from the physical backup and archived WAL to the target.
-docker exec "$source_container" sh -c "cat >> /base-backup/postgresql.auto.conf" <<EOF
-restore_command = 'cp /wal-archive/%f %p'
-recovery_target_time = '$target_time'
-recovery_target_inclusive = 'false'
-recovery_target_action = 'promote'
-EOF
+# Configure recovery on the restore server's command line. This makes the
+# recovery parameters explicit and avoids depending on edits to the backup's
+# postgresql.auto.conf file.
 docker exec --user root "$source_container" touch /base-backup/recovery.signal
-docker exec --user root "$source_container" chown postgres:postgres /base-backup/postgresql.auto.conf /base-backup/recovery.signal
+docker exec --user root "$source_container" chown postgres:postgres /base-backup/recovery.signal
 docker stop "$source_container" >/dev/null
 
 docker run --detach --name "$restore_container" \
   --publish "$restore_port:5432" \
   --volume "$base_backup_volume:/var/lib/postgresql/data" \
   --volume "$wal_archive_volume:/wal-archive:ro" \
-  postgres:17
+  postgres:17 \
+  -c "restore_command=cp /wal-archive/%f %p" \
+  -c "recovery_target_time=$target_time" \
+  -c "recovery_target_inclusive=off" \
+  -c "recovery_target_action=promote"
 
 wait_for_postgres "$restore_container" "$restore_port"
 
