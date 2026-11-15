@@ -403,7 +403,7 @@ class WorkspaceServiceTest {
         assertEquals(3, env.api.getDraft(p, DefinitionKind.PROCESS, "orders").revision(), "an identical overwrite creates no revision");
         // with publish asked for, an identical draft is still written and published
         var pub = env.ws(null).importBundle(p, bundle, new WorkspaceService.Options(false, "overwrite", target, true, false, true, false, false));
-        assertTrue(pub.items().stream().noneMatch(i -> i.action().equals("unchanged")), pub.items().toString());
+        assertTrue(pub.items().stream().noneMatch(i -> i.action().equals("unchanged") && (i.type().equals("process") || i.type().equals("decision"))), pub.items().toString());
     }
 
     @Test
@@ -419,7 +419,9 @@ class WorkspaceServiceTest {
         var same = env.ws(null).importBundle(p, bundle, new WorkspaceService.Options(true, "overwrite", target, false, true, true, false, false));
         assertTrue(same.ok(), same.problems().toString());
         assertTrue(same.items().stream().anyMatch(i -> i.type().equals("trigger") && i.action().equals("unchanged")), same.items().toString());
-        assertTrue(env.ws(null).importBundle(p, bundle, apply("overwrite", target)).ok());
+        var applied = env.ws(null).importBundle(p, bundle, apply("overwrite", target));
+        assertTrue(applied.ok(), applied.problems().toString());
+        assertTrue(applied.items().stream().anyMatch(i -> i.type().equals("trigger") && i.action().equals("unchanged")), "the applied report also lists what was left alone: " + applied.items());
         // a different one is never overwritten, and the report says which part differs without showing values
         @SuppressWarnings("unchecked")
         Map<String, Object> t = (Map<String, Object>) ((List<Object>) bundle.get("triggers")).get(0);

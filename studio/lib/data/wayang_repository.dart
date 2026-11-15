@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../models/bpmn.dart';
 import '../models/dmn.dart';
 import '../models/wayang.dart';
@@ -5,6 +7,7 @@ import 'api_client.dart';
 import 'bpmn_mapper.dart';
 import 'dmn_mapper.dart';
 import 'feedback_model.dart';
+import 'surface_model.dart';
 import 'workspace_model.dart';
 
 /// Everything the Studio and the management screens ask of the Wayang API, one method per endpoint
@@ -330,4 +333,15 @@ class WayangRepository {
   /// Side-effect-free dry run of a mapper spec or an EIP pipeline.
   Future<Map<String, dynamic>> previewMapper(Map<String, dynamic> request) async =>
       asMap(await _api.sendJson('POST', '/api/v1/mapper/preview', body: request));
+
+  /// Asks the server to check a UI surface; the answer holds the rebuilt surface or the problems. Input that is not JSON is a problem, not an error.
+  Future<SurfaceCheck> validateSurface(String text) async {
+    Object? body;
+    try {
+      body = jsonDecode(text);
+    } catch (_) {
+      return const SurfaceCheck(ok: false, problems: ['Not valid JSON.']);
+    }
+    return SurfaceCheck.fromJson(asMap(await _api.sendJson('POST', '/api/v1/ui/surfaces/validate', body: body)));
+  }
 }
