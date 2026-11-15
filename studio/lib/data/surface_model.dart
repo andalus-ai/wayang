@@ -1,3 +1,5 @@
+import '../models/wayang.dart';
+
 /// A declarative UI surface (the A2UI wire format Wayang's server validates at `POST /api/v1/ui/surfaces/validate`). The model is data
 /// only: no widgets, no callbacks. [UiSurface.parse] is tolerant on purpose, so an old or odd document shows what it can instead of
 /// failing, and it keeps its own depth/size limits so it is safe even on a surface the server did not check.
@@ -31,14 +33,21 @@ String _text(Object? v) => v is String ? (v.length > surfaceMaxText ? v.substrin
 
 /// What a button may do here: reload the surface, or open a screen inside Studio. Anything else is dropped to [SurfaceAction.none].
 class SurfaceAction {
-  const SurfaceAction._(this.kind, [this.route]);
+  const SurfaceAction._(this.kind, [this.route, this.runId, this.nodeId, this.outputs = const {}]);
 
   static const none = SurfaceAction._('none');
   static const refresh = SurfaceAction._('refresh');
   factory SurfaceAction.navigate(String route) => SurfaceAction._('navigate', route);
 
+  /// Completes a waiting human task of a run. Holds ids and plain outputs only, never a task token.
+  factory SurfaceAction.completeTask(String runId, String nodeId, Map<String, dynamic> outputs) =>
+      SurfaceAction._('task.complete', null, runId, nodeId, outputs);
+
   final String kind;
   final String? route;
+  final String? runId;
+  final String? nodeId;
+  final Map<String, dynamic> outputs;
 
   static SurfaceAction parse(Object? json) {
     if (json is! Map) return none;
@@ -48,10 +57,38 @@ class SurfaceAction {
       case 'navigate':
         final r = json['route'];
         return r is String && r.startsWith('/') && !r.startsWith('//') && r.length <= 200 ? SurfaceAction.navigate(r) : none;
+      case 'task.complete':
+        final r = json['runId'], n = json['nodeId'], o = json['outputs'];
+        if (r is! String || n is! String || !_idPattern.hasMatch(r) || !_idPattern.hasMatch(n)) return none;
+        final out = <String, dynamic>{};
+        if (o is Map) {
+          for (final e in o.entries.take(20)) {
+            final k = '${e.key}', v = e.value;
+            if (!_idPattern.hasMatch(k)) continue;
+            if (v is String) {
+              out[k] = v.length > 200 ? v.substring(0, 200) : v;
+            } else if (v is num || v is bool) {
+              out[k] = v;
+            }
+          }
+        }
+        return SurfaceAction.completeTask(r, n, out);
       default:
         return none;
     }
   }
+}
+
+final RegExp _idPattern = RegExp(r'^[A-Za-z0-9_.:-]{1,200}$');
+
+/// The waiting human task a `task.complete` action may complete, or null. The action must name the very run the surface was drawn from
+/// ([surfaceRunId]), so a surface cannot reach another run's tasks, and the task must be one the viewer's own task list returned.
+TaskView? taskForAction(SurfaceAction action, String surfaceRunId, Iterable<TaskView> tasks) {
+  if (action.kind != 'task.complete' || action.runId != surfaceRunId) return null;
+  for (final t in tasks) {
+    if (t.kind == 'human' && t.runId == surfaceRunId && t.nodeId == action.nodeId) return t;
+  }
+  return null;
 }
 
 sealed class SurfaceNode {

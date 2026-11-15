@@ -106,4 +106,28 @@ class UiSurfaceValidatorTest {
         var ok = UiSurfaceValidator.validate(Map.of("id", "s", "title", "t", "rootNode", text("x"), "metadata", Map.of("run", "r-1", "n", 3)));
         assertTrue(ok.ok(), ok.problems().toString());
     }
+
+    private static Map<String, Object> buttonWith(Map<String, Object> action) {
+        return Map.of("id", "s", "title", "t", "rootNode", Map.of("_type", "button", "label", "Approve", "action", action));
+    }
+
+    @Test
+    void taskCompleteKeepsReferencesAndPlainOutputsOnly() {
+        var ok = UiSurfaceValidator.validate(buttonWith(Map.of("_type", "task.complete", "runId", "run-1", "nodeId", "review", "outputs", Map.of("approved", true, "note", "ok"), "token", "secret-token", "url", "http://x")));
+        assertTrue(ok.ok(), ok.problems().toString());
+        @SuppressWarnings("unchecked")
+        var action = (Map<String, Object>) ((Map<String, Object>) ok.surface().get("rootNode")).get("action");
+        assertEquals("run-1", action.get("runId"));
+        assertEquals(Map.of("approved", true, "note", "ok"), action.get("outputs"));
+        assertFalse(action.containsKey("token"));
+        assertFalse(action.containsKey("url"));
+    }
+
+    @Test
+    void taskCompleteRefusesBadIdsAndStructuredOutputs() {
+        assertFalse(UiSurfaceValidator.validate(buttonWith(Map.of("_type", "task.complete", "runId", "../x", "nodeId", "n"))).ok());
+        assertFalse(UiSurfaceValidator.validate(buttonWith(Map.of("_type", "task.complete", "runId", "r"))).ok());
+        assertFalse(UiSurfaceValidator.validate(buttonWith(Map.of("_type", "task.complete", "runId", "r", "nodeId", "n", "outputs", Map.of("x", Map.of("a", 1))))).ok());
+        assertFalse(UiSurfaceValidator.validate(buttonWith(Map.of("_type", "task.complete", "runId", "r", "nodeId", "n", "outputs", List.of(1)))).ok());
+    }
 }

@@ -39,6 +39,14 @@ shape, not a dependency on the framework module; it does not run the A2UI JSONL 
 If a run has a variable named `surface` holding a surface (either shape), the run detail in Studio sends it to the check endpoint and draws
 the result under **Surface**. A refused surface shows its first problems instead. Nothing is stored or pushed.
 
+## Acting buttons: `task.complete` only
+
+A button on a surface drawn from a run may carry `{"_type": "task.complete", "runId", "nodeId", "outputs": {plain values}}`. It holds ids, never
+a task token. Studio finds the waiting human task in the viewer's own task list, requires it to belong to the run the surface came from,
+asks the person to confirm using the task's own title (and shows what will be sent), then completes it with the viewer's session; the
+server still decides whether they may. Pasted playground surfaces show the button disabled. See UI-SURFACE-ACTIONS.md for the design and what is
+not done (audit record, other operations).
+
 ## Not done
 
 Binding actions to operations, images, charts, and persisting or pushing surfaces from runs. Each needs its own design and tests.

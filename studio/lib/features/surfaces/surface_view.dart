@@ -7,10 +7,13 @@ import '../../data/surface_model.dart';
 /// Draws a [UiSurface]. Read-only: text, tables and badges only; no images are fetched, markdown is plain text, and a button can only
 /// refresh or open a Studio screen through [onAction].
 class SurfaceView extends StatelessWidget {
-  const SurfaceView({super.key, required this.surface, this.onAction});
+  const SurfaceView({super.key, required this.surface, this.onAction, this.allowTaskActions = false});
 
   final UiSurface surface;
   final void Function(SurfaceAction action)? onAction;
+
+  /// Whether `task.complete` buttons are live. Only a surface that came from a run may turn this on; a pasted one never does.
+  final bool allowTaskActions;
 
   @override
   Widget build(BuildContext context) => _node(context, surface.root);
@@ -93,7 +96,7 @@ class SurfaceView extends StatelessWidget {
           ),
         );
       case ButtonSurfaceNode():
-        final enabled = n.action.kind != 'none' && onAction != null;
+        final enabled = n.action.kind != 'none' && onAction != null && (n.action.kind != 'task.complete' || allowTaskActions);
         final press = enabled ? () => onAction!(n.action) : null;
         return Align(
           alignment: Alignment.centerLeft,

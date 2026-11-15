@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wayang_studio/data/surface_model.dart';
+import 'package:wayang_studio/models/wayang.dart';
 
 void main() {
   test('the sample parses into a card with its children', () {
@@ -73,5 +74,20 @@ void main() {
   test('both samples are valid JSON; the first parses as a surface', () {
     expect(UiSurface.parse(jsonDecode(sampleSurfaceJson)), isNotNull);
     expect((jsonDecode(sampleA2uiJson) as Map)['components'], isA<List>());
+  });
+
+  test('task.complete keeps ids and plain outputs; bad ids become no action', () {
+    final a = SurfaceAction.parse({'_type': 'task.complete', 'runId': 'r1', 'nodeId': 'n1', 'outputs': {'ok': true, 'x': {'a': 1}, 'bad key': 'v'}, 'token': 't'});
+    expect(a.kind, 'task.complete');
+    expect(a.outputs, {'ok': true});
+    expect(SurfaceAction.parse({'_type': 'task.complete', 'runId': '../r', 'nodeId': 'n'}).kind, 'none');
+  });
+
+  test('a task is only found for the surface\'s own run and a human task', () {
+    TaskView t(String run, String node, String kind) => TaskView(token: 'tok-$run-$node', runId: run, nodeId: node, kind: kind);
+    final a = SurfaceAction.completeTask('r1', 'n1', const {});
+    expect(taskForAction(a, 'r1', [t('r2', 'n1', 'human'), t('r1', 'n1', 'timer')]), isNull);
+    expect(taskForAction(a, 'r1', [t('r1', 'n1', 'human')])?.token, 'tok-r1-n1');
+    expect(taskForAction(a, 'other-run', [t('other-run', 'n1', 'human')]), isNull, reason: 'action names another run than the surface');
   });
 }
