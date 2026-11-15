@@ -20,8 +20,6 @@ public final class DeploymentOrchestrationService {
 
     public DeploymentOrchestrationService(DeploymentLedger ledger, DeploymentLifecycleService lifecycle,
             DeploymentTargetRegistry targets, Clock clock) {
-        this.ledger = Objects.requireNonNull(ledger, "ledger");
-        this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this(ledger, lifecycle, targets, clock, null);
     }
 
@@ -149,7 +147,10 @@ public final class DeploymentOrchestrationService {
             throw new IllegalStateException("Deployment cannot be activated from " + current.state());
         }
         DeploymentTarget target = targets.require(command.targetId());
+        var activatingRef = new java.util.concurrent.atomic.AtomicReference<DeploymentSnapshot>();
         var execution = executionGate.execute("ACTIVATE", command, Duration.ofMinutes(15),
+                () -> activatingRef.set(lifecycle.beginActivation(current.deploymentId(), current.version(),
+                        safeActor, safeReason, correlation, eventKey(command.idempotencyKey(), "begin"))),
                 () -> Objects.requireNonNull(target.activate(command, timeout), "target activation result"),
                 DeploymentOrchestrationService::classifyTargetResult,
                 result -> result.status().name(), TargetOperationResult::detail);
@@ -157,8 +158,7 @@ public final class DeploymentOrchestrationService {
             return new DeploymentOrchestrationExecution<>(false, null, current, execution.receipt());
         }
 
-        DeploymentSnapshot activating = lifecycle.beginActivation(current.deploymentId(), current.version(),
-                safeActor, safeReason, correlation, eventKey(command.idempotencyKey(), "begin"));
+        DeploymentSnapshot activating = Objects.requireNonNull(activatingRef.get(), "activation transition");
         TargetOperationResult activation = execution.result();
         if (activation.status() != TargetOperationResult.Status.SUCCEEDED) {
             DeploymentSnapshot failed = lifecycle.recordHealth(command.deploymentId(), activating.version(),
@@ -188,15 +188,17 @@ public final class DeploymentOrchestrationService {
             throw new IllegalStateException("Deployment cannot be deactivated from " + current.state());
         }
         DeploymentTarget target = targets.require(command.targetId());
+        var deactivatingRef = new java.util.concurrent.atomic.AtomicReference<DeploymentSnapshot>();
         var execution = executionGate.execute("DEACTIVATE", command, Duration.ofMinutes(15),
+                () -> deactivatingRef.set(lifecycle.beginDeactivation(current.deploymentId(), current.version(),
+                        safeActor, safeReason, correlation, eventKey(command.idempotencyKey(), "deactivate-begin"))),
                 () -> Objects.requireNonNull(target.deactivate(command, timeout), "target deactivation result"),
                 DeploymentOrchestrationService::classifyTargetResult,
                 result -> result.status().name(), TargetOperationResult::detail);
         if (!execution.dispatched()) {
             return new DeploymentOrchestrationExecution<>(false, null, current, execution.receipt());
         }
-        DeploymentSnapshot deactivating = lifecycle.beginDeactivation(current.deploymentId(), current.version(),
-                safeActor, safeReason, correlation, eventKey(command.idempotencyKey(), "deactivate-begin"));
+        DeploymentSnapshot deactivating = Objects.requireNonNull(deactivatingRef.get(), "deactivation transition");
         TargetOperationResult operation = execution.result();
         DeploymentSnapshot result = operation.status() == TargetOperationResult.Status.SUCCEEDED
                 ? lifecycle.completeDeactivation(command.deploymentId(), deactivating.version(), safeActor,
@@ -222,15 +224,17 @@ public final class DeploymentOrchestrationService {
             throw new IllegalStateException("Deployment cannot be rolled back from " + current.state());
         }
         DeploymentTarget target = targets.require(command.targetId());
+        var rollingBackRef = new java.util.concurrent.atomic.AtomicReference<DeploymentSnapshot>();
         var execution = executionGate.execute("ROLLBACK", command, Duration.ofMinutes(15),
+                () -> rollingBackRef.set(lifecycle.beginRollback(current.deploymentId(), current.version(),
+                        safeActor, safeReason, correlation, eventKey(command.idempotencyKey(), "rollback-begin"))),
                 () -> Objects.requireNonNull(target.rollback(command, timeout), "target rollback result"),
                 DeploymentOrchestrationService::classifyTargetResult,
                 result -> result.status().name(), TargetOperationResult::detail);
         if (!execution.dispatched()) {
             return new DeploymentOrchestrationExecution<>(false, null, current, execution.receipt());
         }
-        DeploymentSnapshot rollingBack = lifecycle.beginRollback(current.deploymentId(), current.version(),
-                safeActor, safeReason, correlation, eventKey(command.idempotencyKey(), "rollback-begin"));
+        DeploymentSnapshot rollingBack = Objects.requireNonNull(rollingBackRef.get(), "rollback transition");
         TargetOperationResult operation = execution.result();
         if (operation.status() != TargetOperationResult.Status.SUCCEEDED) {
             DeploymentSnapshot failed = lifecycle.failRollback(command.deploymentId(), rollingBack.version(), safeActor,
