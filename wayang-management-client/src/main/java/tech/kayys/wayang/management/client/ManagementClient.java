@@ -44,14 +44,6 @@ public final class ManagementClient {
         this.json = Objects.requireNonNull(json, "json");
     }
 
-    private ManagementClient(URI baseUri, Duration connectTimeout, Duration requestTimeout,
-            HttpClient http, ObjectMapper json) {
-        this.baseUri = validateBaseUri(baseUri);
-        this.requestTimeout = positive(requestTimeout, "requestTimeout");
-        this.http = Objects.requireNonNull(http, "http");
-        this.json = Objects.requireNonNull(json, "json");
-    }
-
     public EnrollResponse enroll(EnrollRequest request) throws IOException {
         Objects.requireNonNull(request, "request");
         return post("enroll", null, request, EnrollResponse.class);
