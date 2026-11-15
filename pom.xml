@@ -17,6 +17,7 @@
         <module>wayang-integration</module>
         <module>wayang-agent</module>
         <module>wayang-runtime</module>
+        <module>wayang-management-client</module>
         <module>wayang-embed</module>
         <module>wayang-connectors</module>
         <module>wayang-multimodal</module>
