@@ -14,6 +14,8 @@ import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/bpmn_provider.dart';
 import '../feedback/feedback_dialog.dart';
+import '../surfaces/surface_view.dart';
+import '../../data/surface_model.dart';
 
 final runsProvider = FutureProvider.autoDispose<List<RunView>>((ref) => ref.watch(repositoryProvider).listRuns());
 
@@ -295,6 +297,11 @@ class _RunDetail extends ConsumerWidget {
             const SizedBox(height: 14),
             _EventLog(id: id),
             const SizedBox(height: 14),
+            if (r.variables['surface'] is Map) ...[
+              const PanelSectionLabel('Surface'),
+              _RunSurface(surface: Map<String, dynamic>.from(r.variables['surface'] as Map)),
+              const SizedBox(height: 14),
+            ],
             const PanelSectionLabel('Variables'),
             SelectableText(const JsonEncoder.withIndent('  ').convert(r.variables), style: const TextStyle(fontFamily: 'monospace', fontSize: 11.5)),
           ],
@@ -352,4 +359,46 @@ class _EventLogState extends ConsumerState<_EventLog> {
       ],
     );
   }
+}
+
+/// A run's `surface` variable, checked by the server first and then drawn. A surface the server refuses is shown as its problems, never drawn.
+class _RunSurface extends ConsumerStatefulWidget {
+  const _RunSurface({required this.surface});
+  final Map<String, dynamic> surface;
+
+  @override
+  ConsumerState<_RunSurface> createState() => _RunSurfaceState();
+}
+
+class _RunSurfaceState extends ConsumerState<_RunSurface> {
+  late Future<SurfaceCheck> _check;
+
+  @override
+  void initState() {
+    super.initState();
+    _check = ref.read(repositoryProvider).validateSurface(jsonEncode(widget.surface));
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<SurfaceCheck>(
+        future: _check,
+        builder: (context, snap) {
+          if (snap.hasError) return Text(errText(snap.error!), style: const TextStyle(color: AppColors.danger, fontSize: 12));
+          final c = snap.data;
+          if (c == null) return const LinearProgressIndicator();
+          if (!c.ok || c.surface == null) {
+            return Text('Surface refused: ${c.problems.take(3).join('; ')}', style: const TextStyle(fontSize: 12));
+          }
+          return SurfaceView(
+            surface: c.surface!,
+            onAction: (a) {
+              if (a.kind != 'navigate' || a.route == null) return;
+              final key = a.route!.split('/').where((x) => x.isNotEmpty).firstOrNull;
+              if (key != null && [platformSectionDashboard, ...platformSectionsAfterPlugins].any((x) => x.key == key)) {
+                ref.read(selectedNavKeyProvider.notifier).state = key;
+              }
+            },
+          );
+        },
+      );
 }

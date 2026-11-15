@@ -34,6 +34,11 @@ shape, not a dependency on the framework module; it does not run the A2UI JSONL 
 - Studio: `UiSurface.parse` is tolerant and applies the same limits again; unknown nodes show a "Not shown" note. The **UI surfaces**
   screen is a playground: paste, check, render.
 
+## From a run
+
+If a run has a variable named `surface` holding a surface (either shape), the run detail in Studio sends it to the check endpoint and draws
+the result under **Surface**. A refused surface shows its first problems instead. Nothing is stored or pushed.
+
 ## Not done
 
 Binding actions to operations, images, charts, and persisting or pushing surfaces from runs. Each needs its own design and tests.
