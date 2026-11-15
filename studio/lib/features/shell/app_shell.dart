@@ -19,6 +19,7 @@ import '../secrets/secrets_screen.dart';
 import '../workspace/config_screen.dart';
 import '../workspace/workspace_screen.dart';
 import '../settings/settings_screen.dart';
+import '../surfaces/surfaces_screen.dart';
 import '../tasks/tasks_screen.dart';
 
 /// One entry in the assembled navigation — either a fixed platform section
@@ -43,6 +44,7 @@ const _platformScreenBuilders = <String, WidgetBuilder>{
   'secrets': _secretsBuilder,
   'config': _configBuilder,
   'workspace': _workspaceBuilder,
+  'surfaces': _surfacesBuilder,
   'feedback': _feedbackBuilder,
   'settings': _settingsBuilder,
 };
@@ -57,6 +59,7 @@ Widget _channelsBuilder(BuildContext context) => const ChannelsScreen();
 Widget _secretsBuilder(BuildContext context) => const SecretsScreen();
 Widget _configBuilder(BuildContext context) => const ConfigScreen();
 Widget _workspaceBuilder(BuildContext context) => const WorkspaceScreen();
+Widget _surfacesBuilder(BuildContext context) => const SurfacesScreen();
 Widget _feedbackBuilder(BuildContext context) => const FeedbackScreen();
 Widget _settingsBuilder(BuildContext context) => const SettingsScreen();
 
