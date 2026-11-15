@@ -43,6 +43,12 @@ public final class UiSurfaceValidator {
 
     public static Result validate(Object raw) {
         UiSurfaceValidator v = new UiSurfaceValidator();
+        if (raw instanceof Map<?, ?> m && m.containsKey("components")) {
+            raw = A2uiStandardAdapter.adapt(m, v.problems); // A2UI standard-catalog shape: convert, then check like any surface
+            if (!v.problems.isEmpty()) {
+                return new Result(false, List.copyOf(v.problems), null);
+            }
+        }
         Map<String, Object> out = v.surface(raw);
         return v.problems.isEmpty() ? new Result(true, List.of(), out) : new Result(false, List.copyOf(v.problems), null);
     }
