@@ -215,9 +215,15 @@ public final class JdbcDeploymentOperationReceiptStore implements DeploymentOper
         String sql = """
                 SELECT deployment_id, operation_key, command_fingerprint, operation, status, attempt,
                        target_operation_key, result_code, result_detail, lease_until, created_at, updated_at
-                FROM wayang_deployment_operation_receipt
-                WHERE status IN ('SUCCEEDED', 'FAILED', 'UNKNOWN')
-                ORDER BY updated_at, deployment_id, operation_key
+                FROM wayang_deployment_operation_receipt r
+                LEFT JOIN wayang_deployment_reconciliation_work w
+                  ON w.deployment_id = r.deployment_id AND w.operation_key = r.operation_key
+                 AND w.command_fingerprint = r.command_fingerprint
+                WHERE r.status IN ('SUCCEEDED', 'FAILED', 'UNKNOWN')
+                  AND (w.deployment_id IS NULL
+                    OR (w.status = 'WAITING' AND w.retry_at <= CURRENT_TIMESTAMP)
+                    OR (w.status = 'CLAIMED' AND w.lease_until <= CURRENT_TIMESTAMP))
+                ORDER BY r.updated_at, r.deployment_id, r.operation_key
                 """;
         try (Connection c = dataSource.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setMaxRows(limit);
