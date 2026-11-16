@@ -1,0 +1,158 @@
+import importlib.util
+import json
+import os
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+SCRIPT_PATH = Path(__file__).parents[1] / "plan-postgres-wal-retention.py"
+SPEC = importlib.util.spec_from_file_location("plan_postgres_wal_retention", SCRIPT_PATH)
+MODULE = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = MODULE
+SPEC.loader.exec_module(MODULE)
+CatalogError = MODULE.CatalogError
+build_plan = MODULE.build_plan
+expand_wal_range = MODULE.expand_wal_range
+
+
+SEGMENT_SIZE = 16 * 1024 * 1024
+
+
+class PostgresWalRetentionPlanTest(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.archive = self.root / "archive"
+        self.archive.mkdir()
+        self.catalog_path = self.root / "catalog.json"
+        self.cutoff = 1_700_000_000
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def put_archive_file(self, name, mtime=1_600_000_000):
+        path = self.archive / name
+        path.write_bytes(b"wal-or-marker")
+        os.utime(path, (mtime, mtime))
+        return path
+
+    def write_manifest(self, name, ranges):
+        path = self.root / name
+        path.write_text(json.dumps({"WAL-Ranges": ranges}), encoding="utf-8")
+        return name
+
+    def write_catalog(self, backups, segment_size=SEGMENT_SIZE):
+        self.catalog_path.write_text(json.dumps({
+            "wal_segment_size_bytes": segment_size,
+            "backups": backups,
+        }), encoding="utf-8")
+
+    def range(self, timeline=1, start="0/00000000", end="0/02000000"):
+        return {"Timeline": timeline, "Start-LSN": start, "End-LSN": end}
+
+    def test_expands_inclusive_segment_range(self):
+        self.assertEqual(
+            {
+                "000000010000000000000000",
+                "000000010000000000000001",
+                "000000010000000000000002",
+            },
+            expand_wal_range(1, "0/00000000", "0/02000000", SEGMENT_SIZE),
+        )
+
+    def test_union_of_multiple_retained_backups_protects_old_wal(self):
+        first = self.write_manifest("first.json", [self.range(end="0/01000000")])
+        second = self.write_manifest("second.json", [self.range(start="0/01000000", end="0/02000000")])
+        required = {
+            "000000010000000000000000",
+            "000000010000000000000001",
+            "000000010000000000000002",
+        }
+        for name in required:
+            self.put_archive_file(name)
+        unrelated = "000000010000000000000010"
+        self.put_archive_file(unrelated)
+        self.write_catalog([
+            {"backup_id": "base-a", "retained": True, "manifest": first},
+            {"backup_id": "base-b", "retained": True, "manifest": second},
+        ])
+
+        plan = build_plan(self.archive, self.catalog_path, self.cutoff)
+
+        self.assertEqual(tuple(sorted(required)), plan.required_wal_files)
+        self.assertEqual((unrelated,), plan.eligible_wal_files)
+        self.assertFalse(plan.missing_required_files)
+
+    def test_recent_wal_and_unknown_files_are_protected(self):
+        manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
+        required = "000000010000000000000000"
+        self.put_archive_file(required)
+        recent = "000000010000000000000010"
+        self.put_archive_file(recent, mtime=self.cutoff + 100)
+        unknown = "README"
+        self.put_archive_file(unknown)
+        self.write_catalog([{"backup_id": "base", "retained": True, "manifest": manifest}])
+
+        plan = build_plan(self.archive, self.catalog_path, self.cutoff)
+
+        self.assertEqual((), plan.eligible_wal_files)
+        self.assertEqual((recent, unknown), plan.protected_other_files)
+
+    def test_missing_required_wal_fails_closed(self):
+        manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
+        self.write_catalog([{"backup_id": "base", "retained": True, "manifest": manifest}])
+        with self.assertRaisesRegex(CatalogError, "missing required WAL"):
+            build_plan(self.archive, self.catalog_path, self.cutoff)
+
+    def test_timeline_history_is_always_protected(self):
+        manifest = self.write_manifest("backup.json", [self.range(timeline=2, end="0/00000000")])
+        required = "000000020000000000000000"
+        history = "00000002.history"
+        unrelated = "000000010000000000000010"
+        self.put_archive_file(required)
+        self.put_archive_file(history)
+        self.put_archive_file(unrelated)
+        self.write_catalog([{"backup_id": "base", "retained": True, "manifest": manifest}])
+
+        plan = build_plan(self.archive, self.catalog_path, self.cutoff)
+
+        self.assertEqual((history,), plan.protected_history_files)
+        self.assertEqual((unrelated,), plan.eligible_wal_files)
+
+    def test_missing_timeline_history_fails_closed(self):
+        manifest = self.write_manifest("backup.json", [self.range(timeline=2, end="0/00000000")])
+        self.put_archive_file("000000020000000000000000")
+        self.write_catalog([{"backup_id": "base", "retained": True, "manifest": manifest}])
+        with self.assertRaisesRegex(CatalogError, "missing timeline history"):
+            build_plan(self.archive, self.catalog_path, self.cutoff)
+
+    def test_empty_or_duplicate_catalog_fails_closed(self):
+        self.write_catalog([])
+        with self.assertRaisesRegex(CatalogError, "no retained backups"):
+            build_plan(self.archive, self.catalog_path, self.cutoff)
+        self.write_catalog([
+            {"backup_id": "same", "retained": False},
+            {"backup_id": "same", "retained": True, "manifest": "missing.json"},
+        ])
+        with self.assertRaisesRegex(CatalogError, "duplicate backup_id"):
+            build_plan(self.archive, self.catalog_path, self.cutoff)
+
+    def test_archive_symlink_fails_closed(self):
+        manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
+        self.put_archive_file("000000010000000000000000")
+        target = self.root / "target"
+        target.write_text("not an archive file", encoding="utf-8")
+        (self.archive / "linked").symlink_to(target)
+        self.write_catalog([{"backup_id": "base", "retained": True, "manifest": manifest}])
+        with self.assertRaisesRegex(CatalogError, "symbolic link"):
+            build_plan(self.archive, self.catalog_path, self.cutoff)
+
+    def test_invalid_segment_size_fails_closed(self):
+        self.write_catalog([], segment_size=12345)
+        with self.assertRaisesRegex(CatalogError, "power of two"):
+            build_plan(self.archive, self.catalog_path, self.cutoff)
+
+
+if __name__ == "__main__":
+    unittest.main()

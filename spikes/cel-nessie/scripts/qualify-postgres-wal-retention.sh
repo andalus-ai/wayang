@@ -110,6 +110,43 @@ if docker run --rm \
   exit 1
 fi
 
+# Exercise the new planner against the real backup_manifest and archive produced
+# above, not only synthetic unit-test fixtures.
+catalog_dir="/tmp/wayang-wal-dependency-catalog"
+mkdir -p "$catalog_dir/archive"
+docker cp "$source_container:/base-backup/backup_manifest" "$catalog_dir/backup_manifest"
+docker cp "$source_container:/wal-archive/." "$catalog_dir/archive/"
+segment_size="$(docker exec "$source_container" pg_controldata /var/lib/postgresql/data \
+  | awk -F: '/Bytes per WAL segment/ { gsub(/[[:space:]]/, "", $2); print $2 }')"
+if [[ ! "$segment_size" =~ ^[0-9]+$ ]] || [[ "$segment_size" -le 0 ]]; then
+  echo "Could not determine PostgreSQL WAL segment size from pg_controldata" >&2
+  exit 1
+fi
+python3 - "$catalog_dir" "$segment_size" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+catalog = {
+    "wal_segment_size_bytes": int(sys.argv[2]),
+    "backups": [{
+        "backup_id": "phase-4al-retained-backup",
+        "retained": True,
+        "manifest": "backup_manifest",
+    }],
+}
+(root / "catalog.json").write_text(json.dumps(catalog, indent=2), encoding="utf-8")
+PY
+python3 spikes/cel-nessie/scripts/plan-postgres-wal-retention.py \
+  --archive-dir "$catalog_dir/archive" \
+  --catalog "$catalog_dir/catalog.json" \
+  --older-than-days 0 \
+  > /tmp/wayang-wal-retention-plan.json
+grep -q '"deletion_performed": false' /tmp/wayang-wal-retention-plan.json
+grep -q '"required_wal_files": \[' /tmp/wayang-wal-retention-plan.json
+
 echo "WAL_ARCHIVE_QUALIFICATION_SUCCESS wal_files=$wal_count"
 echo "$verify_output"
 echo "Checksum inventory written to /tmp/wayang-wal-archive.sha256"
+echo "Manifest-backed dry-run plan written to /tmp/wayang-wal-retention-plan.json"

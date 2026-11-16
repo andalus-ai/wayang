@@ -85,6 +85,19 @@ jobs:
       - name: Run PostgreSQL-backed store integration tests
         run: mvn -B -f spikes/cel-nessie/pom.xml -Dtest=PostgresPressureEventStoreTest test
 
+  postgres-wal-retention-planner:
+    name: PostgreSQL WAL dependency catalog planner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Run WAL dependency planner contract tests
+        run: python3 -m unittest discover -s spikes/cel-nessie/scripts/tests -v
+
   postgres-wal-pitr:
     name: PostgreSQL physical backup and WAL PITR
     runs-on: ubuntu-latest
@@ -111,5 +124,6 @@ jobs:
             /tmp/wayang-wal-archive.sha256
             /tmp/wayang-pg-verifybackup.log
             /tmp/wayang-pg-verifybackup-missing.log
+            /tmp/wayang-wal-retention-plan.json
           if-no-files-found: ignore
           retention-days: 7
