@@ -16,6 +16,7 @@
   to it and an amber guide line shows the match. Guides take priority over the grid.
 - **Find:** Ctrl/Cmd+F or the magnifier in the zoom controls opens a search over node names, ids and element types (every word must match,
   names that start with the query first). Picking one selects it and brings it to the middle of the view.
+- **Help:** `?`, F1 or the keyboard icon in the zoom controls lists all of this in the app.
 - **Keys** (canvas focused, after a click on it): Delete/Backspace remove, Esc clears, Ctrl/Cmd+A selects all, Ctrl/Cmd+Z undo,
   Ctrl+Y or Ctrl/Cmd+Shift+Z redo.
 
