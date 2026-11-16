@@ -24,6 +24,9 @@ class MinimapGeometry {
       final s = bpmnNodeSize(n.type);
       world = world.expandToInclude(Rect.fromLTWH(n.x, n.y, s.width, s.height));
     }
+    for (final n in diagram.noteList) {
+      world = world.expandToInclude(Rect.fromLTWH(n.x, n.y, BpmnNote.width, BpmnNote.height));
+    }
     world = world.inflate(40);
     final scale = math.min(size.width / world.width, size.height / world.height);
     final offset = Offset((size.width - world.width * scale) / 2, (size.height - world.height * scale) / 2);
@@ -137,6 +140,9 @@ class _MinimapPainter extends CustomPainter {
             ..strokeWidth = 1.2,
         );
       }
+    }
+    for (final n in diagram.noteList) {
+      canvas.drawRect(geo.toMap(Rect.fromLTWH(n.x, n.y, BpmnNote.width, BpmnNote.height)), Paint()..color = const Color(0xFFFFF3B0).withValues(alpha: 0.8));
     }
     final v = geo.toMap(view);
     canvas.drawRect(v, Paint()..color = AppColors.primaryBright.withValues(alpha: 0.12));

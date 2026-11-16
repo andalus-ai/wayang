@@ -3,6 +3,7 @@ import 'package:wayang_studio/features/bpmn/diagram_svg.dart';
 import 'package:wayang_studio/models/bpmn.dart';
 
 void main() {
+  notesInSvgTests();
   BpmnDiagram sample() {
     var d = BpmnDiagram.empty
         .addNode(const BpmnNode(id: 's', type: BpmnElementType.startEvent, x: 60, y: 60, label: 'Start'))
@@ -52,5 +53,24 @@ void main() {
     final svg = diagramToSvg(BpmnDiagram.empty);
     expect(svg, contains('width="'));
     expect(svg, contains('</svg>'));
+  });
+}
+
+void notesInSvgTests() {
+  test('notes are drawn, wrapped, escaped and counted in the picture size', () {
+    final d = BpmnDiagram.empty.putNote(const BpmnNote(id: 'n', x: 900, y: 40, text: '<b>careful</b>\nsecond line'));
+    final svg = diagramToSvg(d);
+    expect(svg, contains('fill="#fff3b0"'));
+    expect(svg, contains('&lt;b&gt;careful&lt;/b&gt;'));
+    expect(svg, contains('second line'));
+    expect(svg, isNot(contains('<b>')));
+    final width = double.parse(RegExp(r'<svg [^>]*width="([0-9.]+)"').firstMatch(svg)!.group(1)!);
+    expect(width >= 900 + BpmnNote.width, isTrue);
+  });
+
+  test('a very long note is cut to six lines with an ellipsis', () {
+    final svg = diagramToSvg(BpmnDiagram.empty.putNote(BpmnNote(id: 'n', x: 0, y: 0, text: 'word ' * 200)));
+    expect(RegExp('<text ').allMatches(svg).length, 6);
+    expect(svg, contains('…'));
   });
 }

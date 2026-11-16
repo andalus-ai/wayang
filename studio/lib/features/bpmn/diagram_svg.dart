@@ -33,6 +33,10 @@ String diagramToSvg(BpmnDiagram diagram, {double padding = 40}) {
     maxX = math.max(maxX, n.x + s.width);
     maxY = math.max(maxY, n.y + s.height);
   }
+  for (final n in diagram.noteList) {
+    maxX = math.max(maxX, n.x + BpmnNote.width);
+    maxY = math.max(maxY, n.y + BpmnNote.height);
+  }
   final width = maxX + padding, height = maxY + padding;
   final b = StringBuffer()
     ..writeln('<svg xmlns="http://www.w3.org/2000/svg" width="${_num(width)}" height="${_num(height)}" viewBox="0 0 ${_num(width)} ${_num(height)}" font-family="sans-serif" font-size="12">')
@@ -72,6 +76,23 @@ String diagramToSvg(BpmnDiagram diagram, {double padding = 40}) {
     final shown = name.length > 28 ? '${name.substring(0, 27)}…' : name;
     final ty = (n.type.isEvent || n.type.isGateway) ? n.y + s.height + 14 : cy + 4;
     b.writeln('<text x="${_num(cx)}" y="${_num(ty)}" text-anchor="middle" fill="#222222">${_esc(shown)}</text>');
+  }
+  for (final n in diagram.noteList) {
+    b.writeln('<rect x="${_num(n.x)}" y="${_num(n.y)}" width="${_num(BpmnNote.width)}" height="${_num(BpmnNote.height)}" rx="4" fill="#fff3b0" stroke="#d9c85a"/>');
+    // Wrap by lines and by a rough character budget; the picture is a sketch, not typeset text.
+    final lines = <String>[];
+    for (final para in n.text.split('\n')) {
+      var rest = para;
+      while (rest.length > 24) {
+        lines.add(rest.substring(0, 24));
+        rest = rest.substring(24);
+      }
+      lines.add(rest);
+    }
+    for (var i = 0; i < lines.length && i < 6; i++) {
+      final more = i == 5 && lines.length > 6;
+      b.writeln('<text x="${_num(n.x + 10)}" y="${_num(n.y + 22 + i * 15)}" fill="#222222">${_esc(more ? '${lines[i]}…' : lines[i])}</text>');
+    }
   }
   b.write('</svg>');
   return b.toString();
