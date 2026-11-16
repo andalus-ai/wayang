@@ -55,7 +55,15 @@ public final class DeploymentLifecycleReconciliationWorker {
         int skipped = 0;
         for (DeploymentOperationReceipt receipt : candidates) {
             var now = clock.instant();
-            if (!work.claim(receipt, now, now.plus(lease))) {
+            try {
+                if (!work.claim(receipt, now, now.plus(lease))) {
+                    skipped++;
+                    continue;
+                }
+            } catch (SecurityException identityConflict) {
+                conflicts++;
+                continue;
+            } catch (RuntimeException unavailable) {
                 skipped++;
                 continue;
             }
