@@ -7,9 +7,11 @@ import 'package:flutter/services.dart' hide DiagnosticLevel;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
+import '../../core/widgets.dart' show showToast;
 import '../../models/bpmn.dart';
 import '../../providers/bpmn_provider.dart';
 import 'context_menu.dart';
+import 'diagram_svg.dart';
 import 'guides.dart';
 import 'minimap.dart';
 import 'selection.dart';
@@ -480,6 +482,10 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
       if (ref.read(bpmnClipboardProvider) != null)
         BpmnMenuItem('Paste here', icon: Icons.content_paste_rounded, divider: true, onTap: () => _paste(at: local)),
       BpmnMenuItem('Select all', icon: Icons.select_all_rounded, divider: true, onTap: controller.selectAllNodes),
+      BpmnMenuItem('Copy diagram as SVG', icon: Icons.image_outlined, onTap: () async {
+        await Clipboard.setData(ClipboardData(text: diagramToSvg(ref.read(bpmnControllerProvider).diagram)));
+        if (mounted) showToast(context, 'Copied the diagram as SVG. Paste it into a file named something.svg.');
+      }),
       BpmnMenuItem('Tidy layout (all)', icon: Icons.auto_fix_high_rounded, onTap: () {
         controller.clearSelection();
         controller.autoLayout();
