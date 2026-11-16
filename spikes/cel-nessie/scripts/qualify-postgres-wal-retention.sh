@@ -146,11 +146,11 @@ python3 spikes/cel-nessie/scripts/plan-postgres-wal-retention.py \
 grep -q '"deletion_performed": false' /tmp/wayang-wal-retention-plan.json
 grep -q '"required_wal_files": \\[' /tmp/wayang-wal-retention-plan.json
 expected_snapshot="$(python3 -c 'import json; print(json.load(open("/tmp/wayang-wal-retention-plan.json"))["catalog_snapshot_sha256"])')"
-python3 spikes/cel-nessie/scripts/plan-postgres-wal-retention.py \\
-  --archive-dir "$catalog_dir/archive" \\
-  --catalog "$catalog_dir/catalog.json" \\
-  --older-than-days 0 \\
-  --expected-snapshot-sha256 "$expected_snapshot" \\
+python3 spikes/cel-nessie/scripts/plan-postgres-wal-retention.py \
+  --archive-dir "$catalog_dir/archive" \
+  --catalog "$catalog_dir/catalog.json" \
+  --older-than-days 0 \
+  --expected-snapshot-sha256 "$expected_snapshot" \
   > /tmp/wayang-wal-retention-revalidation.json
 cp "$catalog_dir/catalog.json" "$catalog_dir/catalog.original.json"
 python3 - "$catalog_dir/catalog.json" <<'PY'
@@ -167,11 +167,11 @@ catalog["backups"].append({
 })
 path.write_text(json.dumps(catalog, indent=2), encoding="utf-8")
 PY
-if python3 spikes/cel-nessie/scripts/plan-postgres-wal-retention.py \\
-  --archive-dir "$catalog_dir/archive" \\
-  --catalog "$catalog_dir/catalog.json" \\
-  --older-than-days 0 \\
-  --expected-snapshot-sha256 "$expected_snapshot" \\
+if python3 spikes/cel-nessie/scripts/plan-postgres-wal-retention.py \
+  --archive-dir "$catalog_dir/archive" \
+  --catalog "$catalog_dir/catalog.json" \
+  --older-than-days 0 \
+  --expected-snapshot-sha256 "$expected_snapshot" \
   > /tmp/wayang-wal-retention-stale-plan.json 2> /tmp/wayang-wal-retention-stale-plan.log; then
   echo "Stale catalog snapshot unexpectedly passed revalidation" >&2
   exit 1
