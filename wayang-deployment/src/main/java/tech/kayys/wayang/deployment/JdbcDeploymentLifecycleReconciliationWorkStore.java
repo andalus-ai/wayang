@@ -68,6 +68,7 @@ public final class JdbcDeploymentLifecycleReconciliationWorkStore
                 if (isUniqueViolation(failure)) {
                     String existingFingerprint = findFingerprint(receipt.deploymentId(), receipt.operationKey());
                     if (existingFingerprint != null && !existingFingerprint.equals(receipt.commandFingerprint())) {
+                        recordIdentityConflict(receipt, now);
                         throw new SecurityException("Reconciliation work key was reused with a different command fingerprint");
                     }
                     return false;
@@ -116,6 +117,24 @@ public final class JdbcDeploymentLifecycleReconciliationWorkStore
             }
         } catch (SQLException failure) {
             throw new IllegalStateException("Unable to complete lifecycle reconciliation work", failure);
+        }
+    }
+
+    private void recordIdentityConflict(DeploymentOperationReceipt receipt, Instant now) {
+        String sql = """
+                UPDATE wayang_deployment_reconciliation_work
+                SET status = 'CONFLICT', detail = 'Command fingerprint changed for an existing work key',
+                    lease_until = NULL, retry_at = NULL, updated_at = ?
+                WHERE deployment_id = ? AND operation_key = ?
+                """;
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setTimestamp(1, Timestamp.from(now));
+            statement.setString(2, receipt.deploymentId());
+            statement.setString(3, receipt.operationKey());
+            statement.executeUpdate();
+        } catch (SQLException failure) {
+            throw new IllegalStateException("Unable to record reconciliation identity conflict", failure);
         }
     }
 
