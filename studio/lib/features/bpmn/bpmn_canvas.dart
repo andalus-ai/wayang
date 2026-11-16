@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart' hide DiagnosticLevel;
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/services.dart' hide DiagnosticLevel;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
