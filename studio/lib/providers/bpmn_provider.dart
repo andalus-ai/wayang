@@ -425,6 +425,20 @@ final runHighlightProvider = StateProvider<Set<String>>((ref) => const {});
 /// The process open in the designer (null until one is picked or created).
 final activeBpmnDiagramIdProvider = StateProvider<String?>((ref) => null);
 
+/// Nodes (with the flows that run between them) copied from a diagram, ready to paste into this or another process. Kept in memory
+/// only: it is not written to the system clipboard and is gone when Studio closes.
+class BpmnClip {
+  const BpmnClip(this.nodes, this.flows);
+
+  final List<BpmnNode> nodes;
+  final List<BpmnFlow> flows;
+
+  bool get isEmpty => nodes.isEmpty;
+}
+
+/// What Ctrl+C / Ctrl+X last copied. Survives switching processes, which is what makes copying between processes work.
+final bpmnClipboardProvider = StateProvider<BpmnClip?>((ref) => null);
+
 /// The editor for the process picked in [activeBpmnDiagramIdProvider] (an empty id = nothing open).
 final bpmnControllerProvider = StateNotifierProvider<BpmnController, BpmnEditorState>((ref) {
   return BpmnController(ref.watch(repositoryProvider), ref.watch(activeBpmnDiagramIdProvider) ?? '');
