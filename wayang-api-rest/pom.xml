@@ -19,6 +19,11 @@
         </dependency>
         <dependency>
             <groupId>tech.kayys.wayang</groupId>
+            <artifactId>wayang-management-client</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>tech.kayys.wayang</groupId>
             <artifactId>wayang-store-jdbc</artifactId>
             <version>${project.version}</version>
         </dependency>
