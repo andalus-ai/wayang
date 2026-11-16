@@ -9,6 +9,7 @@ import '../../core/theme.dart';
 import '../../models/bpmn.dart';
 import '../../providers/bpmn_provider.dart';
 import 'context_menu.dart';
+import 'minimap.dart';
 import 'selection.dart';
 
 const double kLaneHeaderWidth = 120;
@@ -325,6 +326,17 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
           if (diagram.nodeCount == 0 && !state.loading)
             const Center(
               child: _HintBanner(text: 'Drag an element from the palette to start modeling this process'),
+            ),
+          if (diagram.nodeCount > 0)
+            Positioned(
+              left: 16,
+              bottom: 16,
+              child: BpmnMinimap(
+                diagram: diagram,
+                controller: _transformController,
+                viewportSize: constraints.biggest,
+                selected: state.selectedNodeIds,
+              ),
             ),
           Positioned(
             right: 16,

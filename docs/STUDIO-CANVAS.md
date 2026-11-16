@@ -12,4 +12,6 @@
   Align left / top (two or more nodes), Delete. On a flow: make or clear the default flow, delete. On empty canvas: add any element type at
   that point (in the lane under it), select all.
 
-Planned next, each in its own change: minimap, debug window.
+- **Minimap:** an overview at the bottom left shows every node, the selection and the visible area; click or drag on it to move the view.
+
+Planned next, as its own change: debug window.
