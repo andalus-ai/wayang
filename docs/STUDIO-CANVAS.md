@@ -4,7 +4,7 @@
 - **Box select:** the first button in the zoom controls turns box select on; dragging on empty canvas then draws a rectangle and selects
   every node it touches (panning is paused while it is on).
 - **Group:** dragging a selected node moves the whole group as one undo step; Delete removes the group as one undo step. The inspector shows
-  a node only when exactly one is selected. A group move keeps each node's lane as it was.
+  a node only when exactly one is selected. After a group move each node joins the lane its centre is now in, like a single drag.
 - **Keys** (canvas focused, after a click on it): Delete/Backspace remove, Esc clears, Ctrl/Cmd+A selects all, Ctrl/Cmd+Z undo,
   Ctrl+Y or Ctrl/Cmd+Shift+Z redo.
 
@@ -12,7 +12,7 @@
   Align left / top (two or more nodes), Delete. On a flow: make or clear the default flow, delete. On empty canvas: add any element type at
   that point (in the lane under it), select all.
 
-- **Minimap:** an overview at the bottom left shows every node, the selection and the visible area; click or drag on it to move the view.
+- **Minimap:** an overview at the bottom left shows the lanes, every node, the selection and the visible area; click or drag on it to move the view.
 
 - **Debug (bug icon in the toolbar):** a dock under the canvas. Pick a recent run of the open process; the canvas marks the path it took and
   you can step through the executed nodes (the canvas selects each). It also shows the run's status, error, what it waits on, variables and

@@ -11,7 +11,48 @@ BpmnController _controller() =>
     // The repository points nowhere: validation after an edit fails quietly, which these tests do not look at.
     BpmnController(WayangRepository(ApiClient(const ApiConfig(baseUrl: 'http://127.0.0.1:1'))), '');
 
+void laneTests() {
+  BpmnDiagram twoLanes() => BpmnDiagram.empty.copyWith(lanes: const [
+        BpmnLane(id: 'l1', name: 'A', order: 0, height: 200),
+        BpmnLane(id: 'l2', name: 'B', order: 1, height: 200),
+      ]);
+
+  test('lane lookup by y, with the last lane taking everything below', () {
+    final lanes = twoLanes().sortedLanes;
+    final tops = laneLayout(lanes).tops;
+    expect(tops, [0, 200]);
+    expect(laneIdForY(lanes, tops, 50), 'l1');
+    expect(laneIdForY(lanes, tops, 250), 'l2');
+    expect(laneIdForY(lanes, tops, 9000), 'l2');
+    expect(laneIdForY(const [], const [0], 10), isNull);
+  });
+
+  test('lanesForNodes goes by the vertical centre of the box', () {
+    final d = twoLanes()
+        .addNode(const BpmnNode(id: 'a', type: BpmnElementType.userTask, x: 0, y: 150)) // centre 189 -> l1
+        .addNode(const BpmnNode(id: 'b', type: BpmnElementType.userTask, x: 0, y: 170)); // centre 209 -> l2
+    expect(lanesForNodes(d, ['a', 'b']), {'a': 'l1', 'b': 'l2'});
+  });
+
+  test('a group drag puts each node in the lane it ends in, in one undo step', () {
+    final c = _controller();
+    final a = c.addNode(BpmnElementType.userTask, 10, 10);
+    final b = c.addNode(BpmnElementType.userTask, 300, 10);
+    c.selectAllNodes();
+    final before = c.state.diagram.copyWith(lanes: const [BpmnLane(id: 'l1', name: 'A', order: 0, height: 200), BpmnLane(id: 'l2', name: 'B', order: 1, height: 200)]);
+    c.dragGroup({a: const Offset(10, 10), b: const Offset(300, 10)}, 0, 220);
+    // lanes are part of the diagram the canvas hands back; here they are added to `before` and to the live diagram the same way
+    c.endDragGroup(before, lanes: {a: 'l2', b: 'l2'});
+    expect(c.state.diagram.node(a)!.laneId, 'l2');
+    expect(c.state.diagram.node(b)!.y, 230);
+    c.undo();
+    expect(c.state.diagram.node(a)!.y, 10);
+    expect(c.state.diagram.node(a)!.laneId, isNot('l2'));
+  });
+}
+
 void main() {
+  laneTests();
   contextMenuActionTests();
   test('nodesInRect finds nodes whose box touches the rectangle, whichever way it was dragged', () {
     var d = BpmnDiagram.empty;

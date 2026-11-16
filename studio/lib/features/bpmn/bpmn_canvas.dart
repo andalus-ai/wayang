@@ -74,28 +74,9 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
     return box.globalToLocal(globalPosition);
   }
 
-  /// Cumulative top-offset for each lane, in sorted order, plus a total
-  /// canvas height. Diagrams with no lanes render as one implicit band.
-  ({List<double> tops, double totalHeight}) _laneLayout(List<BpmnLane> lanes) {
-    if (lanes.isEmpty) return (tops: const [0], totalHeight: 600);
-    final tops = <double>[];
-    double y = 0;
-    for (final lane in lanes) {
-      tops.add(y);
-      y += lane.height;
-    }
-    return (tops: tops, totalHeight: y);
-  }
+  ({List<double> tops, double totalHeight}) _laneLayout(List<BpmnLane> lanes) => laneLayout(lanes);
 
-  String? _laneIdForY(List<BpmnLane> lanes, List<double> tops, double y) {
-    if (lanes.isEmpty) return null;
-    for (var i = 0; i < lanes.length; i++) {
-      final top = tops[i];
-      final bottom = i + 1 < tops.length ? tops[i + 1] : double.infinity;
-      if (y >= top && y < bottom) return lanes[i].id;
-    }
-    return lanes.last.id;
-  }
+  String? _laneIdForY(List<BpmnLane> lanes, List<double> tops, double y) => laneIdForY(lanes, tops, y);
 
   void _zoomBy(double factor) {
     final matrix = _transformController.value.clone();
@@ -288,8 +269,8 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
                               },
                               onPanEnd: (_) {
                                 if (_groupStarts != null && _dragNodeId == node.id) {
-                                  // Lane membership is left as it was for a group move; one undo step for the whole move.
-                                  controller.endDragGroup(_groupBefore!);
+                                  // Each moved node joins the lane it now sits in, like a single drag; one undo step for the whole move.
+                                  controller.endDragGroup(_groupBefore!, lanes: lanesForNodes(ref.read(bpmnControllerProvider).diagram, _groupStarts!.keys));
                                   _groupStarts = null;
                                   _groupBefore = null;
                                 } else if (_dragNodeId == node.id) {
