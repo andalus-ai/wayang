@@ -196,7 +196,8 @@ public class RuntimeManagementCommandPoller {
         consecutiveFailures = Math.min(consecutiveFailures + 1, 16);
         long exponential = Math.min(MAX_BACKOFF_SECONDS, 1L << Math.min(consecutiveFailures, 8));
         double jitter = ThreadLocalRandom.current().nextDouble(0.5d, 1.5d);
-        long delayNanos = Duration.ofMillis((long) (exponential * jitter * 1000d)).toNanos();
+        long delayMillis = Math.min(MAX_BACKOFF_SECONDS * 1000L, (long) (exponential * jitter * 1000d));
+        long delayNanos = Duration.ofMillis(delayMillis).toNanos();
         nextAttemptNanos = System.nanoTime() + delayNanos;
     }
 
