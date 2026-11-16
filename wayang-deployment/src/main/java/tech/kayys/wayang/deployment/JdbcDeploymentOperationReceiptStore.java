@@ -210,7 +210,8 @@ public final class JdbcDeploymentOperationReceiptStore implements DeploymentOper
     }
 
     @Override
-    public List<DeploymentOperationReceipt> findTerminalReceipts(int limit) {
+    public List<DeploymentOperationReceipt> findTerminalReceipts(Instant now, int limit) {
+        if (now == null) throw new IllegalArgumentException("now is required");
         if (limit < 1 || limit > 1000) throw new IllegalArgumentException("limit must be between 1 and 1000");
         String sql = """
                 SELECT r.deployment_id, r.operation_key, r.command_fingerprint, r.operation, r.status, r.attempt,
@@ -221,11 +222,13 @@ public final class JdbcDeploymentOperationReceiptStore implements DeploymentOper
                  AND w.command_fingerprint = r.command_fingerprint
                 WHERE r.status IN ('SUCCEEDED', 'FAILED', 'UNKNOWN')
                   AND (w.deployment_id IS NULL
-                    OR (w.status = 'WAITING' AND w.retry_at <= CURRENT_TIMESTAMP)
-                    OR (w.status = 'CLAIMED' AND w.lease_until <= CURRENT_TIMESTAMP))
+                    OR (w.status = 'WAITING' AND w.retry_at <= ?)
+                    OR (w.status = 'CLAIMED' AND w.lease_until <= ?))
                 ORDER BY r.updated_at, r.deployment_id, r.operation_key
                 """;
         try (Connection c = dataSource.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setTimestamp(1, Timestamp.from(now));
+            ps.setTimestamp(2, Timestamp.from(now));
             ps.setMaxRows(limit);
             try (ResultSet rs = ps.executeQuery()) {
                 List<DeploymentOperationReceipt> found = new ArrayList<>();
