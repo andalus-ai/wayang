@@ -144,7 +144,7 @@ python3 spikes/cel-nessie/scripts/plan-postgres-wal-retention.py \
   --older-than-days 0 \
   > /tmp/wayang-wal-retention-plan.json
 grep -q '"deletion_performed": false' /tmp/wayang-wal-retention-plan.json
-grep -q '"required_wal_files": \\[' /tmp/wayang-wal-retention-plan.json
+grep -q '"required_wal_files": \[' /tmp/wayang-wal-retention-plan.json
 expected_snapshot="$(python3 -c 'import json; print(json.load(open("/tmp/wayang-wal-retention-plan.json"))["catalog_snapshot_sha256"])')"
 python3 spikes/cel-nessie/scripts/plan-postgres-wal-retention.py \
   --archive-dir "$catalog_dir/archive" \
