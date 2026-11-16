@@ -177,10 +177,21 @@ if not isinstance(ranges, list) or not ranges:
     raise SystemExit("base backup manifest has no WAL-Ranges")
 if {entry["Timeline"] for entry in ranges} != {1}:
     raise SystemExit("expected the retained base backup to be on timeline 1")
-start_lsn = min(
-    (entry["Start-LSN"] for entry in ranges),
-    key=lambda value: (int(value.split("/")[0], 16) << 32) | int(value.split("/")[1], 16),
-)
+def lsn_to_int(value):
+    high, low = value.split("/", 1)
+    return (int(high, 16) << 32) | int(low, 16)
+
+def int_to_lsn(value):
+    return f"{value >> 32:X}/{value & 0xFFFFFFFF:08X}"
+
+start_lsn = min((entry["Start-LSN"] for entry in ranges), key=lsn_to_int)
+fork_value = lsn_to_int(fork_lsn)
+if fork_value == 0:
+    raise SystemExit("timeline fork LSN cannot be zero")
+# The parent timeline ends immediately before the switchpoint. Using the
+# switchpoint itself would incorrectly require the parent timeline's segment
+# at a segment boundary where only the child timeline has that segment.
+parent_end_lsn = int_to_lsn(fork_value - 1)
 catalog = {
     "wal_segment_size_bytes": segment_size,
     "backups": [{
@@ -188,7 +199,7 @@ catalog = {
         "retained": True,
         "manifest": "backup_manifest",
         "recovery_wal_ranges": [
-            {"Timeline": 1, "Start-LSN": start_lsn, "End-LSN": fork_lsn},
+            {"Timeline": 1, "Start-LSN": start_lsn, "End-LSN": parent_end_lsn},
             {"Timeline": 2, "Start-LSN": fork_lsn, "End-LSN": target_lsn},
         ],
     }],
