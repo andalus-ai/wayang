@@ -78,21 +78,23 @@ public class RuntimeManagementCommandPoller {
             return;
         }
 
+        String tokenUsed = null;
         try {
             Optional<String> token = credentials.load();
             if (token.isEmpty()) return;
-            if (fingerprint(token.get()).equals(rejectedCredentialFingerprint)) return;
+            tokenUsed = token.get();
+            if (fingerprint(tokenUsed).equals(rejectedCredentialFingerprint)) return;
             ManagementClient client = newClient();
-            CommandPage page = client.pollCommands(token.get(), boundedPollLimit());
+            CommandPage page = client.pollCommands(tokenUsed, boundedPollLimit());
             consecutiveFailures = 0;
             nextAttemptNanos = 0L;
             for (CommandView command : page.commands()) {
                 if (closed.get()) break;
-                process(client, token.get(), command, byType);
+                process(client, tokenUsed, command, byType);
             }
         } catch (ManagementApiException failure) {
             if (failure.credentialRejected()) {
-                credentialsRejected();
+                credentialsRejected(tokenUsed);
                 return;
             }
             scheduleBackoff();
@@ -182,13 +184,8 @@ public class RuntimeManagementCommandPoller {
         return Math.max(1, Math.min(pollLimit, MAX_POLL_LIMIT));
     }
 
-    private void credentialsRejected() {
-        try {
-            rejectedCredentialFingerprint = credentials.load().map(RuntimeManagementCommandPoller::fingerprint)
-                    .orElse(null);
-        } catch (IOException ignored) {
-            rejectedCredentialFingerprint = null;
-        }
+    private void credentialsRejected(String rejectedToken) {
+        rejectedCredentialFingerprint = rejectedToken == null ? null : fingerprint(rejectedToken);
         LOG.severe("Runtime management credential rejected; command polling is paused until the stored token changes");
     }
 
