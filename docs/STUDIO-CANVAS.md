@@ -5,6 +5,10 @@
   every node it touches (panning is paused while it is on).
 - **Group:** dragging a selected node moves the whole group as one undo step; Delete removes the group as one undo step. The inspector shows
   a node only when exactly one is selected. After a group move each node joins the lane its centre is now in, like a single drag.
+- **Copy / paste:** Ctrl/Cmd+C, X, V or the context menu. A copy holds the selected nodes and the flows between them; it stays in memory while Studio
+  is open, so it can be pasted into another process after switching. Paste without a position nudges the copy 40px down-right until it does
+  not sit on an existing node; "Paste here" on empty canvas puts the top-left corner at the click. Pasted nodes get new ids and the lane they
+  land in. Node settings are copied as they are (secret references stay references). Not written to the system clipboard.
 - **Keys** (canvas focused, after a click on it): Delete/Backspace remove, Esc clears, Ctrl/Cmd+A selects all, Ctrl/Cmd+Z undo,
   Ctrl+Y or Ctrl/Cmd+Shift+Z redo.
 

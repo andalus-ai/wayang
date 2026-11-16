@@ -8,6 +8,7 @@ import '../data/api_client.dart';
 import '../data/bpmn_mapper.dart';
 import '../data/wayang_repository.dart';
 import '../features/bpmn/auto_layout.dart';
+import '../features/bpmn/selection.dart';
 import '../models/bpmn.dart';
 import '../models/wayang.dart';
 import 'app_providers.dart';
@@ -236,6 +237,50 @@ class BpmnController extends StateNotifier<BpmnEditorState> {
       d = d.moveNode(e.key, e.value.dx, e.value.dy);
     }
     state = state.copyWith(diagram: d);
+  /// The selected nodes and the flows between two of them, or null when nothing is selected.
+  BpmnClip? copySelection() {
+    final ids = state.selectedNodeIds;
+    final nodes = [for (final n in state.diagram.nodeList) if (ids.contains(n.id)) n];
+    if (nodes.isEmpty) return null;
+    return BpmnClip(nodes, [for (final f in state.diagram.flowList) if (ids.contains(f.from) && ids.contains(f.to)) f]);
+  }
+
+  /// Adds the clip's nodes and internal flows under new ids and selects them. With [at] the clip's top-left corner lands there; without it
+  /// the clip is nudged 40px down-right of where it came from until it does not sit exactly on an existing node. Each pasted node joins
+  /// the lane it lands in. One undo step.
+  void pasteClip(BpmnClip clip, {Offset? at}) {
+    if (clip.isEmpty) return;
+    final minX = clip.nodes.map((n) => n.x).reduce((a, b) => a < b ? a : b);
+    final minY = clip.nodes.map((n) => n.y).reduce((a, b) => a < b ? a : b);
+    var dx = at == null ? 0.0 : at.dx - minX, dy = at == null ? 0.0 : at.dy - minY;
+    if (at == null) {
+      bool clash() => clip.nodes.any((c) => state.diagram.nodeList.any((n) => (n.x - (c.x + dx)).abs() < 1 && (n.y - (c.y + dy)).abs() < 1));
+      for (var i = 0; i < 50 && (i == 0 || clash()); i++) {
+        dx += 40;
+        dy += 40;
+      }
+    }
+    _checkpoint();
+    var d = state.diagram;
+    final map = <String, String>{};
+    for (final n in clip.nodes) {
+      final id = IdGen.next('bn');
+      map[n.id] = id;
+      d = d.addNode(BpmnNode(id: id, type: n.type, x: n.x + dx, y: n.y + dy, label: n.label, properties: n.properties));
+    }
+    for (final f in clip.flows) {
+      final a = map[f.from], b = map[f.to];
+      if (a != null && b != null) {
+        d = d.connect(BpmnFlow(id: IdGen.next('bf'), from: a, to: b, label: f.label, condition: f.condition, isDefault: f.isDefault));
+      }
+    }
+    for (final e in lanesForNodes(d, map.values).entries) {
+      final n = d.node(e.key);
+      if (n != null) d = d.moveNode(e.key, n.x, n.y, laneId: e.value, clearLane: e.value == null);
+    }
+    state = state.copyWith(diagram: d);
+    selectNodes(map.values);
+    unawaited(validate());
   }
 
   /// Lines the selected nodes up on their leftmost x (or topmost y). Needs two or more. One undo step.
@@ -438,6 +483,20 @@ final runHighlightProvider = StateProvider<Set<String>>((ref) => const {});
 
 /// The process open in the designer (null until one is picked or created).
 final activeBpmnDiagramIdProvider = StateProvider<String?>((ref) => null);
+
+/// Nodes (with the flows that run between them) copied from a diagram, ready to paste into this or another process. Kept in memory
+/// only: it is not written to the system clipboard and is gone when Studio closes.
+class BpmnClip {
+  const BpmnClip(this.nodes, this.flows);
+
+  final List<BpmnNode> nodes;
+  final List<BpmnFlow> flows;
+
+  bool get isEmpty => nodes.isEmpty;
+}
+
+/// What Ctrl+C / Ctrl+X last copied. Survives switching processes, which is what makes copying between processes work.
+final bpmnClipboardProvider = StateProvider<BpmnClip?>((ref) => null);
 
 /// The editor for the process picked in [activeBpmnDiagramIdProvider] (an empty id = nothing open).
 final bpmnControllerProvider = StateNotifierProvider<BpmnController, BpmnEditorState>((ref) {

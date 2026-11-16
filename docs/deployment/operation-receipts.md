@@ -82,6 +82,35 @@ A recovery worker scans expired RUNNING receipts using `findExpiredRunning(now, 
 
 The default target observation implementation returns UNKNOWN. An adapter must explicitly implement observation to enable automatic reconciliation. Observation must never start, retry, or otherwise mutate the external operation.
 
+## Lifecycle reconciliation
+
+`DeploymentLifecycleReconciliationService` applies a terminal receipt to a still-pending lifecycle transition without re-dispatching the target operation. It supports ACTIVATE, DEACTIVATE, and ROLLBACK and verifies the receipt deployment/key, operation, command fingerprint, and tenant/environment/target/release scope before writing.
+
+The caller supplies the original `DeploymentCommand` and trusted actor/reason/correlation context. Those values must be reloaded from the application's durable request/audit store; the receipt intentionally does not persist arbitrary command parameters or actor metadata. The service therefore provides a safe reconciliation primitive, not a self-contained scheduled worker.
+
+- RUNNING, ACCEPTED, and UNKNOWN receipts remain unresolved.
+- A pre-dispatch rejection does not alter lifecycle state.
+- A definitive FAILED receipt applies the operation-specific failure transition.
+- A successful DEACTIVATE receipt completes deactivation.
+- Successful ACTIVATE and ROLLBACK receipts require a fresh health check. If health cannot be observed, lifecycle remains pending.
+- A replay is considered already reconciled only when the expected lifecycle event key is present in the append-only ledger.
+- A state mismatch without that event is reported as CONFLICT; the service does not guess or overwrite a newer lifecycle state.
+
+Example:
+
+```java
+var outcome = reconciliation.reconcile(
+    terminalReceipt,
+    originalCommandFromDurableRequestStore,
+    actor,
+    reason,
+    correlationId,
+    Duration.ofSeconds(30));
+if (outcome.status() == DeploymentLifecycleReconciliationResult.Status.CONFLICT) {
+    // Route to operator review; never retry the target side effect.
+}
+```
+
 ## Integration boundary and limitations
 
 - Persist the receipt before invoking a target adapter.

@@ -7,6 +7,7 @@ removed by this program; it only reports eligible candidates for review.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -34,6 +35,7 @@ class RetentionPlan:
     eligible_wal_files: tuple[str, ...]
     protected_other_files: tuple[str, ...]
     missing_required_files: tuple[str, ...]
+    catalog_snapshot_sha256: str
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -44,6 +46,7 @@ class RetentionPlan:
             "eligible_wal_files": list(self.eligible_wal_files),
             "protected_other_files": list(self.protected_other_files),
             "missing_required_files": list(self.missing_required_files),
+            "catalog_snapshot_sha256": self.catalog_snapshot_sha256,
             "deletion_performed": False,
         }
 
@@ -56,12 +59,14 @@ def parse_lsn(value: str) -> int:
 
 
 def wal_filename(timeline: int, lsn: int, segment_size: int) -> str:
+    if timeline < 1 or timeline > 0xFFFFFFFF:
+        raise CatalogError("WAL timeline is outside PostgreSQL filename range")
     segments_per_xlogid = UINT32 // segment_size
     segment_number = lsn // segment_size
     log = segment_number // segments_per_xlogid
     segment = segment_number % segments_per_xlogid
-    if timeline < 1 or timeline > 0xFFFFFFFF or log > 0xFFFFFFFF:
-        raise CatalogError("WAL timeline or segment number is outside PostgreSQL filename range")
+    if log > 0xFFFFFFFF:
+        raise CatalogError("WAL segment number is outside PostgreSQL filename range")
     return f"{timeline:08X}{log:08X}{segment:08X}"
 
 
@@ -81,21 +86,29 @@ def expand_wal_range(timeline: int, start_lsn: str, end_lsn: str,
     }
 
 
-def _load_catalog(catalog_path: Path) -> tuple[list[tuple[str, Path]], int]:
+def _load_catalog(catalog_path: Path) -> tuple[list[tuple[str, Path, bytes]], int, str]:
     try:
-        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        catalog_bytes = catalog_path.read_bytes()
+        catalog = json.loads(catalog_bytes.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise CatalogError(f"cannot read backup catalog: {exc}") from exc
     if not isinstance(catalog, dict) or not isinstance(catalog.get("backups"), list):
         raise CatalogError("catalog must contain a backups array")
+
     segment_size = catalog.get("wal_segment_size_bytes")
     if not isinstance(segment_size, int) or isinstance(segment_size, bool):
         raise CatalogError("catalog wal_segment_size_bytes must be an integer")
     if segment_size <= 0 or segment_size & (segment_size - 1) or UINT32 % segment_size:
         raise CatalogError("WAL segment size must be a power of two dividing 2^32")
 
-    retained: list[tuple[str, Path]] = []
+    catalog_base = catalog_path.resolve().parent
+    retained: list[tuple[str, Path, bytes]] = []
     seen: set[str] = set()
+    digest = hashlib.sha256()
+    digest.update(b"wayang-postgres-wal-catalog-snapshot-v1|")
+    digest.update(len(catalog_bytes).to_bytes(8, "big"))
+    digest.update(catalog_bytes)
+
     for item in catalog["backups"]:
         if not isinstance(item, dict):
             raise CatalogError("each backup catalog entry must be an object")
@@ -105,32 +118,63 @@ def _load_catalog(catalog_path: Path) -> tuple[list[tuple[str, Path]], int]:
         if backup_id in seen:
             raise CatalogError(f"duplicate backup_id: {backup_id}")
         seen.add(backup_id)
+
         keep = item.get("retained")
         if not isinstance(keep, bool):
             raise CatalogError(f"backup {backup_id}: retained must be boolean")
         if not keep:
             continue
+
         manifest = item.get("manifest")
         if not isinstance(manifest, str) or not manifest.strip():
             raise CatalogError(f"backup {backup_id}: manifest path is required")
-        manifest_path = (catalog_path.parent / manifest).resolve()
-        retained.append((backup_id, manifest_path))
+        relative_manifest = Path(manifest)
+        if relative_manifest.is_absolute():
+            raise CatalogError(f"backup {backup_id}: manifest path must be relative")
+
+        candidate = catalog_base / relative_manifest
+        current = catalog_base
+        for part in relative_manifest.parts:
+            if part in ("", "."):
+                continue
+            if part == "..":
+                raise CatalogError(f"backup {backup_id}: manifest path escapes catalog directory")
+            current = current / part
+            if current.is_symlink():
+                raise CatalogError(f"backup {backup_id}: manifest path contains a symbolic link")
+
+        try:
+            manifest_path = candidate.resolve(strict=True)
+            manifest_path.relative_to(catalog_base)
+            manifest_bytes = manifest_path.read_bytes()
+        except (OSError, ValueError) as exc:
+            raise CatalogError(
+                f"backup {backup_id}: manifest path is unavailable or outside catalog directory"
+            ) from exc
+
+        backup_id_bytes = backup_id.encode("utf-8")
+        digest.update(len(backup_id_bytes).to_bytes(4, "big"))
+        digest.update(backup_id_bytes)
+        digest.update(len(manifest_bytes).to_bytes(8, "big"))
+        digest.update(manifest_bytes)
+        retained.append((backup_id, manifest_path, manifest_bytes))
+
     if not retained:
         raise CatalogError("catalog has no retained backups; refusing to plan deletion")
-    return retained, segment_size
+    return retained, segment_size, digest.hexdigest()
 
 
 def build_plan(archive_dir: Path, catalog_path: Path, cutoff_epoch: float) -> RetentionPlan:
-    retained, segment_size = _load_catalog(catalog_path)
+    retained, segment_size, snapshot_sha256 = _load_catalog(catalog_path)
     if not archive_dir.is_dir():
         raise CatalogError("WAL archive directory does not exist")
 
     required: set[str] = set()
     required_timelines: set[int] = set()
-    for backup_id, manifest_path in retained:
+    for backup_id, _manifest_path, manifest_bytes in retained:
         try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+            manifest = json.loads(manifest_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise CatalogError(f"backup {backup_id}: cannot read manifest: {exc}") from exc
         ranges = manifest.get("WAL-Ranges") if isinstance(manifest, dict) else None
         if not isinstance(ranges, list) or not ranges:
@@ -153,8 +197,6 @@ def build_plan(archive_dir: Path, catalog_path: Path, cutoff_epoch: float) -> Re
         if path.is_dir():
             raise CatalogError(f"archive must be flat; found directory: {path.name}")
         if path.is_file():
-            if path.name in files:
-                raise CatalogError(f"duplicate archive filename: {path.name}")
             files[path.name] = path
 
     history = {name for name in files if HISTORY_NAME.fullmatch(name)}
@@ -178,18 +220,25 @@ def build_plan(archive_dir: Path, catalog_path: Path, cutoff_epoch: float) -> Re
         if WAL_NAME.fullmatch(name) and path.stat().st_mtime <= cutoff_epoch:
             eligible.append(name)
         else:
-            # Unknown files and recent WAL are conservatively retained.
             other.append(name)
 
     return RetentionPlan(
-        retained_backup_ids=tuple(sorted(backup_id for backup_id, _ in retained)),
+        retained_backup_ids=tuple(sorted(backup_id for backup_id, _, _ in retained)),
         archive_files=tuple(sorted(files)),
         required_wal_files=tuple(sorted(required)),
         protected_history_files=tuple(sorted(history)),
         eligible_wal_files=tuple(sorted(eligible)),
         protected_other_files=tuple(sorted(other)),
         missing_required_files=tuple(missing),
+        catalog_snapshot_sha256=snapshot_sha256,
     )
+
+
+def require_snapshot_match(plan: RetentionPlan, expected_sha256: str) -> None:
+    if not re.fullmatch(r"[0-9a-f]{64}", expected_sha256):
+        raise CatalogError("expected snapshot fingerprint must be a lowercase SHA-256 hex digest")
+    if plan.catalog_snapshot_sha256 != expected_sha256:
+        raise CatalogError("catalog snapshot changed since planning; re-plan and re-approve")
 
 
 def main() -> int:
@@ -197,12 +246,18 @@ def main() -> int:
     parser.add_argument("--archive-dir", required=True, type=Path)
     parser.add_argument("--catalog", required=True, type=Path)
     parser.add_argument("--older-than-days", required=True, type=float)
+    parser.add_argument(
+        "--expected-snapshot-sha256",
+        help="refuse if the current catalog/manifests differ from this planned snapshot",
+    )
     args = parser.parse_args()
     if args.older_than_days < 0:
         parser.error("--older-than-days must not be negative")
     cutoff = time.time() - args.older_than_days * 24 * 60 * 60
     try:
         plan = build_plan(args.archive_dir, args.catalog, cutoff)
+        if args.expected_snapshot_sha256:
+            require_snapshot_match(plan, args.expected_snapshot_sha256)
     except CatalogError as exc:
         print(f"RETENTION_PLAN_REFUSED: {exc}", file=sys.stderr)
         return 2
