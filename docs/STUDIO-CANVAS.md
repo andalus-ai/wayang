@@ -13,8 +13,10 @@
   Ctrl+Y or Ctrl/Cmd+Shift+Z redo.
 
 - **Context menu (right-click):** on a node or group: Duplicate (copies the nodes and the flows between them, 40px down-right, one undo step),
-  Align left / top (two or more nodes), Delete. On a flow: make or clear the default flow, delete. On empty canvas: add any element type at
-  that point (in the lane under it), select all.
+  Tidy layout and Align left / top (two or more nodes), Delete. On a flow: make or clear the default flow, delete. On empty canvas: add any element type at
+  that point (in the lane under it), select all, tidy layout (all).
+- **Tidy layout:** lays the selection (two or more nodes; it keeps its top-left corner) or the whole diagram out left to right by longest path from a
+  source, like the server's auto layout; nodes keep their lane. One undo step.
 
 - **Minimap:** an overview at the bottom left shows the lanes, every node, the selection and the visible area; click or drag on it to move the view.
 

@@ -390,6 +390,7 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
       BpmnMenuItem('Copy', icon: Icons.content_copy_rounded, onTap: _copy),
       BpmnMenuItem('Cut', icon: Icons.content_cut_rounded, onTap: _cut),
       if (count > 1) ...[
+        BpmnMenuItem('Tidy layout', icon: Icons.auto_fix_high_rounded, onTap: controller.autoLayout),
         BpmnMenuItem('Align left', icon: Icons.align_horizontal_left_rounded, onTap: () => controller.alignSelected(horizontal: true)),
         BpmnMenuItem('Align top', icon: Icons.align_vertical_top_rounded, onTap: () => controller.alignSelected(horizontal: false)),
       ],
@@ -422,6 +423,10 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
       if (ref.read(bpmnClipboardProvider) != null)
         BpmnMenuItem('Paste here', icon: Icons.content_paste_rounded, divider: true, onTap: () => _paste(at: local)),
       BpmnMenuItem('Select all', icon: Icons.select_all_rounded, divider: true, onTap: controller.selectAllNodes),
+      BpmnMenuItem('Tidy layout (all)', icon: Icons.auto_fix_high_rounded, onTap: () {
+        controller.clearSelection();
+        controller.autoLayout();
+      }),
     ]);
   }
 
