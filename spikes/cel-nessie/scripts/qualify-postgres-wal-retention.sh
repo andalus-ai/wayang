@@ -238,6 +238,7 @@ docker run --detach --name "$restore_container_1" \
   postgres:17 \
   -c "restore_command=cp /simulated-wal/%f %p" \
   -c "recovery_target_time=$target_time" \
+  -c recovery_target_timeline=current \
   -c recovery_target_inclusive=off \
   -c recovery_target_action=promote
 
