@@ -65,7 +65,7 @@ class WalRetentionSimulationTest(unittest.TestCase):
         simulate(self.archive, self.plan, destination)
 
         source_mode = stat.S_IMODE(source.stat().st_mode)
-        copy_mode = stat.S_IMODE((destination / CANDIDATE).stat().st_mode)
+        copy_mode = stat.S_IMODE((destination / REQUIRED).stat().st_mode)
         self.assertEqual(0o600, source_mode)
         self.assertTrue(copy_mode & stat.S_IRGRP)
         self.assertTrue(copy_mode & stat.S_IROTH)
