@@ -8,4 +8,8 @@
 - **Keys** (canvas focused, after a click on it): Delete/Backspace remove, Esc clears, Ctrl/Cmd+A selects all, Ctrl/Cmd+Z undo,
   Ctrl+Y or Ctrl/Cmd+Shift+Z redo.
 
-Planned next, each in its own change: context menu, minimap, debug window.
+- **Context menu (right-click):** on a node or group: Duplicate (copies the nodes and the flows between them, 40px down-right, one undo step),
+  Align left / top (two or more nodes), Delete. On a flow: make or clear the default flow, delete. On empty canvas: add any element type at
+  that point (in the lane under it), select all.
+
+Planned next, each in its own change: minimap, debug window.

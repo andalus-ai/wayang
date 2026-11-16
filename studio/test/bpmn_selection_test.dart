@@ -12,6 +12,7 @@ BpmnController _controller() =>
     BpmnController(WayangRepository(ApiClient(const ApiConfig(baseUrl: 'http://127.0.0.1:1'))), '');
 
 void main() {
+  contextMenuActionTests();
   test('nodesInRect finds nodes whose box touches the rectangle, whichever way it was dragged', () {
     var d = BpmnDiagram.empty;
     d = d.addNode(const BpmnNode(id: 'a', type: BpmnElementType.userTask, x: 100, y: 100));
@@ -78,5 +79,46 @@ void main() {
     expect(c.state.selectedNodeIds, isEmpty);
     c.undo();
     expect(c.state.diagram.nodeCount, 3);
+  });
+}
+
+void contextMenuActionTests() {
+  test('duplicate copies the selection and the flows between its members, and selects the copies', () {
+    final c = _controller();
+    final a = c.addNode(BpmnElementType.userTask, 10, 10);
+    final b = c.addNode(BpmnElementType.userTask, 300, 10);
+    final outside = c.addNode(BpmnElementType.endEvent, 600, 10);
+    c.startConnection(a, Offset.zero);
+    c.completeConnection(b);
+    c.startConnection(b, Offset.zero);
+    c.completeConnection(outside);
+    c.selectNodes([a, b]);
+    c.duplicateSelected();
+    expect(c.state.diagram.nodeCount, 5);
+    expect(c.state.diagram.flowList.length, 3, reason: 'a->b copied, b->outside not');
+    expect(c.state.selectedNodeIds.length, 2);
+    expect(c.state.selectedNodeIds.intersection({a, b, outside}), isEmpty);
+    final copy = c.state.diagram.node(c.state.selectedNodeIds.first)!;
+    expect(copy.x == 50 || copy.x == 340, isTrue);
+    c.undo();
+    expect(c.state.diagram.nodeCount, 3);
+  });
+
+  test('align needs two nodes and is one undo step', () {
+    final c = _controller();
+    final a = c.addNode(BpmnElementType.userTask, 10, 80);
+    final b = c.addNode(BpmnElementType.userTask, 300, 20);
+    c.selectNodes([a]);
+    c.alignSelected(horizontal: true);
+    expect(c.state.canUndo, isTrue); // only the two adds so far
+    c.selectNodes([a, b]);
+    c.alignSelected(horizontal: false);
+    expect(c.state.diagram.node(a)!.y, 20);
+    expect(c.state.diagram.node(b)!.y, 20);
+    c.alignSelected(horizontal: true);
+    expect(c.state.diagram.node(b)!.x, 10);
+    c.undo();
+    expect(c.state.diagram.node(b)!.x, 300);
+    expect(c.state.diagram.node(a)!.y, 20);
   });
 }

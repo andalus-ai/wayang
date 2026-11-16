@@ -199,6 +199,51 @@ class BpmnController extends StateNotifier<BpmnEditorState> {
     }
   }
 
+  /// Copies the selected nodes (and the flows that run between two of them) 40px down and right, and selects the copies. One undo step.
+  void duplicateSelected() {
+    final ids = state.selectedNodeIds;
+    if (ids.isEmpty) return;
+    _checkpoint();
+    var d = state.diagram;
+    final map = <String, String>{};
+    for (final id in ids) {
+      final n = state.diagram.node(id);
+      if (n == null) continue;
+      final copyId = IdGen.next('bn');
+      map[id] = copyId;
+      d = d.addNode(BpmnNode(id: copyId, type: n.type, x: n.x + 40, y: n.y + 40, label: n.label, laneId: n.laneId, properties: n.properties));
+    }
+    for (final f in state.diagram.flowList) {
+      final a = map[f.from], b = map[f.to];
+      if (a != null && b != null) {
+        d = d.connect(BpmnFlow(id: IdGen.next('bf'), from: a, to: b, label: f.label, condition: f.condition, isDefault: f.isDefault));
+      }
+    }
+    state = state.copyWith(diagram: d);
+    selectNodes(map.values);
+    unawaited(validate());
+  }
+
+  /// Lines the selected nodes up on their leftmost x (or topmost y). Needs two or more. One undo step.
+  void alignSelected({required bool horizontal}) {
+    final nodes = [for (final id in state.selectedNodeIds) if (state.diagram.node(id) case final n?) n];
+    if (nodes.length < 2) return;
+    _checkpoint();
+    var d = state.diagram;
+    if (horizontal) {
+      final x = nodes.map((n) => n.x).reduce((a, b) => a < b ? a : b);
+      for (final n in nodes) {
+        d = d.moveNode(n.id, x, n.y);
+      }
+    } else {
+      final y = nodes.map((n) => n.y).reduce((a, b) => a < b ? a : b);
+      for (final n in nodes) {
+        d = d.moveNode(n.id, n.x, y);
+      }
+    }
+    state = state.copyWith(diagram: d);
+  }
+
   void dragNode(String id, double x, double y) {
     state = state.copyWith(diagram: state.diagram.moveNode(id, x, y));
   }

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme.dart';
 import '../../models/bpmn.dart';
 import '../../providers/bpmn_provider.dart';
+import 'context_menu.dart';
 import 'selection.dart';
 
 const double kLaneHeaderWidth = 120;
@@ -199,6 +200,7 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
                               // A tap on empty canvas (no flow hit) clears the selection.
                               if (ref.read(bpmnControllerProvider).selectedFlowId == before) controller.clearSelection();
                             },
+                            onSecondaryTapUp: (d) => _emptyOrFlowMenu(d.globalPosition, d.localPosition),
                             onPanStart: _boxMode ? (d) => setState(() => _boxStart = d.localPosition) : null,
                             onPanUpdate: _boxMode
                                 ? (d) => setState(() => _box = _boxStart == null ? null : rectBetween(_boxStart!, d.localPosition))
@@ -252,6 +254,7 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
                                   controller.selectNode(node.id);
                                 }
                               },
+                              onContextMenu: (pos) => _nodeMenu(pos, node.id),
                               onPanStart: (details) {
                                 _dragNodeId = node.id;
                                 _dragStartCanvasPos = _canvasPositionOf(details.globalPosition);
@@ -345,6 +348,63 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
     ),
     );
     });
+  }
+
+  BpmnFlow? _flowAt(Offset pos, BpmnDiagram diagram) {
+    BpmnFlow? closest;
+    var best = 10.0;
+    for (final f in diagram.flowList) {
+      final from = diagram.node(f.from), to = diagram.node(f.to);
+      if (from == null || to == null) continue;
+      final dist = _pointToSegmentDistance(pos, _portCenter(from, true), _portCenter(to, false));
+      if (dist < best) {
+        best = dist;
+        closest = f;
+      }
+    }
+    return closest;
+  }
+
+  void _nodeMenu(Offset global, String nodeId) {
+    _focus.requestFocus();
+    final controller = ref.read(bpmnControllerProvider.notifier);
+    if (!ref.read(bpmnControllerProvider).selectedNodeIds.contains(nodeId)) controller.selectNode(nodeId);
+    final count = ref.read(bpmnControllerProvider).selectedNodeIds.length;
+    showBpmnContextMenu(context, global, [
+      BpmnMenuItem(count > 1 ? '$count nodes' : 'Node'),
+      BpmnMenuItem('Duplicate', icon: Icons.copy_rounded, onTap: controller.duplicateSelected),
+      if (count > 1) ...[
+        BpmnMenuItem('Align left', icon: Icons.align_horizontal_left_rounded, onTap: () => controller.alignSelected(horizontal: true)),
+        BpmnMenuItem('Align top', icon: Icons.align_vertical_top_rounded, onTap: () => controller.alignSelected(horizontal: false)),
+      ],
+      BpmnMenuItem(count > 1 ? 'Delete $count nodes' : 'Delete', icon: Icons.delete_outline_rounded, destructive: true, divider: true, onTap: controller.removeSelected),
+    ]);
+  }
+
+  void _emptyOrFlowMenu(Offset global, Offset local) {
+    _focus.requestFocus();
+    final controller = ref.read(bpmnControllerProvider.notifier);
+    final state = ref.read(bpmnControllerProvider);
+    final flow = _flowAt(local, state.diagram);
+    if (flow != null) {
+      controller.selectFlow(flow.id);
+      showBpmnContextMenu(context, global, [
+        const BpmnMenuItem('Flow'),
+        BpmnMenuItem(flow.isDefault ? 'Not the default flow' : 'Make default flow',
+            icon: Icons.alt_route_rounded, onTap: () => controller.setFlowDefault(flow.id, !flow.isDefault)),
+        BpmnMenuItem('Delete flow', icon: Icons.delete_outline_rounded, destructive: true, divider: true, onTap: controller.removeSelected),
+      ]);
+      return;
+    }
+    final lanes = state.diagram.sortedLanes;
+    final layout = _laneLayout(lanes);
+    final laneId = _laneIdForY(lanes, layout.tops, local.dy);
+    showBpmnContextMenu(context, global, [
+      const BpmnMenuItem('Add here'),
+      for (final t in BpmnElementType.values)
+        BpmnMenuItem(t.label, icon: t.icon, onTap: () => controller.addNode(t, local.dx, local.dy, laneId: laneId)),
+      BpmnMenuItem('Select all', icon: Icons.select_all_rounded, divider: true, onTap: controller.selectAllNodes),
+    ]);
   }
 
   void _handleFlowTap(Offset pos, BpmnDiagram diagram, BpmnController controller) {
@@ -609,6 +669,7 @@ class _BpmnNodeWidget extends StatelessWidget {
     required this.diagnostics,
     required this.highlighted,
     required this.onTap,
+    required this.onContextMenu,
     required this.onPanStart,
     required this.onPanUpdate,
     required this.onPanEnd,
@@ -622,6 +683,7 @@ class _BpmnNodeWidget extends StatelessWidget {
   final List<BpmnDiagnostic> diagnostics;
   final bool highlighted;
   final VoidCallback onTap;
+  final void Function(Offset globalPosition) onContextMenu;
   final GestureDragStartCallback onPanStart;
   final GestureDragUpdateCallback onPanUpdate;
   final GestureDragEndCallback onPanEnd;
@@ -655,6 +717,7 @@ class _BpmnNodeWidget extends StatelessWidget {
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: onTap,
+            onSecondaryTapUp: (d) => onContextMenu(d.globalPosition),
             onPanStart: onPanStart,
             onPanUpdate: onPanUpdate,
             onPanEnd: onPanEnd,
