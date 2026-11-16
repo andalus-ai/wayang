@@ -9,6 +9,7 @@ import '../../core/theme.dart';
 import '../../models/bpmn.dart';
 import '../../providers/bpmn_provider.dart';
 import 'context_menu.dart';
+import 'guides.dart';
 import 'minimap.dart';
 import 'selection.dart';
 
@@ -57,6 +58,9 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
 
   // Box select: while [_boxMode] is on, dragging on empty canvas draws a rectangle instead of panning.
   bool _boxMode = false;
+
+  // Alignment guides shown while a drag is close to lining up with another node.
+  Guides _guides = Guides.none;
   Offset? _boxStart;
   Rect? _box;
   final FocusNode _focus = FocusNode(debugLabel: 'bpmn-canvas');
@@ -224,6 +228,10 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
                             ),
                           ),
                         ),
+                        if (!_guides.isEmpty)
+                          Positioned.fill(
+                            child: IgnorePointer(child: CustomPaint(painter: GuidesPainter(_guides, AppColors.warning.withValues(alpha: 0.8)))),
+                          ),
                         if (_box != null)
                           Positioned.fromRect(
                             rect: _box!,
@@ -280,8 +288,15 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
                                 final dy = now.dy - _dragStartCanvasPos.dy;
                                 final snap = ref.read(bpmnSnapProvider) ? bpmnGrid : 0.0;
                                 // Snapping puts the dragged node on the grid; a group keeps its shape and moves by the same amount.
-                                final sx = snapToGrid(_dragStartNodeX + dx, snap) - _dragStartNodeX;
-                                final sy = snapToGrid(_dragStartNodeY + dy, snap) - _dragStartNodeY;
+                                var sx = snapToGrid(_dragStartNodeX + dx, snap) - _dragStartNodeX;
+                                var sy = snapToGrid(_dragStartNodeY + dy, snap) - _dragStartNodeY;
+                                // Alignment guides win over the grid: a node that lines up with a neighbour snaps to it.
+                                final cur = ref.read(bpmnControllerProvider).diagram;
+                                final movers = _groupStarts ?? {node.id: Offset(_dragStartNodeX, _dragStartNodeY)};
+                                final g = alignmentGuides(cur, movers.keys.toSet(), boxOfMoved(cur, movers, sx, sy));
+                                sx += g.dx;
+                                sy += g.dy;
+                                if (!listEquals(_guides.vertical, g.vertical) || !listEquals(_guides.horizontal, g.horizontal)) setState(() => _guides = g);
                                 if (_groupStarts != null) {
                                   controller.dragGroup(_groupStarts!, sx, sy);
                                   return;
@@ -289,6 +304,7 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
                                 controller.dragNode(node.id, _dragStartNodeX + sx, _dragStartNodeY + sy);
                               },
                               onPanEnd: (_) {
+                                if (!_guides.isEmpty) setState(() => _guides = Guides.none);
                                 if (_groupStarts != null && _dragNodeId == node.id) {
                                   // Each moved node joins the lane it now sits in, like a single drag; one undo step for the whole move.
                                   controller.endDragGroup(_groupBefore!, lanes: lanesForNodes(ref.read(bpmnControllerProvider).diagram, _groupStarts!.keys));

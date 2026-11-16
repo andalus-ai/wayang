@@ -12,6 +12,8 @@
 - **Snap and nudge:** the grid button in the zoom controls makes dragging snap to a 20px grid (the dragged node lands on a grid line and a group
   keeps its shape). Arrow keys move the selection by one grid cell; with Shift, by one pixel. Each press is one undo step. Snap is off by default
   and is not remembered between sessions.
+- **Alignment guides:** while dragging, a node (or group) whose left/centre/right or top/middle/bottom comes within 6px of another node's snaps
+  to it and an amber guide line shows the match. Guides take priority over the grid.
 - **Find:** Ctrl/Cmd+F or the magnifier in the zoom controls opens a search over node names, ids and element types (every word must match,
   names that start with the query first). Picking one selects it and brings it to the middle of the view.
 - **Keys** (canvas focused, after a click on it): Delete/Backspace remove, Esc clears, Ctrl/Cmd+A selects all, Ctrl/Cmd+Z undo,
