@@ -134,6 +134,12 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
         const SingleActivator(LogicalKeyboardKey.escape): controller.clearSelection,
         const SingleActivator(LogicalKeyboardKey.keyA, control: true): controller.selectAllNodes,
         const SingleActivator(LogicalKeyboardKey.keyA, meta: true): controller.selectAllNodes,
+        const SingleActivator(LogicalKeyboardKey.keyC, control: true): _copy,
+        const SingleActivator(LogicalKeyboardKey.keyC, meta: true): _copy,
+        const SingleActivator(LogicalKeyboardKey.keyX, control: true): _cut,
+        const SingleActivator(LogicalKeyboardKey.keyX, meta: true): _cut,
+        const SingleActivator(LogicalKeyboardKey.keyV, control: true): _paste,
+        const SingleActivator(LogicalKeyboardKey.keyV, meta: true): _paste,
         const SingleActivator(LogicalKeyboardKey.keyZ, control: true): controller.undo,
         const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): controller.undo,
         const SingleActivator(LogicalKeyboardKey.keyY, control: true): controller.redo,
@@ -358,6 +364,21 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
     return closest;
   }
 
+  void _copy() {
+    final clip = ref.read(bpmnControllerProvider.notifier).copySelection();
+    if (clip != null) ref.read(bpmnClipboardProvider.notifier).state = clip;
+  }
+
+  void _cut() {
+    _copy();
+    if (ref.read(bpmnClipboardProvider) != null) ref.read(bpmnControllerProvider.notifier).removeSelected();
+  }
+
+  void _paste({Offset? at}) {
+    final clip = ref.read(bpmnClipboardProvider);
+    if (clip != null) ref.read(bpmnControllerProvider.notifier).pasteClip(clip, at: at);
+  }
+
   void _nodeMenu(Offset global, String nodeId) {
     _focus.requestFocus();
     final controller = ref.read(bpmnControllerProvider.notifier);
@@ -366,6 +387,8 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
     showBpmnContextMenu(context, global, [
       BpmnMenuItem(count > 1 ? '$count nodes' : 'Node'),
       BpmnMenuItem('Duplicate', icon: Icons.copy_rounded, onTap: controller.duplicateSelected),
+      BpmnMenuItem('Copy', icon: Icons.content_copy_rounded, onTap: _copy),
+      BpmnMenuItem('Cut', icon: Icons.content_cut_rounded, onTap: _cut),
       if (count > 1) ...[
         BpmnMenuItem('Align left', icon: Icons.align_horizontal_left_rounded, onTap: () => controller.alignSelected(horizontal: true)),
         BpmnMenuItem('Align top', icon: Icons.align_vertical_top_rounded, onTap: () => controller.alignSelected(horizontal: false)),
@@ -396,6 +419,8 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
       const BpmnMenuItem('Add here'),
       for (final t in BpmnElementType.values)
         BpmnMenuItem(t.label, icon: t.icon, onTap: () => controller.addNode(t, local.dx, local.dy, laneId: laneId)),
+      if (ref.read(bpmnClipboardProvider) != null)
+        BpmnMenuItem('Paste here', icon: Icons.content_paste_rounded, divider: true, onTap: () => _paste(at: local)),
       BpmnMenuItem('Select all', icon: Icons.select_all_rounded, divider: true, onTap: controller.selectAllNodes),
     ]);
   }
