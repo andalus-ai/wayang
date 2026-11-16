@@ -237,6 +237,8 @@ class BpmnController extends StateNotifier<BpmnEditorState> {
       d = d.moveNode(e.key, e.value.dx, e.value.dy);
     }
     state = state.copyWith(diagram: d);
+  }
+
   /// The selected nodes and the flows between two of them, or null when nothing is selected.
   BpmnClip? copySelection() {
     final ids = state.selectedNodeIds;
