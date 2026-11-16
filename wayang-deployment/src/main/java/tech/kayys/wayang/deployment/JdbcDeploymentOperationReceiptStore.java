@@ -219,7 +219,6 @@ public final class JdbcDeploymentOperationReceiptStore implements DeploymentOper
                 FROM wayang_deployment_operation_receipt r
                 LEFT JOIN wayang_deployment_reconciliation_work w
                   ON w.deployment_id = r.deployment_id AND w.operation_key = r.operation_key
-                 AND w.command_fingerprint = r.command_fingerprint
                 WHERE r.status IN ('SUCCEEDED', 'FAILED', 'UNKNOWN')
                   AND (w.deployment_id IS NULL
                     OR (w.status = 'WAITING' AND w.retry_at <= ?)
