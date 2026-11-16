@@ -213,8 +213,8 @@ public final class JdbcDeploymentOperationReceiptStore implements DeploymentOper
     public List<DeploymentOperationReceipt> findTerminalReceipts(int limit) {
         if (limit < 1 || limit > 1000) throw new IllegalArgumentException("limit must be between 1 and 1000");
         String sql = """
-                SELECT deployment_id, operation_key, command_fingerprint, operation, status, attempt,
-                       target_operation_key, result_code, result_detail, lease_until, created_at, updated_at
+                SELECT r.deployment_id, r.operation_key, r.command_fingerprint, r.operation, r.status, r.attempt,
+                       r.target_operation_key, r.result_code, r.result_detail, r.lease_until, r.created_at, r.updated_at
                 FROM wayang_deployment_operation_receipt r
                 LEFT JOIN wayang_deployment_reconciliation_work w
                   ON w.deployment_id = r.deployment_id AND w.operation_key = r.operation_key
