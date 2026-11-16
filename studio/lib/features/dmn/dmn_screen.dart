@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show LogicalKeyboardKey;
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
@@ -429,13 +429,13 @@ class _DecisionGrid extends StatelessWidget {
                           )),
                         for (var i = 0; i < table.outputs.length; i++)
                           DataCell(_EntryField(
-                            key: ValueKey('out-${epoch}-${table.rules[r].id}-${table.outputs[i].id}'),
+                            key: ValueKey('out-$epoch-${table.rules[r].id}-${table.outputs[i].id}'),
                             value: i < table.rules[r].outputEntries.length ? table.rules[r].outputEntries[i] : '',
                             color: AppColors.success,
                             onChanged: (v) => controller.setOutputEntry(table.rules[r].id, i, v),
                           )),
                         DataCell(_EntryField(
-                          key: ValueKey('note-${epoch}-${table.rules[r].id}'),
+                          key: ValueKey('note-$epoch-${table.rules[r].id}'),
                           value: table.rules[r].annotation,
                           color: AppColors.textMutedDark,
                           onChanged: (v) => controller.setRuleAnnotation(table.rules[r].id, v),
