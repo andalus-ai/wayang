@@ -128,6 +128,7 @@ jobs:
             /tmp/wayang-multitimeline-plan.json
             /tmp/wayang-multitimeline-simulation.json
             /tmp/wayang-multitimeline-recovery.txt
+            /tmp/wayang-multitimeline-pg-verifybackup.log
             /tmp/wayang-multitimeline-no-history.log
           if-no-files-found: ignore
           retention-days: 7
