@@ -35,7 +35,7 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
     def put_archive_file(self, name, mtime=1_600_000_000):
         path = self.archive / name
         if name.endswith(".history"):
-            path.write_text("1 0/01000000 no recovery target specified\\n", encoding="ascii")
+            path.write_text("1 0/01000000 no recovery target specified\n", encoding="ascii")
         else:
             path.write_bytes(b"wal-or-marker")
         os.utime(path, (mtime, mtime))
@@ -232,10 +232,10 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
         for name in required:
             self.put_archive_file(name)
         self.put_archive_file("00000002.history").write_text(
-            "1 0/01000000 first promotion\\n", encoding="ascii"
+            "1 0/01000000 first promotion\n", encoding="ascii"
         )
         self.put_archive_file("00000003.history").write_text(
-            "1 0/01000000 first promotion\\n2 0/02000000 second promotion\\n",
+            "1 0/01000000 first promotion\n2 0/02000000 second promotion\n",
             encoding="ascii"
         )
         self.write_catalog([
@@ -261,7 +261,7 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
         self.put_archive_file("000000010000000000000000")
         self.put_archive_file("000000020000000000000001")
         self.put_archive_file("00000002.history").write_text(
-            "1 0/01000000 first promotion\\n", encoding="ascii"
+            "1 0/01000000 first promotion\n", encoding="ascii"
         )
         self.write_catalog([{
             "backup_id": "fork-gap",
@@ -284,10 +284,10 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
         ):
             self.put_archive_file(name)
         self.put_archive_file("00000002.history").write_text(
-            "1 0/01000000 first promotion\\n", encoding="ascii"
+            "1 0/01000000 first promotion\n", encoding="ascii"
         )
         self.put_archive_file("00000003.history").write_text(
-            "1 0/01000000 first promotion\\n2 0/02000000 second promotion\\n",
+            "1 0/01000000 first promotion\n2 0/02000000 second promotion\n",
             encoding="ascii"
         )
         self.write_catalog([
@@ -308,7 +308,7 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
     def test_malformed_timeline_history_fails_closed(self):
         manifest = self.write_manifest("backup.json", [self.range(timeline=2, end="0/00000000")])
         self.put_archive_file("000000020000000000000000")
-        self.put_archive_file("00000002.history").write_text("not a PostgreSQL history row\\n", encoding="ascii")
+        self.put_archive_file("00000002.history").write_text("not a PostgreSQL history row\n", encoding="ascii")
         self.write_catalog([{"backup_id": "bad-history", "retained": True, "manifest": manifest}])
 
         with self.assertRaisesRegex(CatalogError, "malformed timeline history"):
