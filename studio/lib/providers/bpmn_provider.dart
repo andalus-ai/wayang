@@ -354,7 +354,7 @@ class BpmnController extends StateNotifier<BpmnEditorState> {
 
   void updateNodeLabel(String id, String label) {
     final node = state.diagram.node(id);
-    if (node == null) return;
+    if (node == null || node.label == label) return;
     _checkpoint();
     state = state.copyWith(diagram: state.diagram.updateNode(node.copyWith(label: label)));
   }
@@ -393,6 +393,14 @@ class BpmnController extends StateNotifier<BpmnEditorState> {
     if (flow == null) return;
     _checkpoint();
     state = state.copyWith(diagram: state.diagram.updateFlow(flow.copyWith(condition: condition)));
+  }
+
+  /// Sets the text drawn on a flow. One undo step; an unchanged label records nothing.
+  void setFlowLabel(String flowId, String label) {
+    final flow = state.diagram.flows[flowId];
+    if (flow == null || flow.label == label) return;
+    _checkpoint();
+    state = state.copyWith(diagram: state.diagram.updateFlow(flow.copyWith(label: label)));
   }
 
   void setFlowDefault(String flowId, bool isDefault) {
