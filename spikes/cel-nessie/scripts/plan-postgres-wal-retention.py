@@ -11,7 +11,7 @@ import json
 import re
 import sys
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -150,6 +150,8 @@ def build_plan(archive_dir: Path, catalog_path: Path, cutoff_epoch: float) -> Re
     for path in archive_dir.iterdir():
         if path.is_symlink():
             raise CatalogError(f"archive contains a symbolic link: {path.name}")
+        if path.is_dir():
+            raise CatalogError(f"archive must be flat; found directory: {path.name}")
         if path.is_file():
             if path.name in files:
                 raise CatalogError(f"duplicate archive filename: {path.name}")
