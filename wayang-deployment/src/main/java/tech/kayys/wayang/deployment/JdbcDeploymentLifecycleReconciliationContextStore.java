@@ -39,10 +39,12 @@ public final class JdbcDeploymentLifecycleReconciliationContextStore
             connection.setAutoCommit(false);
             try {
                 Optional<DeploymentLifecycleReconciliationContext> existing =
-                        select(connection, context.command().deploymentId(), context.command().idempotencyKey(),
-                                fingerprint, context.operation(), true);
+                        selectByKey(connection, context.command().deploymentId(),
+                                context.command().idempotencyKey(), true);
                 if (existing.isPresent()) {
-                    if (!existing.get().equals(context)) {
+                    DeploymentLifecycleReconciliationContext stored = existing.get();
+                    if (!stored.commandFingerprint().equals(fingerprint) || !stored.operation().equals(context.operation())
+                            || !stored.equals(context)) {
                         throw new SecurityException("Reconciliation context already exists with different request data");
                     }
                     connection.commit();
@@ -66,12 +68,14 @@ public final class JdbcDeploymentLifecycleReconciliationContextStore
             } catch (SQLException | RuntimeException failure) {
                 rollback(connection, failure);
                 if (failure instanceof SQLException sqlFailure && isConstraintViolation(sqlFailure)) {
-                    Optional<DeploymentLifecycleReconciliationContext> raced = findByIdentity(
-                            context.command().deploymentId(), context.command().idempotencyKey(), fingerprint,
-                            context.operation());
-                    if (raced.isPresent() && raced.get().equals(context)) return;
-                    if (raced.isPresent()) throw new SecurityException(
-                            "Reconciliation context already exists with different request data");
+                    Optional<DeploymentLifecycleReconciliationContext> raced = findByKey(
+                            context.command().deploymentId(), context.command().idempotencyKey());
+                    if (raced.isPresent()) {
+                        DeploymentLifecycleReconciliationContext stored = raced.get();
+                        if (stored.commandFingerprint().equals(fingerprint)
+                                && stored.operation().equals(context.operation()) && stored.equals(context)) return;
+                        throw new SecurityException("Reconciliation context already exists with different request data");
+                    }
                 }
                 if (failure instanceof RuntimeException runtime) throw runtime;
                 throw new IllegalStateException("Unable to persist deployment reconciliation context", failure);
@@ -86,6 +90,37 @@ public final class JdbcDeploymentLifecycleReconciliationContextStore
         Objects.requireNonNull(receipt, "receipt");
         return findByIdentity(receipt.deploymentId(), receipt.operationKey(),
                 receipt.commandFingerprint(), receipt.operation());
+    }
+
+    private Optional<DeploymentLifecycleReconciliationContext> findByKey(String deploymentId, String operationKey) {
+        try (Connection connection = dataSource.getConnection()) {
+            return selectByKey(connection, deploymentId, operationKey, false);
+        } catch (SQLException failure) {
+            throw new IllegalStateException("Unable to read deployment reconciliation context", failure);
+        }
+    }
+
+    private Optional<DeploymentLifecycleReconciliationContext> selectByKey(Connection connection,
+            String deploymentId, String operationKey, boolean forUpdate) throws SQLException {
+        String sql = """
+                SELECT command_fingerprint, operation, encrypted_context
+                FROM wayang_deployment_reconciliation_context
+                WHERE deployment_id = ? AND operation_key = ?
+                """ + (forUpdate ? " FOR UPDATE" : "");
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, deploymentId);
+            statement.setString(2, operationKey);
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) return Optional.empty();
+                String fingerprint = result.getString("command_fingerprint");
+                String operation = result.getString("operation");
+                byte[] ciphertext = validateCiphertext(result.getBytes("encrypted_context"));
+                DeploymentLifecycleReconciliationContext decoded = Objects.requireNonNull(
+                        codec.decode(ciphertext), "decoded reconciliation context");
+                verifyIdentity(decoded, deploymentId, operationKey, fingerprint, operation);
+                return Optional.of(decoded);
+            }
+        }
     }
 
     private Optional<DeploymentLifecycleReconciliationContext> findByIdentity(
