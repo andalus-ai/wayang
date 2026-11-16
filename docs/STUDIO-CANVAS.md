@@ -14,4 +14,8 @@
 
 - **Minimap:** an overview at the bottom left shows every node, the selection and the visible area; click or drag on it to move the view.
 
-Planned next, as its own change: debug window.
+- **Debug (bug icon in the toolbar):** a dock under the canvas. Pick a recent run of the open process; the canvas marks the path it took and
+  you can step through the executed nodes (the canvas selects each). It also shows the run's status, error, what it waits on, variables and
+  live events (click an event to select its node). Read-only: it changes nothing on the server or in the diagram. Closing it clears the marks.
+
+Not done: breakpoints, pausing a run, or stepping a live run forward; the engine exposes no such control.
