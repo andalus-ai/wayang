@@ -28,8 +28,10 @@ and operation key. The database primary key elects one initial claimant. A claim
 only when a WAITING retry is due or a previous CLAIMED lease has expired. Terminal work states are
 not claimable. A fingerprint mismatch for an existing work key is a security conflict, not a replay.
 
-The worker bounds each scan and each lease. The application owns scheduling, concurrency, back-pressure,
-and shutdown behavior; this module does not create a background thread or assume a particular scheduler.
+The terminal receipt scan excludes work already in a terminal work state and includes WAITING or expired
+CLAIMED rows only when due according to the worker's injected clock. This prevents an old page of
+completed receipts from starving newer work. The worker bounds each scan and each lease. The application
+owns scheduling, concurrency, back-pressure, and shutdown behavior; this module does not create a background thread or assume a particular scheduler.
 Run multiple worker instances safely against the same JDBC database.
 
 ## Outcome handling
