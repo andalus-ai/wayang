@@ -204,16 +204,15 @@ def parse_timeline_history(path: Path, timeline: int) -> tuple[tuple[int, int], 
 
 def validate_recovery_timeline_chain(backup_id: str, ranges: list[dict[str, Any]], histories: dict[int, tuple[tuple[int, int], ...]]) -> None:
     """Require each ancestry fork to be covered on both sides by recovery ranges."""
-    bounds: dict[int, tuple[int, int]] = {}
+    by_timeline: dict[int, list[tuple[int, int]]] = {}
     for wal_range in ranges:
         timeline = wal_range["Timeline"]
         start = parse_lsn(wal_range["Start-LSN"])
         end = parse_lsn(wal_range["End-LSN"])
-        previous = bounds.get(timeline)
-        bounds[timeline] = (min(start, previous[0]) if previous else start, max(end, previous[1]) if previous else end)
-    if len(bounds) < 2:
+        by_timeline.setdefault(timeline, []).append((start, end))
+    if len(by_timeline) < 2:
         return
-    for child_timeline in sorted(bounds):
+    for child_timeline in sorted(by_timeline):
         if child_timeline <= 1:
             continue
         ancestry = histories.get(child_timeline)
@@ -221,14 +220,14 @@ def validate_recovery_timeline_chain(backup_id: str, ranges: list[dict[str, Any]
             raise CatalogError(f"backup {backup_id}: missing parsed ancestry for timeline {child_timeline}")
         for index, (parent_timeline, fork_lsn) in enumerate(ancestry):
             child = ancestry[index + 1][0] if index + 1 < len(ancestry) else child_timeline
-            parent_bounds = bounds.get(parent_timeline)
-            child_bounds = bounds.get(child)
-            if parent_bounds is None or child_bounds is None:
-                missing = parent_timeline if parent_bounds is None else child
+            parent_ranges = by_timeline.get(parent_timeline, [])
+            child_ranges = by_timeline.get(child, [])
+            if not parent_ranges or not child_ranges:
+                missing = parent_timeline if not parent_ranges else child
                 raise CatalogError(f"backup {backup_id}: recovery ranges omit timeline {missing}")
-            if parent_bounds[1] < fork_lsn - 1:
+            if fork_lsn == 0 or not any(start <= fork_lsn - 1 <= end for start, end in parent_ranges):
                 raise CatalogError(f"backup {backup_id}: timeline {parent_timeline} recovery range does not reach byte before fork {fork_lsn:X}")
-            if child_bounds[0] > fork_lsn or child_bounds[1] < fork_lsn:
+            if not any(start <= fork_lsn <= end for start, end in child_ranges):
                 raise CatalogError(f"backup {backup_id}: timeline {child} recovery range does not cover fork point {fork_lsn:X}")
 
 def build_plan(archive_dir: Path, catalog_path: Path, cutoff_epoch: float) -> RetentionPlan:
