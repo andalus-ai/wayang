@@ -167,6 +167,22 @@ class BpmnLane {
 }
 
 /// Immutable BPMN process diagram — same shape philosophy as `StudioGraph`.
+/// A sticky note on the canvas: free text for people, never part of the process and never sent to the engine.
+class BpmnNote {
+  const BpmnNote({required this.id, required this.x, required this.y, this.text = ''});
+
+  static const double width = 180;
+  static const double height = 110;
+  static const int maxText = 1000;
+
+  final String id;
+  final double x;
+  final double y;
+  final String text;
+
+  BpmnNote copyWith({double? x, double? y, String? text}) => BpmnNote(id: id, x: x ?? this.x, y: y ?? this.y, text: text ?? this.text);
+}
+
 class BpmnDiagram {
   const BpmnDiagram({
     required this.id,
@@ -174,6 +190,7 @@ class BpmnDiagram {
     this.lanes = const [],
     this.nodes = const {},
     this.flows = const {},
+    this.notes = const {},
     this.revision,
     this.projectId,
     this.mcp,
@@ -193,11 +210,13 @@ class BpmnDiagram {
   final List<BpmnLane> lanes;
   final Map<String, BpmnNode> nodes;
   final Map<String, BpmnFlow> flows;
+  final Map<String, BpmnNote> notes;
 
   static const empty = BpmnDiagram(id: '');
 
   List<BpmnNode> get nodeList => nodes.values.toList()..sort((a, b) => a.id.compareTo(b.id));
   int get nodeCount => nodes.length;
+  List<BpmnNote> get noteList => notes.values.toList()..sort((a, b) => a.id.compareTo(b.id));
   List<BpmnFlow> get flowList => flows.values.toList()..sort((a, b) => a.id.compareTo(b.id));
   List<BpmnLane> get sortedLanes => [...lanes]..sort((a, b) => a.order.compareTo(b.order));
 
@@ -210,6 +229,7 @@ class BpmnDiagram {
     List<BpmnLane>? lanes,
     Map<String, BpmnNode>? nodes,
     Map<String, BpmnFlow>? flows,
+    Map<String, BpmnNote>? notes,
     int? revision,
     String? projectId,
     bool clearProject = false,
@@ -222,6 +242,7 @@ class BpmnDiagram {
       lanes: lanes ?? this.lanes,
       nodes: nodes ?? this.nodes,
       flows: flows ?? this.flows,
+      notes: notes ?? this.notes,
       revision: revision ?? this.revision,
       projectId: clearProject ? null : (projectId ?? this.projectId),
       mcp: clearMcp ? null : (mcp ?? this.mcp),
@@ -267,6 +288,10 @@ class BpmnDiagram {
     final next = Map<String, BpmnFlow>.from(flows)..[f.id] = f;
     return copyWith(flows: next);
   }
+
+  BpmnDiagram putNote(BpmnNote n) => copyWith(notes: Map<String, BpmnNote>.from(notes)..[n.id] = n);
+
+  BpmnDiagram removeNote(String id) => copyWith(notes: Map<String, BpmnNote>.from(notes)..remove(id));
 
   BpmnDiagram addLane(BpmnLane lane) => copyWith(lanes: [...lanes, lane]);
 

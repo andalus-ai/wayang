@@ -395,6 +395,35 @@ class BpmnController extends StateNotifier<BpmnEditorState> {
     state = state.copyWith(diagram: state.diagram.updateFlow(flow.copyWith(condition: condition)));
   }
 
+  String addNote(double x, double y) {
+    _checkpoint();
+    final id = IdGen.next('note');
+    state = state.copyWith(diagram: state.diagram.putNote(BpmnNote(id: id, x: x, y: y)));
+    return id;
+  }
+
+  void updateNoteText(String id, String text) {
+    final n = state.diagram.notes[id];
+    final t = text.length > BpmnNote.maxText ? text.substring(0, BpmnNote.maxText) : text;
+    if (n == null || n.text == t) return;
+    _checkpoint();
+    state = state.copyWith(diagram: state.diagram.putNote(n.copyWith(text: t)));
+  }
+
+  /// Call once when a note drag starts: that is the one undo step for the whole drag.
+  void beginNoteDrag() => _checkpoint();
+
+  void dragNote(String id, double x, double y) {
+    final n = state.diagram.notes[id];
+    if (n != null) state = state.copyWith(diagram: state.diagram.putNote(n.copyWith(x: x, y: y)));
+  }
+
+  void removeNote(String id) {
+    if (!state.diagram.notes.containsKey(id)) return;
+    _checkpoint();
+    state = state.copyWith(diagram: state.diagram.removeNote(id));
+  }
+
   /// Sets the text drawn on a flow. One undo step; an unchanged label records nothing.
   void setFlowLabel(String flowId, String label) {
     final flow = state.diagram.flows[flowId];
