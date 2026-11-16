@@ -161,7 +161,7 @@ class DeploymentLifecycleReconciliationWorkerTest {
         @Override public List<DeploymentOperationReceipt> findExpiredRunning(Instant now, int limit) {
             return List.of();
         }
-        @Override public List<DeploymentOperationReceipt> findTerminalReceipts(int limit) {
+        @Override public List<DeploymentOperationReceipt> findTerminalReceipts(Instant now, int limit) {
             return List.of(receipt).subList(0, Math.min(1, limit));
         }
         @Override public DeploymentOperationReceipt markUnknown(String d, String k, String reason, Instant now) {
