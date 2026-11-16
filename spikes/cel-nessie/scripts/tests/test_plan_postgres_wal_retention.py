@@ -121,6 +121,26 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
         with self.assertRaisesRegex(CatalogError, "missing required WAL"):
             build_plan(self.archive, self.catalog_path, self.cutoff)
 
+    def test_recovery_range_change_invalidates_approved_snapshot(self):
+        manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
+        self.put_archive_file("000000010000000000000000")
+        self.put_archive_file("000000010000000000000001")
+        backup = {
+            "backup_id": "base",
+            "retained": True,
+            "manifest": manifest,
+            "recovery_wal_ranges": [self.range(end="0/00000000")],
+        }
+        self.write_catalog([backup])
+        first = build_plan(self.archive, self.catalog_path, self.cutoff)
+
+        backup["recovery_wal_ranges"] = [self.range(end="0/01000000")]
+        self.write_catalog([backup])
+        second = build_plan(self.archive, self.catalog_path, self.cutoff)
+
+        with self.assertRaisesRegex(CatalogError, "snapshot changed"):
+            require_snapshot_match(second, first.catalog_snapshot_sha256)
+
     def test_empty_explicit_recovery_range_is_rejected(self):
         manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
         self.put_archive_file("000000010000000000000000")
