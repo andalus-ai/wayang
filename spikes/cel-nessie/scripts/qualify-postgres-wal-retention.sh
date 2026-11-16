@@ -79,6 +79,11 @@ run_sql -c "INSERT INTO wal_retention_marker VALUES ('post-backup-unreferenced-w
 # fourth. This gives the restore rehearsal an observable include/exclude edge.
 target_time="$(run_sql -At -c "SELECT to_char(clock_timestamp(), 'YYYY-MM-DD HH24:MI:SS.USOF')")"
 run_sql -c "INSERT INTO wal_retention_marker VALUES ('must-not-exist-at-target')"
+target_lsn="$(run_sql -At -c "SELECT pg_current_wal_lsn()")"
+# Close the segment containing the transaction after target_time, then write
+# another transaction in the following segment to create a true purge candidate.
+run_sql -c "SELECT pg_switch_wal()"
+run_sql -c "INSERT INTO wal_retention_marker VALUES ('after-recovery-target')"
 target_wal="$(run_sql -At -c "SELECT pg_walfile_name(pg_current_wal_lsn())")"
 run_sql -c "SELECT pg_switch_wal()"
 archived_target_wal="f"
@@ -152,24 +157,46 @@ if [[ ! "$segment_size" =~ ^[0-9]+$ ]] || [[ "$segment_size" -le 0 ]]; then
   echo "Could not determine PostgreSQL WAL segment size from pg_controldata" >&2
   exit 1
 fi
-python3 - "$catalog_dir" "$segment_size" <<'PY'
+python3 - "$catalog_dir" "$segment_size" "$target_lsn" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
+target_lsn = sys.argv[3]
+
+def parse_lsn(value):
+    high, low = value.split("/", 1)
+    return (int(high, 16) << 32) | int(low, 16)
+
+def recovery_ranges(manifest_name):
+    manifest = json.loads((root / manifest_name).read_text(encoding="utf-8"))
+    ranges = manifest.get("WAL-Ranges")
+    if not isinstance(ranges, list) or not ranges:
+        raise SystemExit(f"{manifest_name} has no WAL-Ranges")
+    timelines = {entry["Timeline"] for entry in ranges}
+    if len(timelines) != 1:
+        raise SystemExit(f"{manifest_name} crosses timelines; explicit catalog review required")
+    timeline = next(iter(timelines))
+    start_lsn = min((entry["Start-LSN"] for entry in ranges), key=parse_lsn)
+    if parse_lsn(target_lsn) < parse_lsn(start_lsn):
+        raise SystemExit(f"recovery target precedes backup start for {manifest_name}")
+    return [{"Timeline": timeline, "Start-LSN": start_lsn, "End-LSN": target_lsn}]
+
 catalog = {
     "wal_segment_size_bytes": int(sys.argv[2]),
     "backups": [{
-        "backup_id": "phase-4ao-retained-backup-1",
+        "backup_id": "phase-4ap-retained-backup-1",
         "retained": True,
         "manifest": "backup_manifest-1",
         "backup_directory": "backup-1",
+        "recovery_wal_ranges": recovery_ranges("backup_manifest-1"),
     }, {
-        "backup_id": "phase-4ao-retained-backup-2",
+        "backup_id": "phase-4ap-retained-backup-2",
         "retained": True,
         "manifest": "backup_manifest-2",
         "backup_directory": "backup-2",
+        "recovery_wal_ranges": recovery_ranges("backup_manifest-2"),
     }],
 }
 (root / "catalog.json").write_text(json.dumps(catalog, indent=2), encoding="utf-8")
@@ -211,6 +238,7 @@ docker run --detach --name "$restore_container_1" \
   postgres:17 \
   -c "restore_command=cp /simulated-wal/%f %p" \
   -c "recovery_target_time=$target_time" \
+  -c recovery_target_timeline=current \
   -c recovery_target_inclusive=off \
   -c recovery_target_action=promote
 
@@ -220,6 +248,7 @@ docker run --detach --name "$restore_container_2" \
   postgres:17 \
   -c "restore_command=cp /simulated-wal/%f %p" \
   -c "recovery_target_time=$target_time" \
+  -c recovery_target_timeline=current \
   -c recovery_target_inclusive=off \
   -c recovery_target_action=promote
 
@@ -262,6 +291,7 @@ for container in "$restore_container_1" "$restore_container_2"; do
   assert_marker_count "$container" "second-retained-backup" "1"
   assert_marker_count "$container" "post-backup-unreferenced-wal" "1"
   assert_marker_count "$container" "must-not-exist-at-target" "0"
+  assert_marker_count "$container" "after-recovery-target" "0"
   echo "$container promoted at $target_time with expected marker visibility" \
     | tee -a /tmp/wayang-wal-restore-rehearsal.txt
 done
