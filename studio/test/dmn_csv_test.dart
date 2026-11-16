@@ -60,7 +60,7 @@ void main() {
   });
 
   test('headers match by label in any order and case; unknown headers are reported; missing columns get defaults', () {
-    final r = rulesFromCsv(_table(), 'tier , AGE , Extra\n"gold",> 30,whatever', _id);
+    final r = rulesFromCsv(_table(), 'tier , AGE , Extra\n"""gold""",> 30,whatever', _id);
     expect(r.error, isNull);
     expect(r.rules.single.inputEntries, ['> 30', '-']);
     expect(r.rules.single.outputEntries, ['"gold"']);
