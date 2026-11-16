@@ -6,6 +6,7 @@ import 'package:flutter/material.dart' hide DiagnosticLevel;
 import '../../core/theme.dart';
 import '../../models/bpmn.dart';
 import 'bpmn_canvas.dart';
+import 'selection.dart';
 
 /// Maps between canvas coordinates and a minimap of a given pixel [size]. The world shown is every node plus the visible [viewport],
 /// padded, so the viewport rectangle is never off the map.
@@ -105,6 +106,15 @@ class _MinimapPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final lanes = diagram.sortedLanes;
+    if (lanes.isNotEmpty) {
+      final tops = laneLayout(lanes).tops;
+      for (var i = 0; i < lanes.length; i++) {
+        final r = geo.toMap(Rect.fromLTRB(geo.world.left, tops[i], geo.world.right, tops[i] + lanes[i].height));
+        if (i.isOdd) canvas.drawRect(r, Paint()..color = Colors.white.withValues(alpha: 0.04));
+        canvas.drawLine(r.topLeft, r.topRight, Paint()..color = AppColors.darkBorder);
+      }
+    }
     final flow = Paint()
       ..color = AppColors.textSecondaryDark.withValues(alpha: 0.5)
       ..strokeWidth = 1;

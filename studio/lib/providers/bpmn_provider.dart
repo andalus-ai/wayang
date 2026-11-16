@@ -257,10 +257,15 @@ class BpmnController extends StateNotifier<BpmnEditorState> {
     state = state.copyWith(diagram: d);
   }
 
-  /// Ends a group drag with one undo step. [before] is the diagram as it was when the drag began.
-  void endDragGroup(BpmnDiagram before) {
+  /// Ends a group drag with one undo step. [before] is the diagram as it was when the drag began. [lanes] (node id -> lane id, null for
+  /// none) re-assigns lane membership as part of the same step.
+  void endDragGroup(BpmnDiagram before, {Map<String, String?> lanes = const {}}) {
     if (identical(before, state.diagram)) return;
-    final now = state.diagram;
+    var now = state.diagram;
+    for (final e in lanes.entries) {
+      final n = now.node(e.key);
+      if (n != null) now = now.moveNode(e.key, n.x, n.y, laneId: e.value, clearLane: e.value == null);
+    }
     state = state.copyWith(diagram: before);
     _checkpoint();
     state = state.copyWith(diagram: now);
