@@ -9,6 +9,7 @@ import '../../models/wayang.dart';
 import '../../providers/bpmn_provider.dart';
 import 'bpmn_canvas.dart';
 import 'bpmn_panels.dart';
+import 'debug_panel.dart';
 
 String _msg(Object e) => e is WayangApiException ? e.fullMessage : '$e';
 
@@ -45,7 +46,8 @@ class BpmnScreen extends ConsumerWidget {
         if (state.errorMessage != null) _Banner(text: state.errorMessage!, isError: true),
         if (state.publishedVersion != null && !state.dirty) _Banner(text: 'Published as version ${state.publishedVersion}.', isError: false),
         Expanded(
-          child: list.when(
+          child: Column(children: [
+            Expanded(child: list.when(
             loading: () => const LoadingView(label: 'Loading processes…'),
             error: (e, _) => ErrorView(message: _msg(e), onRetry: () => ref.invalidate(bpmnDiagramListProvider)),
             data: (_) {
@@ -105,7 +107,9 @@ class BpmnScreen extends ConsumerWidget {
                 },
               );
             },
-          ),
+          )),
+            if (ref.watch(bpmnDebugOpenProvider) && activeId != null) BpmnDebugPanel(processId: activeId),
+          ]),
         ),
       ],
     );
@@ -201,6 +205,12 @@ class _BpmnToolbar extends ConsumerWidget {
             onPressed: state.canRedo ? controller.redo : null,
           ),
           const Spacer(),
+          IconButton(
+            tooltip: 'Debug a run of this process',
+            icon: Icon(Icons.bug_report_outlined, size: 18, color: ref.watch(bpmnDebugOpenProvider) ? AppColors.primaryBright : AppColors.textSecondaryDark),
+            onPressed: !hasOpen ? null : () => ref.read(bpmnDebugOpenProvider.notifier).state = !ref.read(bpmnDebugOpenProvider),
+          ),
+          const SizedBox(width: 6),
           OutlinedButton.icon(
             onPressed: !hasOpen || state.validating ? null : controller.validate,
             icon: state.validating
