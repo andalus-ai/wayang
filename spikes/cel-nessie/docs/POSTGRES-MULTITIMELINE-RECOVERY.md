@@ -18,8 +18,13 @@ The qualification uses PostgreSQL 17 and disposable Docker volumes:
 5. Commit a child-timeline marker, record a PITR target, then commit markers
    after that target and force WAL switches.
 6. Build an explicit recovery catalog containing two ranges:
-   - timeline 1 from the backup's manifest start through the fork LSN;
-   - timeline 2 from the fork LSN through the PITR target LSN.
+   - timeline 1 from the backup's manifest start through the byte immediately
+     before the fork LSN;
+   - timeline 2 beginning exactly at the fork LSN and ending at the PITR target.
+
+   The fork LSN belongs to the child timeline. Treating the parent end as
+   inclusive at an exact WAL segment boundary would incorrectly require a
+   parent-timeline segment that does not exist.
 7. Run the planner, simulate candidate removal in a disposable archive copy,
    and restore the original backup to the target on timeline 2.
 
