@@ -127,6 +127,7 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
     }
 
     return LayoutBuilder(builder: (context, constraints) {
+    _viewportSize = constraints.biggest;
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.delete): controller.removeSelected,
@@ -142,6 +143,8 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
         const SingleActivator(LogicalKeyboardKey.arrowRight, shift: true): () => _nudge(1, 0, true),
         const SingleActivator(LogicalKeyboardKey.arrowUp, shift: true): () => _nudge(0, -1, true),
         const SingleActivator(LogicalKeyboardKey.arrowDown, shift: true): () => _nudge(0, 1, true),
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true): _find,
+        const SingleActivator(LogicalKeyboardKey.keyF, meta: true): _find,
         const SingleActivator(LogicalKeyboardKey.keyC, control: true): _copy,
         const SingleActivator(LogicalKeyboardKey.keyC, meta: true): _copy,
         const SingleActivator(LogicalKeyboardKey.keyX, control: true): _cut,
@@ -346,6 +349,7 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
               onReset: _resetView,
               onFit: () => _zoomToFit(diagram, constraints.biggest),
               boxMode: _boxMode,
+              onFind: _find,
               snap: ref.watch(bpmnSnapProvider),
               onToggleSnap: () => ref.read(bpmnSnapProvider.notifier).state = !ref.read(bpmnSnapProvider),
               onToggleBox: () => setState(() {
@@ -381,6 +385,19 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
   void _nudge(int sx, int sy, bool fine) {
     final step = nudgeStep(fine: fine, grid: bpmnGrid);
     ref.read(bpmnControllerProvider.notifier).nudgeSelected(sx * step, sy * step);
+  }
+
+  Size _viewportSize = Size.zero;
+
+  /// Ctrl/Cmd+F: pick a node by name, id or type; it is selected and brought to the middle of the view.
+  Future<void> _find() async {
+    final diagram = ref.read(bpmnControllerProvider).diagram;
+    final picked = await showDialog<BpmnNode>(context: context, builder: (_) => _FindNodeDialog(diagram: diagram));
+    if (picked == null || !mounted) return;
+    ref.read(bpmnControllerProvider.notifier).selectNode(picked.id);
+    final s = bpmnNodeSize(picked.type);
+    _transformController.value = matrixCenteredOn(_transformController.value, Offset(picked.x + s.width / 2, picked.y + s.height / 2), _viewportSize);
+    _focus.requestFocus();
   }
 
   void _copy() {
@@ -492,7 +509,7 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
 }
 
 class _BpmnZoomControls extends StatelessWidget {
-  const _BpmnZoomControls({required this.onZoomIn, required this.onZoomOut, required this.onReset, required this.onFit, required this.boxMode, required this.onToggleBox, required this.snap, required this.onToggleSnap});
+  const _BpmnZoomControls({required this.onZoomIn, required this.onZoomOut, required this.onReset, required this.onFit, required this.boxMode, required this.onToggleBox, required this.snap, required this.onToggleSnap, required this.onFind});
   final VoidCallback onZoomIn;
   final VoidCallback onZoomOut;
   final VoidCallback onReset;
@@ -501,6 +518,7 @@ class _BpmnZoomControls extends StatelessWidget {
   final VoidCallback onToggleBox;
   final bool snap;
   final VoidCallback onToggleSnap;
+  final VoidCallback onFind;
 
   @override
   Widget build(BuildContext context) {
@@ -514,6 +532,7 @@ class _BpmnZoomControls extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          Tooltip(message: 'Find a node (Ctrl+F)', child: InkWell(onTap: onFind, borderRadius: BorderRadius.circular(AppRadius.sm), child: const Padding(padding: EdgeInsets.all(7), child: Icon(Icons.search_rounded, size: 17, color: AppColors.textSecondaryDark)))),
           Tooltip(message: snap ? 'Snap to grid on' : 'Snap to grid', child: InkWell(onTap: onToggleSnap, borderRadius: BorderRadius.circular(AppRadius.sm), child: Padding(padding: const EdgeInsets.all(7), child: Icon(Icons.grid_4x4_rounded, size: 17, color: snap ? AppColors.primaryBright : AppColors.textSecondaryDark)))),
           Tooltip(message: boxMode ? 'Box select on (drag on empty canvas)' : 'Box select', child: InkWell(onTap: onToggleBox, borderRadius: BorderRadius.circular(AppRadius.sm), child: Padding(padding: const EdgeInsets.all(7), child: Icon(Icons.select_all_rounded, size: 17, color: boxMode ? AppColors.primaryBright : AppColors.textSecondaryDark)))),
           Tooltip(message: 'Zoom out', child: InkWell(onTap: onZoomOut, borderRadius: BorderRadius.circular(AppRadius.sm), child: const Padding(padding: EdgeInsets.all(7), child: Icon(Icons.remove_rounded, size: 17, color: AppColors.textSecondaryDark)))),
@@ -943,6 +962,56 @@ class _BpmnPortDot extends StatelessWidget {
         shape: BoxShape.circle,
         border: Border.all(color: color, width: 1.4),
       ),
+    );
+  }
+}
+
+
+class _FindNodeDialog extends StatefulWidget {
+  const _FindNodeDialog({required this.diagram});
+  final BpmnDiagram diagram;
+
+  @override
+  State<_FindNodeDialog> createState() => _FindNodeDialogState();
+}
+
+class _FindNodeDialogState extends State<_FindNodeDialog> {
+  String _q = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final hits = findNodes(widget.diagram, _q);
+    return AlertDialog(
+      title: const Text('Find a node'),
+      content: SizedBox(
+        width: 420,
+        height: 340,
+        child: Column(children: [
+          TextField(
+            autofocus: true,
+            decoration: const InputDecoration(prefixIcon: Icon(Icons.search_rounded), hintText: 'Name, id or type'),
+            onChanged: (v) => setState(() => _q = v),
+            onSubmitted: (_) {
+              if (hits.isNotEmpty) Navigator.pop(context, hits.first);
+            },
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: hits.isEmpty
+                ? const Center(child: Text('No node matches.'))
+                : ListView(children: [
+                    for (final n in hits)
+                      ListTile(
+                        dense: true,
+                        title: Text(n.label.isEmpty ? n.id : n.label),
+                        subtitle: Text('${n.type.label} · ${n.id}', style: const TextStyle(fontSize: 11)),
+                        onTap: () => Navigator.pop(context, n),
+                      ),
+                  ]),
+          ),
+        ]),
+      ),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
     );
   }
 }
