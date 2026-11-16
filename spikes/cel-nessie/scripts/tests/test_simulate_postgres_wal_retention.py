@@ -61,7 +61,7 @@ class WalRetentionSimulationTest(unittest.TestCase):
         report = simulate(self.archive, self.plan, destination, remove_required_wal=True)
 
         self.assertFalse((destination / REQUIRED).exists())
-        self.assertFalse((self.archive / REQUIRED).exists() is False)
+        self.assertTrue((self.archive / REQUIRED).is_file())
         self.assertEqual(report["removed_required_files"], [REQUIRED])
         self.assertEqual(report["required_wal_present"], [])
 
