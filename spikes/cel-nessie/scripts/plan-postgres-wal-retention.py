@@ -86,7 +86,7 @@ def expand_wal_range(timeline: int, start_lsn: str, end_lsn: str,
     }
 
 
-def _load_catalog(catalog_path: Path) -> tuple[list[tuple[str, Path, bytes]], int, str]:
+def _load_catalog(catalog_path: Path) -> tuple[list[tuple[str, Path, bytes, list[dict[str, Any]] | None]], int, str]:
     try:
         catalog_bytes = catalog_path.read_bytes()
         catalog = json.loads(catalog_bytes.decode("utf-8"))
@@ -102,7 +102,7 @@ def _load_catalog(catalog_path: Path) -> tuple[list[tuple[str, Path, bytes]], in
         raise CatalogError("WAL segment size must be a power of two dividing 2^32")
 
     catalog_base = catalog_path.resolve().parent
-    retained: list[tuple[str, Path, bytes]] = []
+    retained: list[tuple[str, Path, bytes, list[dict[str, Any]] | None]] = []
     seen: set[str] = set()
     digest = hashlib.sha256()
     digest.update(b"wayang-postgres-wal-catalog-snapshot-v1|")
@@ -124,6 +124,10 @@ def _load_catalog(catalog_path: Path) -> tuple[list[tuple[str, Path, bytes]], in
             raise CatalogError(f"backup {backup_id}: retained must be boolean")
         if not keep:
             continue
+
+        recovery_ranges = item.get("recovery_wal_ranges")
+        if recovery_ranges is not None and (not isinstance(recovery_ranges, list) or not recovery_ranges):
+            raise CatalogError(f"backup {backup_id}: recovery_wal_ranges must be a non-empty array")
 
         manifest = item.get("manifest")
         if not isinstance(manifest, str) or not manifest.strip():
@@ -157,7 +161,7 @@ def _load_catalog(catalog_path: Path) -> tuple[list[tuple[str, Path, bytes]], in
         digest.update(backup_id_bytes)
         digest.update(len(manifest_bytes).to_bytes(8, "big"))
         digest.update(manifest_bytes)
-        retained.append((backup_id, manifest_path, manifest_bytes))
+        retained.append((backup_id, manifest_path, manifest_bytes, recovery_ranges))
 
     if not retained:
         raise CatalogError("catalog has no retained backups; refusing to plan deletion")
@@ -171,24 +175,30 @@ def build_plan(archive_dir: Path, catalog_path: Path, cutoff_epoch: float) -> Re
 
     required: set[str] = set()
     required_timelines: set[int] = set()
-    for backup_id, _manifest_path, manifest_bytes in retained:
+    for backup_id, _manifest_path, manifest_bytes, recovery_ranges in retained:
         try:
             manifest = json.loads(manifest_bytes.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise CatalogError(f"backup {backup_id}: cannot read manifest: {exc}") from exc
-        ranges = manifest.get("WAL-Ranges") if isinstance(manifest, dict) else None
-        if not isinstance(ranges, list) or not ranges:
-            raise CatalogError(f"backup {backup_id}: manifest has no WAL-Ranges")
-        for wal_range in ranges:
-            if not isinstance(wal_range, dict):
-                raise CatalogError(f"backup {backup_id}: malformed WAL-Ranges entry")
-            timeline = wal_range.get("Timeline")
-            if not isinstance(timeline, int) or isinstance(timeline, bool) or timeline < 1:
-                raise CatalogError(f"backup {backup_id}: invalid WAL timeline")
-            required_timelines.add(timeline)
-            required.update(expand_wal_range(
-                timeline, wal_range.get("Start-LSN"), wal_range.get("End-LSN"), segment_size
-            ))
+
+        def include_ranges(ranges: Any, label: str) -> None:
+            if not isinstance(ranges, list) or not ranges:
+                raise CatalogError(f"backup {backup_id}: {label} must be a non-empty array")
+            for wal_range in ranges:
+                if not isinstance(wal_range, dict):
+                    raise CatalogError(f"backup {backup_id}: malformed {label} entry")
+                timeline = wal_range.get("Timeline")
+                if not isinstance(timeline, int) or isinstance(timeline, bool) or timeline < 1:
+                    raise CatalogError(f"backup {backup_id}: invalid WAL timeline in {label}")
+                required_timelines.add(timeline)
+                required.update(expand_wal_range(
+                    timeline, wal_range.get("Start-LSN"), wal_range.get("End-LSN"), segment_size
+                ))
+
+        manifest_ranges = manifest.get("WAL-Ranges") if isinstance(manifest, dict) else None
+        include_ranges(manifest_ranges, "manifest WAL-Ranges")
+        if recovery_ranges is not None:
+            include_ranges(recovery_ranges, "recovery_wal_ranges")
 
     files: dict[str, Path] = {}
     for path in archive_dir.iterdir():
@@ -223,7 +233,7 @@ def build_plan(archive_dir: Path, catalog_path: Path, cutoff_epoch: float) -> Re
             other.append(name)
 
     return RetentionPlan(
-        retained_backup_ids=tuple(sorted(backup_id for backup_id, _, _ in retained)),
+        retained_backup_ids=tuple(sorted(backup_id for backup_id, _, _, _ in retained)),
         archive_files=tuple(sorted(files)),
         required_wal_files=tuple(sorted(required)),
         protected_history_files=tuple(sorted(history)),
