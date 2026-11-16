@@ -85,6 +85,55 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
         self.assertEqual((unrelated,), plan.eligible_wal_files)
         self.assertFalse(plan.missing_required_files)
 
+    def test_explicit_recovery_range_protects_wal_beyond_backup_manifest(self):
+        manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
+        required = {
+            "000000010000000000000000",
+            "000000010000000000000001",
+            "000000010000000000000002",
+        }
+        for name in required:
+            self.put_archive_file(name)
+        unrelated = "000000010000000000000010"
+        self.put_archive_file(unrelated)
+        self.write_catalog([{
+            "backup_id": "base",
+            "retained": True,
+            "manifest": manifest,
+            "recovery_wal_ranges": [self.range(end="0/02000000")],
+        }])
+
+        plan = build_plan(self.archive, self.catalog_path, self.cutoff)
+
+        self.assertEqual(tuple(sorted(required)), plan.required_wal_files)
+        self.assertEqual((unrelated,), plan.eligible_wal_files)
+
+    def test_missing_wal_inside_explicit_recovery_range_fails_closed(self):
+        manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
+        self.put_archive_file("000000010000000000000000")
+        self.write_catalog([{
+            "backup_id": "base",
+            "retained": True,
+            "manifest": manifest,
+            "recovery_wal_ranges": [self.range(end="0/02000000")],
+        }])
+
+        with self.assertRaisesRegex(CatalogError, "missing required WAL"):
+            build_plan(self.archive, self.catalog_path, self.cutoff)
+
+    def test_empty_explicit_recovery_range_is_rejected(self):
+        manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
+        self.put_archive_file("000000010000000000000000")
+        self.write_catalog([{
+            "backup_id": "base",
+            "retained": True,
+            "manifest": manifest,
+            "recovery_wal_ranges": [],
+        }])
+
+        with self.assertRaisesRegex(CatalogError, "recovery_wal_ranges must be a non-empty array"):
+            build_plan(self.archive, self.catalog_path, self.cutoff)
+
     def test_recent_wal_and_unknown_files_are_protected(self):
         manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
         required = "000000010000000000000000"
