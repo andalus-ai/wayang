@@ -46,7 +46,7 @@ public final class DeploymentLifecycleReconciliationWorker {
     /** Processes at most {@code limit} terminal receipts; callers own scheduling and back-pressure. */
     public DeploymentLifecycleReconciliationWorkerResult runOnce(int limit) {
         if (limit < 1 || limit > 1000) throw new IllegalArgumentException("limit must be between 1 and 1000");
-        List<DeploymentOperationReceipt> candidates = receipts.findTerminalReceipts(limit);
+        List<DeploymentOperationReceipt> candidates = receipts.findTerminalReceipts(clock.instant(), limit);
         int claimed = 0;
         int reconciled = 0;
         int waiting = 0;
