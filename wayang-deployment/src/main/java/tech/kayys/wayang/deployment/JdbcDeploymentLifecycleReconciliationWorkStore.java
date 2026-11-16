@@ -65,7 +65,13 @@ public final class JdbcDeploymentLifecycleReconciliationWorkStore
                 return true;
             } catch (SQLException failure) {
                 rollback(connection, failure);
-                if (isConstraintViolation(failure)) return false;
+                if (isUniqueViolation(failure)) {
+                    String existingFingerprint = findFingerprint(receipt.deploymentId(), receipt.operationKey());
+                    if (existingFingerprint != null && !existingFingerprint.equals(receipt.commandFingerprint())) {
+                        throw new SecurityException("Reconciliation work key was reused with a different command fingerprint");
+                    }
+                    return false;
+                }
                 throw new IllegalStateException("Unable to claim lifecycle reconciliation work", failure);
             } catch (RuntimeException failure) {
                 rollback(connection, failure);
@@ -113,8 +119,25 @@ public final class JdbcDeploymentLifecycleReconciliationWorkStore
         }
     }
 
-    private static boolean isConstraintViolation(SQLException failure) {
-        return failure.getSQLState() != null && failure.getSQLState().startsWith("23");
+    private String findFingerprint(String deploymentId, String operationKey) {
+        String sql = """
+                SELECT command_fingerprint FROM wayang_deployment_reconciliation_work
+                WHERE deployment_id = ? AND operation_key = ?
+                """;
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, deploymentId);
+            statement.setString(2, operationKey);
+            try (var result = statement.executeQuery()) {
+                return result.next() ? result.getString(1) : null;
+            }
+        } catch (SQLException failure) {
+            throw new IllegalStateException("Unable to verify reconciliation work identity", failure);
+        }
+    }
+
+    private static boolean isUniqueViolation(SQLException failure) {
+        return "23505".equals(failure.getSQLState());
     }
 
     private static void rollback(Connection connection, Throwable failure) {
