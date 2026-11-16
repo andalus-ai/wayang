@@ -20,7 +20,7 @@
   unchanged name records nothing. Double-click makes a single click on a node or flow register a moment later.
 - **Notes:** right-click empty canvas, "Add note here". Drag a note to move it (one undo step), double-click to edit (up to 1000 characters), right-click for
   edit/delete. Notes are saved in `studio.meta.notes` of the document: text for people, never part of the process and never sent to the engine. They
-  are not selected, copied, tidied or drawn in the SVG export yet.
+  appear on the minimap and in the SVG export (wrapped, at most six lines); they are not selected, copied or tidied.
 - **Export as image:** right-click empty canvas, "Copy diagram as SVG", then paste into a file ending `.svg` (Studio has no file-save yet).
   The picture has lanes, flows with arrows and labels, and node names; it contains no scripts or external references, every label is escaped,
   and node settings are never included.

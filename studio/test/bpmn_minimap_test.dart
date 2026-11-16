@@ -37,4 +37,11 @@ void main() {
     final back = geo.toCanvas(geo.toMap(const Rect.fromLTWH(500, 300, 1, 1)).topLeft);
     expect((back - const Offset(500, 300)).distance < 0.001, isTrue);
   });
+
+  test('a note far from the nodes is still inside the map', () {
+    final withNote = diagram.putNote(const BpmnNote(id: 'n', x: 5000, y: 3000));
+    final geo = MinimapGeometry.of(withNote, const Rect.fromLTWH(0, 0, 900, 600), const Size(200, 120));
+    final r = geo.toMap(const Rect.fromLTWH(5000, 3000, BpmnNote.width, BpmnNote.height));
+    expect(const Rect.fromLTWH(0, 0, 200, 120).inflate(0.001).contains(r.bottomRight), isTrue);
+  });
 }
