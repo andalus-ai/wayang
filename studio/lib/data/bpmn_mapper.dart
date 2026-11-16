@@ -39,6 +39,11 @@ Map<String, dynamic> bpmnToDocument(BpmnDiagram d) {
       'default': f.isDefault,
     });
   }
+  // Flow labels are drawing text, not process logic: they live in the studio envelope so the engine never sees them.
+  final flowLabels = <String, dynamic>{
+    for (final f in d.flows.values)
+      if (f.label.trim().isNotEmpty) f.id: f.label,
+  };
   return {
     'id': d.id,
     'name': d.name,
@@ -53,6 +58,7 @@ Map<String, dynamic> bpmnToDocument(BpmnDiagram d) {
           for (final l in d.sortedLanes) {'id': l.id, 'name': l.name, 'order': l.order, 'height': l.height},
         ],
         'nodeLanes': nodeLanes,
+        if (flowLabels.isNotEmpty) 'flowLabels': flowLabels,
       },
     },
   };
@@ -113,6 +119,7 @@ BpmnDiagram bpmnFromDocument(Map<String, dynamic> doc, {int? revision}) {
     i++;
   }
 
+  final flowLabels = asMap(meta['flowLabels']);
   final flows = <String, BpmnFlow>{};
   for (final f in asList(doc['flows'])) {
     final m = asMap(f);
@@ -123,10 +130,12 @@ BpmnDiagram bpmnFromDocument(Map<String, dynamic> doc, {int? revision}) {
       throw const DocumentFormatException('A flow has no id, source or target.');
     }
     final cond = m['condition'];
+    final storedLabel = flowLabels[id];
     flows[id] = BpmnFlow(
       id: id,
       from: source,
       to: target,
+      label: storedLabel is String ? storedLabel : '',
       condition: cond is String && cond.trim().isNotEmpty ? cond : null,
       isDefault: m['default'] == true,
     );

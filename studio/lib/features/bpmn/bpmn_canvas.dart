@@ -210,6 +210,12 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
                               if (ref.read(bpmnControllerProvider).selectedFlowId == before) controller.clearSelection();
                             },
                             onSecondaryTapUp: (d) => _emptyOrFlowMenu(d.globalPosition, d.localPosition),
+                            onDoubleTapDown: (d) => _doubleTapAt = d.localPosition,
+                            onDoubleTap: () {
+                              final at = _doubleTapAt;
+                              final flow = at == null ? null : _flowAt(at, ref.read(bpmnControllerProvider).diagram);
+                              if (flow != null) _editFlowLabel(flow.id);
+                            },
                             onPanStart: _boxMode ? (d) => setState(() => _boxStart = d.localPosition) : null,
                             onPanUpdate: _boxMode
                                 ? (d) => setState(() => _box = _boxStart == null ? null : rectBetween(_boxStart!, d.localPosition))
@@ -268,6 +274,7 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
                                 }
                               },
                               onContextMenu: (pos) => _nodeMenu(pos, node.id),
+                              onRename: () => _renameNode(node.id),
                               onPanStart: (details) {
                                 _dragNodeId = node.id;
                                 _dragStartCanvasPos = _canvasPositionOf(details.globalPosition);
@@ -411,6 +418,7 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
   }
 
   Size _viewportSize = Size.zero;
+  Offset? _doubleTapAt;
 
   /// Ctrl/Cmd+F: pick a node by name, id or type; it is selected and brought to the middle of the view.
   Future<void> _find() async {
@@ -420,6 +428,22 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
     ref.read(bpmnControllerProvider.notifier).selectNode(picked.id);
     final s = bpmnNodeSize(picked.type);
     _transformController.value = matrixCenteredOn(_transformController.value, Offset(picked.x + s.width / 2, picked.y + s.height / 2), _viewportSize);
+    _focus.requestFocus();
+  }
+
+  Future<void> _renameNode(String id) async {
+    final node = ref.read(bpmnControllerProvider).diagram.node(id);
+    if (node == null) return;
+    final text = await showDialog<String>(context: context, builder: (_) => _TextPromptDialog(title: 'Rename ${node.type.label}', label: 'Name', initial: node.label));
+    if (text != null && mounted) ref.read(bpmnControllerProvider.notifier).updateNodeLabel(id, text.trim());
+    _focus.requestFocus();
+  }
+
+  Future<void> _editFlowLabel(String id) async {
+    final flow = ref.read(bpmnControllerProvider).diagram.flows[id];
+    if (flow == null) return;
+    final text = await showDialog<String>(context: context, builder: (_) => _TextPromptDialog(title: 'Flow label', label: 'Label', initial: flow.label));
+    if (text != null && mounted) ref.read(bpmnControllerProvider.notifier).setFlowLabel(id, text.trim());
     _focus.requestFocus();
   }
 
@@ -445,6 +469,7 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
     final count = ref.read(bpmnControllerProvider).selectedNodeIds.length;
     showBpmnContextMenu(context, global, [
       BpmnMenuItem(count > 1 ? '$count nodes' : 'Node'),
+      if (count == 1) BpmnMenuItem('Rename', icon: Icons.edit_outlined, onTap: () => _renameNode(nodeId)),
       BpmnMenuItem('Duplicate', icon: Icons.copy_rounded, onTap: controller.duplicateSelected),
       BpmnMenuItem('Copy', icon: Icons.content_copy_rounded, onTap: _copy),
       BpmnMenuItem('Cut', icon: Icons.content_cut_rounded, onTap: _cut),
@@ -466,6 +491,7 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
       controller.selectFlow(flow.id);
       showBpmnContextMenu(context, global, [
         const BpmnMenuItem('Flow'),
+        BpmnMenuItem('Edit label', icon: Icons.edit_outlined, onTap: () => _editFlowLabel(flow.id)),
         BpmnMenuItem(flow.isDefault ? 'Not the default flow' : 'Make default flow',
             icon: Icons.alt_route_rounded, onTap: () => controller.setFlowDefault(flow.id, !flow.isDefault)),
         BpmnMenuItem('Delete flow', icon: Icons.delete_outline_rounded, destructive: true, divider: true, onTap: controller.removeSelected),
@@ -763,6 +789,7 @@ class _BpmnNodeWidget extends StatelessWidget {
     required this.highlighted,
     required this.onTap,
     required this.onContextMenu,
+    required this.onRename,
     required this.onPanStart,
     required this.onPanUpdate,
     required this.onPanEnd,
@@ -777,6 +804,7 @@ class _BpmnNodeWidget extends StatelessWidget {
   final bool highlighted;
   final VoidCallback onTap;
   final void Function(Offset globalPosition) onContextMenu;
+  final VoidCallback onRename;
   final GestureDragStartCallback onPanStart;
   final GestureDragUpdateCallback onPanUpdate;
   final GestureDragEndCallback onPanEnd;
@@ -810,6 +838,7 @@ class _BpmnNodeWidget extends StatelessWidget {
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: onTap,
+            onDoubleTap: onRename,
             onSecondaryTapUp: (d) => onContextMenu(d.globalPosition),
             onPanStart: onPanStart,
             onPanUpdate: onPanUpdate,
@@ -1043,4 +1072,44 @@ class _FindNodeDialogState extends State<_FindNodeDialog> {
       actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
     );
   }
+}
+
+
+class _TextPromptDialog extends StatefulWidget {
+  const _TextPromptDialog({required this.title, required this.label, required this.initial});
+  final String title;
+  final String label;
+  final String initial;
+
+  @override
+  State<_TextPromptDialog> createState() => _TextPromptDialogState();
+}
+
+class _TextPromptDialogState extends State<_TextPromptDialog> {
+  late final TextEditingController _c = TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(widget.title),
+        content: SizedBox(
+          width: 360,
+          child: TextField(
+            controller: _c,
+            autofocus: true,
+            maxLength: 200,
+            decoration: InputDecoration(labelText: widget.label),
+            onSubmitted: (v) => Navigator.pop(context, v),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, _c.text), child: const Text('Save')),
+        ],
+      );
 }
