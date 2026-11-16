@@ -172,7 +172,7 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
 
         self.write_manifest("backup.json", [self.range(end="0/00000000", start="0/00000000")])
         manifest_path = self.root / "backup.json"
-        manifest_path.write_text(manifest_path.read_text(encoding="utf-8") + "\\n", encoding="utf-8")
+        manifest_path.write_text(manifest_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
         second = build_plan(self.archive, self.catalog_path, self.cutoff)
         with self.assertRaisesRegex(CatalogError, "snapshot changed"):
             require_snapshot_match(second, first.catalog_snapshot_sha256)
