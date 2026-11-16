@@ -27,6 +27,7 @@ done
 docker run --detach --name "$source_container" \
   --volume "$source_volume:/var/lib/postgresql/data" \
   --volume "$archive_volume:/wal-archive" \
+  --volume "$backup_volume:/base-backup" \
   --env POSTGRES_DB=wayang_timeline \
   --env POSTGRES_USER=postgres \
   --env POSTGRES_PASSWORD=postgres \
@@ -56,20 +57,14 @@ sql() {
 }
 
 wait_ready "$source_container"
-docker exec --user root "$source_container" chown postgres:postgres /wal-archive
+docker exec --user root "$source_container" chown postgres:postgres /wal-archive /base-backup
 sql "$source_container" -c "CREATE TABLE timeline_marker (marker TEXT PRIMARY KEY)"
 sql "$source_container" -c "INSERT INTO timeline_marker VALUES ('baseline-before-fork')"
 
 # The base backup is deliberately taken before any promotion. Its manifest
 # and recovery catalog therefore start on timeline 1.
 docker exec -e PGPASSWORD=postgres "$source_container" pg_basebackup \
-  -h 127.0.0.1 -U postgres -D /tmp/wayang-base-backup -Fp -X none -P
-docker run --rm --volume "$backup_volume:/backup" postgres:17 true
-docker cp "$source_container:/tmp/wayang-base-backup/." "$backup_volume" 2>/dev/null || true
-# pg_basebackup writes to a container-local path; copy it to the dedicated
-# volume through a short-lived helper container.
-docker run --rm --volumes-from "$source_container":ro --volume "$backup_volume:/backup" \
-  --entrypoint sh postgres:17 -c "cp -a /tmp/wayang-base-backup/. /backup/ && chown -R postgres:postgres /backup"
+  -h 127.0.0.1 -U postgres -D /base-backup -Fp -X none -P
 
 sql "$source_container" -c "INSERT INTO timeline_marker VALUES ('parent-timeline-marker')"
 sql "$source_container" -c "SELECT pg_switch_wal()" >/dev/null
