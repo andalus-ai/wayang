@@ -5,3 +5,6 @@
   and a save keeps the history.
 - **Rules:** each row has move up, move down, duplicate (a copy right below, new id) and delete. Order matters for hit policies such as FIRST and RULE ORDER.
 - Inside a text field Ctrl+Z undoes the table, not just the field, because the editor handles the shortcut first.
+- **Filter:** the box above the grid shows only the rules where every word you type appears (case-insensitive) in the id, a condition, a result or the note. Reordering is
+  off while a filter is on, so a move never swaps with a hidden rule. Rule numbers shown are the real positions.
+- **Keyboard:** in a cell, Up and Down (and Enter) move to the cell above or below; Tab moves along the row. Left and Right still move the caret.
