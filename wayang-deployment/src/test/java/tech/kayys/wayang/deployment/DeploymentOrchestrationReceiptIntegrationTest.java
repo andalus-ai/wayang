@@ -36,6 +36,39 @@ class DeploymentOrchestrationReceiptIntegrationTest {
     }
 
     @Test
+    void persistsReconciliationContextBeforeTargetDispatch() {
+        var contextStore = new InMemoryContextStore();
+        var receiptService = new DeploymentOperationReceiptService(receipts, Clock.fixed(NOW, ZoneOffset.UTC));
+        var withContext = new DeploymentOrchestrationService(ledger, lifecycle, targets,
+                Clock.fixed(NOW, ZoneOffset.UTC), receiptService, contextStore);
+        var dispatchedWithContext = new java.util.concurrent.atomic.AtomicBoolean();
+        targets.register("target-a", new DeploymentTarget() {
+            @Override public TargetOperationResult activate(DeploymentCommand command, Duration timeout) {
+                var receipt = receipts.find(command.deploymentId(), command.idempotencyKey()).orElseThrow();
+                dispatchedWithContext.set(contextStore.find(receipt).isPresent());
+                return new TargetOperationResult(TargetOperationResult.Status.SUCCEEDED,
+                        "target-op", "activated", NOW);
+            }
+            @Override public TargetOperationResult deactivate(DeploymentCommand command, Duration timeout) { return null; }
+            @Override public TargetOperationResult rollback(DeploymentCommand command, Duration timeout) { return null; }
+            @Override public HealthCheckResult healthCheck(DeploymentCommand command, Duration timeout) {
+                return new HealthCheckResult(HealthOutcome.HEALTHY, Map.of("ready", true), "healthy", NOW);
+            }
+        });
+
+        var result = withContext.activateDurably(command("context-before-dispatch"), "operator",
+                "activate release", "corr-context", Duration.ofSeconds(30));
+
+        assertTrue(result.dispatched());
+        assertTrue(dispatchedWithContext.get());
+        var stored = contextStore.find(result.receipt()).orElseThrow();
+        assertEquals("operator", stored.actor());
+        assertEquals("activate release", stored.reason());
+        assertEquals("corr-context", stored.correlationId());
+        assertEquals(command("context-before-dispatch"), stored.command());
+    }
+
+    @Test
     void activationReplayDoesNotCallTargetTwiceOrInventAResult() {
         var calls = new AtomicInteger();
         targets.register("target-a", target(calls));
@@ -138,6 +171,26 @@ class DeploymentOrchestrationReceiptIntegrationTest {
                 return new HealthCheckResult(HealthOutcome.HEALTHY, Map.of("ready", true), "healthy", NOW);
             }
         };
+    }
+
+    private static final class InMemoryContextStore implements DeploymentLifecycleReconciliationContextStore {
+        private final Map<String, DeploymentLifecycleReconciliationContext> values = new HashMap<>();
+
+        @Override public synchronized void save(DeploymentLifecycleReconciliationContext context) {
+            String key = context.command().deploymentId() + "/" + context.command().idempotencyKey();
+            var existing = values.putIfAbsent(key, context);
+            if (existing != null && !existing.equals(context)) {
+                throw new SecurityException("context identity conflict");
+            }
+        }
+
+        @Override public synchronized Optional<DeploymentLifecycleReconciliationContext> find(
+                DeploymentOperationReceipt receipt) {
+            var context = values.get(receipt.deploymentId() + "/" + receipt.operationKey());
+            if (context == null || !context.commandFingerprint().equals(receipt.commandFingerprint())
+                    || !context.operation().equals(receipt.operation())) return Optional.empty();
+            return Optional.of(context);
+        }
     }
 
     private static final class ReceiptStore implements DeploymentOperationReceiptStore {
