@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/utils.dart';
@@ -28,6 +29,9 @@ class DmnEditorState {
     this.table,
     this.dirty = false,
     this.saving = false,
+    this.canUndo = false,
+    this.canRedo = false,
+    this.epoch = 0,
     this.report,
     this.publishedVersion,
     this.error,
@@ -36,6 +40,11 @@ class DmnEditorState {
   final DmnDecisionTable? table;
   final bool dirty;
   final bool saving;
+  final bool canUndo;
+  final bool canRedo;
+
+  /// Bumped by undo/redo so the grid's text fields (which only read their initial value) are rebuilt with the restored text.
+  final int epoch;
 
   /// Last server-side validation of the table (null = not validated since the last edit).
   final ValidationReport? report;
@@ -49,6 +58,9 @@ class DmnEditorState {
     DmnDecisionTable? table,
     bool? dirty,
     bool? saving,
+    bool? canUndo,
+    bool? canRedo,
+    int? epoch,
     ValidationReport? report,
     bool clearReport = false,
     int? publishedVersion,
@@ -61,6 +73,9 @@ class DmnEditorState {
       table: table ?? this.table,
       dirty: dirty ?? this.dirty,
       saving: saving ?? this.saving,
+      canUndo: canUndo ?? this.canUndo,
+      canRedo: canRedo ?? this.canRedo,
+      epoch: epoch ?? this.epoch,
       report: clearReport ? null : (report ?? this.report),
       publishedVersion: clearPublished ? null : (publishedVersion ?? this.publishedVersion),
       error: clearError ? null : (error ?? this.error),
@@ -71,25 +86,70 @@ class DmnEditorState {
 /// Owns the currently-open decision table's edit buffer (so cell edits feel
 /// instant) and flushes to the repository on save.
 class DmnController extends StateNotifier<DmnEditorState> {
-  DmnController(this._repo, String tableId) : super(const DmnEditorState()) {
-    _load(tableId);
+  DmnController(this._repo, String tableId, {DateTime Function()? now})
+      : _now = now ?? DateTime.now,
+        super(const DmnEditorState()) {
+    if (tableId.isNotEmpty) _load(tableId);
   }
 
   final WayangRepository _repo;
+  final DateTime Function() _now;
+
+  static const _maxHistory = 100;
+  static const _coalesceWindow = Duration(milliseconds: 1000);
+  final List<DmnDecisionTable> _undo = [];
+  final List<DmnDecisionTable> _redo = [];
+  String? _lastKey;
+  DateTime? _lastAt;
+
+  /// Puts [table] in the editor without touching the server (tests only).
+  @visibleForTesting
+  void seed(DmnDecisionTable table) => state = state.copyWith(loading: false, table: table, dirty: false);
 
   Future<void> _load(String tableId) async {
     state = state.copyWith(loading: true, clearError: true);
     try {
       final table = await _repo.loadTable(tableId);
-      state = state.copyWith(loading: false, table: table, dirty: false);
+      _undo.clear();
+      _redo.clear();
+      state = state.copyWith(loading: false, table: table, dirty: false, canUndo: false, canRedo: false);
     } catch (e) {
       state = state.copyWith(loading: false, error: '$e');
     }
   }
 
   /// Every edit goes through here so stale validation/publish state is dropped.
-  void _edit(DmnDecisionTable next) {
-    state = state.copyWith(table: next, dirty: true, clearReport: true, clearPublished: true);
+  ///
+  /// Each edit is one undo step, except that typing into the same cell (same [coalesce] key) within a second is one step, so undo does not
+  /// walk back letter by letter.
+  void _edit(DmnDecisionTable next, {String? coalesce}) {
+    final before = state.table;
+    final at = _now();
+    final merge = coalesce != null && coalesce == _lastKey && _lastAt != null && at.difference(_lastAt!) < _coalesceWindow;
+    if (before != null && !merge) {
+      _undo.add(before);
+      if (_undo.length > _maxHistory) _undo.removeAt(0);
+    }
+    _redo.clear();
+    _lastKey = coalesce;
+    _lastAt = at;
+    state = state.copyWith(table: next, dirty: true, clearReport: true, clearPublished: true, canUndo: _undo.isNotEmpty, canRedo: false);
+  }
+
+  void undo() {
+    final t = state.table;
+    if (t == null || _undo.isEmpty) return;
+    _redo.add(t);
+    _lastKey = null;
+    state = state.copyWith(table: _undo.removeLast(), dirty: true, clearReport: true, clearPublished: true, canUndo: _undo.isNotEmpty, canRedo: true, epoch: state.epoch + 1);
+  }
+
+  void redo() {
+    final t = state.table;
+    if (t == null || _redo.isEmpty) return;
+    _undo.add(t);
+    _lastKey = null;
+    state = state.copyWith(table: _redo.removeLast(), dirty: true, clearReport: true, clearPublished: true, canUndo: true, canRedo: _redo.isNotEmpty, epoch: state.epoch + 1);
   }
 
   void setHitPolicy(DmnHitPolicy policy) {
@@ -107,7 +167,7 @@ class DmnController extends StateNotifier<DmnEditorState> {
   void renameTable(String name) {
     final t = state.table;
     if (t == null) return;
-    _edit(t.copyWith(name: name));
+    _edit(t.copyWith(name: name), coalesce: 'name');
   }
 
   void addInputColumn(String label) {
@@ -151,25 +211,49 @@ class DmnController extends StateNotifier<DmnEditorState> {
     _edit(t.removeRule(ruleId));
   }
 
+  /// Copies a rule right below itself (new id, same entries).
+  void duplicateRule(String ruleId) {
+    final t = state.table;
+    if (t == null) return;
+    final i = t.rules.indexWhere((r) => r.id == ruleId);
+    if (i < 0) return;
+    final src = t.rules[i];
+    final copy = DmnRule(id: 'rule_${_now().microsecondsSinceEpoch}', inputEntries: [...src.inputEntries], outputEntries: [...src.outputEntries], annotation: src.annotation);
+    _edit(t.copyWith(rules: [...t.rules.sublist(0, i + 1), copy, ...t.rules.sublist(i + 1)]));
+  }
+
+  /// Moves a rule up (-1) or down (+1). The order matters for hit policies such as first and rule order.
+  void moveRule(String ruleId, int delta) {
+    final t = state.table;
+    if (t == null) return;
+    final i = t.rules.indexWhere((r) => r.id == ruleId);
+    final j = i + delta;
+    if (i < 0 || j < 0 || j >= t.rules.length) return;
+    final next = [...t.rules];
+    final r = next.removeAt(i);
+    next.insert(j, r);
+    _edit(t.copyWith(rules: next));
+  }
+
   void setInputEntry(String ruleId, int columnIndex, String value) {
     final t = state.table;
     if (t == null) return;
     final rule = t.rules.firstWhere((r) => r.id == ruleId);
-    _edit(t.updateRule(rule.withInputEntry(columnIndex, value)));
+    _edit(t.updateRule(rule.withInputEntry(columnIndex, value)), coalesce: 'in:$ruleId:$columnIndex');
   }
 
   void setOutputEntry(String ruleId, int columnIndex, String value) {
     final t = state.table;
     if (t == null) return;
     final rule = t.rules.firstWhere((r) => r.id == ruleId);
-    _edit(t.updateRule(rule.withOutputEntry(columnIndex, value)));
+    _edit(t.updateRule(rule.withOutputEntry(columnIndex, value)), coalesce: 'out:$ruleId:$columnIndex');
   }
 
   void setRuleAnnotation(String ruleId, String annotation) {
     final t = state.table;
     if (t == null) return;
     final rule = t.rules.firstWhere((r) => r.id == ruleId);
-    _edit(t.updateRule(rule.copyWith(annotation: annotation)));
+    _edit(t.updateRule(rule.copyWith(annotation: annotation)), coalesce: 'note:$ruleId');
   }
 
   Future<bool> save() async {
