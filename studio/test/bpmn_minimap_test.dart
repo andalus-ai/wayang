@@ -1,6 +1,6 @@
 import 'dart:ui';
 
-import 'package:flutter/painting.dart';
+import 'package:flutter/material.dart' show Matrix4;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wayang_studio/features/bpmn/minimap.dart';
 import 'package:wayang_studio/models/bpmn.dart';
