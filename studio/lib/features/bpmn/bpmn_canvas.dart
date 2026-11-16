@@ -13,6 +13,7 @@ import 'context_menu.dart';
 import 'guides.dart';
 import 'minimap.dart';
 import 'selection.dart';
+import 'shortcuts_help.dart';
 
 const double kLaneHeaderWidth = 120;
 const double kBpmnCanvasWidth = 3200;
@@ -148,6 +149,8 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
         const SingleActivator(LogicalKeyboardKey.arrowRight, shift: true): () => _nudge(1, 0, true),
         const SingleActivator(LogicalKeyboardKey.arrowUp, shift: true): () => _nudge(0, -1, true),
         const SingleActivator(LogicalKeyboardKey.arrowDown, shift: true): () => _nudge(0, 1, true),
+        const SingleActivator(LogicalKeyboardKey.f1): () => showBpmnShortcutHelp(context),
+        const SingleActivator(LogicalKeyboardKey.slash, shift: true): () => showBpmnShortcutHelp(context),
         const SingleActivator(LogicalKeyboardKey.keyF, control: true): _find,
         const SingleActivator(LogicalKeyboardKey.keyF, meta: true): _find,
         const SingleActivator(LogicalKeyboardKey.keyC, control: true): _copy,
@@ -367,6 +370,7 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
               onFit: () => _zoomToFit(diagram, constraints.biggest),
               boxMode: _boxMode,
               onFind: _find,
+              onHelp: () => showBpmnShortcutHelp(context),
               snap: ref.watch(bpmnSnapProvider),
               onToggleSnap: () => ref.read(bpmnSnapProvider.notifier).state = !ref.read(bpmnSnapProvider),
               onToggleBox: () => setState(() {
@@ -526,7 +530,7 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
 }
 
 class _BpmnZoomControls extends StatelessWidget {
-  const _BpmnZoomControls({required this.onZoomIn, required this.onZoomOut, required this.onReset, required this.onFit, required this.boxMode, required this.onToggleBox, required this.snap, required this.onToggleSnap, required this.onFind});
+  const _BpmnZoomControls({required this.onZoomIn, required this.onZoomOut, required this.onReset, required this.onFit, required this.boxMode, required this.onToggleBox, required this.snap, required this.onToggleSnap, required this.onFind, required this.onHelp});
   final VoidCallback onZoomIn;
   final VoidCallback onZoomOut;
   final VoidCallback onReset;
@@ -536,6 +540,7 @@ class _BpmnZoomControls extends StatelessWidget {
   final bool snap;
   final VoidCallback onToggleSnap;
   final VoidCallback onFind;
+  final VoidCallback onHelp;
 
   @override
   Widget build(BuildContext context) {
@@ -549,6 +554,7 @@ class _BpmnZoomControls extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          Tooltip(message: 'Shortcuts (?)', child: InkWell(onTap: onHelp, borderRadius: BorderRadius.circular(AppRadius.sm), child: const Padding(padding: EdgeInsets.all(7), child: Icon(Icons.keyboard_outlined, size: 17, color: AppColors.textSecondaryDark)))),
           Tooltip(message: 'Find a node (Ctrl+F)', child: InkWell(onTap: onFind, borderRadius: BorderRadius.circular(AppRadius.sm), child: const Padding(padding: EdgeInsets.all(7), child: Icon(Icons.search_rounded, size: 17, color: AppColors.textSecondaryDark)))),
           Tooltip(message: snap ? 'Snap to grid on' : 'Snap to grid', child: InkWell(onTap: onToggleSnap, borderRadius: BorderRadius.circular(AppRadius.sm), child: Padding(padding: const EdgeInsets.all(7), child: Icon(Icons.grid_4x4_rounded, size: 17, color: snap ? AppColors.primaryBright : AppColors.textSecondaryDark)))),
           Tooltip(message: boxMode ? 'Box select on (drag on empty canvas)' : 'Box select', child: InkWell(onTap: onToggleBox, borderRadius: BorderRadius.circular(AppRadius.sm), child: Padding(padding: const EdgeInsets.all(7), child: Icon(Icons.select_all_rounded, size: 17, color: boxMode ? AppColors.primaryBright : AppColors.textSecondaryDark)))),
