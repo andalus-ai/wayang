@@ -32,6 +32,24 @@ bool same(Object? a, Object? b) {
 }
 
 void main() {
+  test('a flow label survives save and reload, and lives only in the studio envelope', () {
+    final doc = fixture('process-loan');
+    final diagram = bpmnFromDocument(doc);
+    final flow = diagram.flowList.first;
+    final labelled = diagram.updateFlow(flow.copyWith(label: 'approved'));
+    final saved = bpmnToDocument(labelled);
+    expect(((saved['studio'] as Map)['meta'] as Map)['flowLabels'], {flow.id: 'approved'});
+    for (final f in saved['flows'] as List) {
+      expect((f as Map).containsKey('label'), isFalse, reason: 'the engine never sees labels');
+    }
+    expect(bpmnFromDocument(saved).flows[flow.id]!.label, 'approved');
+  });
+
+  test('a diagram with no flow labels adds no flowLabels key', () {
+    final saved = bpmnToDocument(bpmnFromDocument(fixture('process-loan')));
+    expect(((saved['studio'] as Map)['meta'] as Map).containsKey('flowLabels'), isFalse);
+  });
+
   test('process fixture survives document -> diagram -> document', () {
     final doc = fixture('process-loan');
     final back = bpmnToDocument(bpmnFromDocument(doc));
