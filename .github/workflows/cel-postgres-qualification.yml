@@ -124,5 +124,6 @@ jobs:
             /tmp/wayang-wal-archive.sha256
             /tmp/wayang-pg-verifybackup.log
             /tmp/wayang-pg-verifybackup-missing.log
+            /tmp/wayang-wal-retention-plan.json
           if-no-files-found: ignore
           retention-days: 7
