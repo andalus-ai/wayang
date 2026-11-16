@@ -101,28 +101,24 @@ docker run --detach --name "$branch_container" \
   -c "archive_command=test ! -f /wal-archive/%f && cp %p /wal-archive/%f"
 
 wait_ready "$branch_container"
-in_recovery="f"
-for attempt in $(seq 1 60); do
-  in_recovery="$(sql "$branch_container" -c "SELECT pg_is_in_recovery()")"
-  [[ "$in_recovery" == "t" ]] && break
-  sleep 2
-done
-if [[ "$in_recovery" != "t" ]]; then
-  docker logs "$branch_container" >&2 || true
-  echo "Timeline clone did not enter archive recovery" >&2
-  exit 1
-fi
+in_recovery="$(sql "$branch_container" -c "SELECT pg_is_in_recovery()")"
 sql "$branch_container" -c "SELECT 1 FROM timeline_marker WHERE marker='parent-timeline-marker'" >/dev/null
 
-docker exec "$branch_container" pg_ctl promote -D /var/lib/postgresql/data -w
-for attempt in $(seq 1 60); do
-  in_recovery="$(sql "$branch_container" -c "SELECT pg_is_in_recovery()")"
-  [[ "$in_recovery" == "f" ]] && break
-  sleep 2
-done
+# With recovery.signal (not standby.signal), PostgreSQL can finish archive
+# recovery automatically when it reaches the end of the available archive.
+# If it remains in recovery, explicitly promote the clone; otherwise it has
+# already completed recovery and created its new timeline.
+if [[ "$in_recovery" == "t" ]]; then
+  docker exec "$branch_container" pg_ctl promote -D /var/lib/postgresql/data -w
+  for attempt in $(seq 1 60); do
+    in_recovery="$(sql "$branch_container" -c "SELECT pg_is_in_recovery()")"
+    [[ "$in_recovery" == "f" ]] && break
+    sleep 2
+  done
+fi
 if [[ "$in_recovery" != "f" ]]; then
   docker logs "$branch_container" >&2 || true
-  echo "Timeline clone did not promote" >&2
+  echo "Timeline clone neither completed archive recovery nor promoted" >&2
   exit 1
 fi
 
