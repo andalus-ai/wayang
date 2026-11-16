@@ -52,7 +52,7 @@ public class FileManagementCredentialStore implements ManagementCredentialStore 
     @Override
     public synchronized void save(String registrationToken) throws IOException {
         if (registrationToken == null || registrationToken.isBlank()
-                || registrationToken.indexOf('\\n') >= 0 || registrationToken.indexOf('\\r') >= 0) {
+                || registrationToken.indexOf('\n') >= 0 || registrationToken.indexOf('\r') >= 0) {
             throw new IllegalArgumentException("registrationToken must be a non-blank single-line value");
         }
         Path target = path();
