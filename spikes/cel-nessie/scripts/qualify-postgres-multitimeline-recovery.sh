@@ -67,12 +67,18 @@ docker exec -e PGPASSWORD=postgres "$source_container" pg_basebackup \
   -h 127.0.0.1 -U postgres -D /base-backup -Fp -X none -P
 
 sql "$source_container" -c "INSERT INTO timeline_marker VALUES ('parent-timeline-marker')"
+parent_wal="$(sql "$source_container" -c "SELECT pg_walfile_name(pg_current_wal_lsn())")"
 sql "$source_container" -c "SELECT pg_switch_wal()" >/dev/null
 for attempt in $(seq 1 60); do
-  archived="$(docker exec "$source_container" sh -c "test -s /wal-archive/$(ls /var/lib/postgresql/data/pg_wal/000000010000000000000000 2>/dev/null | xargs -r basename) && echo t || echo f" 2>/dev/null || echo f)"
+  archived="$(docker exec "$source_container" sh -c "test -s /wal-archive/$parent_wal && echo t || echo f")"
   [[ "$archived" == "t" ]] && break
   sleep 2
 done
+if [[ "$archived" != "t" ]]; then
+  docker logs "$source_container" >&2 || true
+  echo "Parent timeline WAL was not archived" >&2
+  exit 1
+fi
 
 # Stop the original timeline-1 writer so no concurrent source branch can
 # obscure the fork point or race archive names.
