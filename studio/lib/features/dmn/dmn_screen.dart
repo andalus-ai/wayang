@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/api_client.dart';
+import '../../data/dmn_csv.dart';
 import '../../models/dmn.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
@@ -504,6 +505,19 @@ class _DecisionGrid extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               OutlinedButton.icon(
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: rulesToCsv(table)));
+                  if (context.mounted) showToast(context, 'Copied ${table.rules.length} rules as CSV.');
+                },
+                icon: const Icon(Icons.content_copy_rounded, size: 15),
+                label: const Text('Copy CSV'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _pasteCsv(context),
+                icon: const Icon(Icons.content_paste_rounded, size: 15),
+                label: const Text('Paste CSV'),
+              ),
+              OutlinedButton.icon(
                 onPressed: () => _promptColumn(context, 'Add input column', controller.addInputColumn),
                 icon: const Icon(Icons.view_column_outlined, size: 15),
                 label: const Text('Add input'),
@@ -519,6 +533,38 @@ class _DecisionGrid extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _pasteCsv(BuildContext context) async {
+    final text = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final c = TextEditingController();
+        return AlertDialog(
+          title: const Text('Paste rules from CSV'),
+          content: SizedBox(
+            width: 520,
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('First row: column labels of this table (and optionally Note). Rows are added after the existing rules.', style: TextStyle(fontSize: 12)),
+              const SizedBox(height: 10),
+              TextField(controller: c, autofocus: true, minLines: 8, maxLines: 12, style: const TextStyle(fontFamily: 'monospace', fontSize: 12), decoration: const InputDecoration(border: OutlineInputBorder())),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, c.text), child: const Text('Add rules')),
+          ],
+        );
+      },
+    );
+    if (text == null || text.trim().isEmpty || !context.mounted) return;
+    final result = rulesFromCsv(table, text, controller.newRuleId);
+    if (result.error != null) {
+      showToast(context, result.error!, isError: true);
+      return;
+    }
+    controller.appendRules(result.rules);
+    showToast(context, 'Added ${result.rules.length} rules.${result.ignoredColumns.isEmpty ? '' : ' Ignored columns: ${result.ignoredColumns.join(', ')}.'}');
   }
 
   Future<void> _promptColumn(BuildContext context, String title, void Function(String) onSubmit) async {

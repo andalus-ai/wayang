@@ -106,4 +106,18 @@ void main() {
     }
     expect(steps, 100);
   });
+
+  test('appended rules are one undo step and get distinct ids', () {
+    final (c, _) = _controller();
+    final rules = [
+      DmnRule(id: c.newRuleId(), inputEntries: const ['1'], outputEntries: const ['"x"']),
+      DmnRule(id: c.newRuleId(), inputEntries: const ['2'], outputEntries: const ['"y"']),
+    ];
+    expect(rules[0].id == rules[1].id, isFalse);
+    c.appendRules(rules);
+    expect(c.state.table!.rules.length, 4);
+    c.appendRules(const []);
+    c.undo();
+    expect(c.state.table!.rules.length, 2);
+  });
 }
