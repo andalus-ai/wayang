@@ -214,6 +214,17 @@ class DmnController extends StateNotifier<DmnEditorState> {
     _edit(t.removeRule(ruleId));
   }
 
+  /// Appends [rules] (already shaped for this table) as one undo step.
+  void appendRules(List<DmnRule> rules) {
+    final t = state.table;
+    if (t == null || rules.isEmpty) return;
+    _edit(t.copyWith(rules: [...t.rules, ...rules]));
+  }
+
+  /// A fresh rule id, unique within the editor session.
+  String newRuleId() => 'rule_${_now().microsecondsSinceEpoch}_${_idCounter++}';
+  int _idCounter = 0;
+
   /// Copies a rule right below itself (new id, same entries).
   void duplicateRule(String ruleId) {
     final t = state.table;
