@@ -18,7 +18,13 @@ from one source cluster. It commits marker rows at controlled points:
 4. `must-not-exist-at-target` after the chosen recovery target timestamp.
 
 Both backups are verified and restored using the **simulated post-retention
-archive**, not the original archive. Recovery uses `recovery.signal`,
+archive**, not the original archive. Each catalog entry also declares an
+explicit `recovery_wal_ranges` interval from that backup's WAL start through
+the approved recovery target LSN. The planner unions these intervals with the
+manifest's own `WAL-Ranges`; the catalog snapshot fingerprint covers the
+recovery ranges, so changing the promised PITR horizon invalidates an earlier
+approval. The manifest's own ranges alone are not treated as a promise of
+future PITR coverage. Recovery uses `recovery.signal`,
 `restore_command`, a timestamp target, exclusive target semantics, and
 promotion after recovery.
 
@@ -32,7 +38,9 @@ promotion after recovery.
 
 The same assertions are run independently for backup 1 and backup 2. This
 proves each retained backup can recover through the simulated retention result
-to the chosen point-in-time state.
+to the chosen point-in-time state. The test also creates a later WAL segment
+outside the approved recovery range, so the planner has a genuine candidate to
+remove while retaining all WAL needed to reach the target.
 
 ## Safety boundary
 
