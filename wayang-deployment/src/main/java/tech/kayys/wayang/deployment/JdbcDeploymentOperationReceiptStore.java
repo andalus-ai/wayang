@@ -210,6 +210,28 @@ public final class JdbcDeploymentOperationReceiptStore implements DeploymentOper
     }
 
     @Override
+    public List<DeploymentOperationReceipt> findTerminalReceipts(int limit) {
+        if (limit < 1 || limit > 1000) throw new IllegalArgumentException("limit must be between 1 and 1000");
+        String sql = """
+                SELECT deployment_id, operation_key, command_fingerprint, operation, status, attempt,
+                       target_operation_key, result_code, result_detail, lease_until, created_at, updated_at
+                FROM wayang_deployment_operation_receipt
+                WHERE status IN ('SUCCEEDED', 'FAILED', 'UNKNOWN')
+                ORDER BY updated_at, deployment_id, operation_key
+                """;
+        try (Connection c = dataSource.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setMaxRows(limit);
+            try (ResultSet rs = ps.executeQuery()) {
+                List<DeploymentOperationReceipt> found = new ArrayList<>();
+                while (rs.next()) found.add(read(rs));
+                return List.copyOf(found);
+            }
+        } catch (SQLException failure) {
+            throw new IllegalStateException("Unable to scan terminal deployment receipts", failure);
+        }
+    }
+
+    @Override
     public DeploymentOperationReceipt markUnknown(String deploymentId, String operationKey, String reason, Instant now) {
         updateUnknown(deploymentId, operationKey, reason, now);
         return find(deploymentId, operationKey).orElseThrow();
