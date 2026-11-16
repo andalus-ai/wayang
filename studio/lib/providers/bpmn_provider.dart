@@ -17,6 +17,7 @@ class BpmnEditorState {
     this.loading = true,
     this.diagram = BpmnDiagram.empty,
     this.selectedNodeId,
+    this.selectedNodeIds = const {},
     this.selectedFlowId,
     this.canUndo = false,
     this.canRedo = false,
@@ -33,7 +34,11 @@ class BpmnEditorState {
 
   final bool loading;
   final BpmnDiagram diagram;
+  /// The one selected node, or null when none or several are selected (the inspector shows a node only when exactly one is).
   final String? selectedNodeId;
+
+  /// Every selected node, including the single one above.
+  final Set<String> selectedNodeIds;
   final String? selectedFlowId;
   final bool canUndo;
   final bool canRedo;
@@ -61,7 +66,9 @@ class BpmnEditorState {
     bool? loading,
     BpmnDiagram? diagram,
     String? selectedNodeId,
+    Set<String>? selectedNodeIds,
     bool clearSelectedNode = false,
+    bool clearPrimary = false,
     String? selectedFlowId,
     bool clearSelectedFlow = false,
     bool? canUndo,
@@ -82,7 +89,8 @@ class BpmnEditorState {
     return BpmnEditorState(
       loading: loading ?? this.loading,
       diagram: diagram ?? this.diagram,
-      selectedNodeId: clearSelectedNode ? null : (selectedNodeId ?? this.selectedNodeId),
+      selectedNodeId: (clearSelectedNode || clearPrimary) ? null : (selectedNodeId ?? this.selectedNodeId),
+      selectedNodeIds: clearSelectedNode ? const {} : (selectedNodeIds ?? this.selectedNodeIds),
       selectedFlowId: clearSelectedFlow ? null : (selectedFlowId ?? this.selectedFlowId),
       canUndo: canUndo ?? this.canUndo,
       canRedo: canRedo ?? this.canRedo,
@@ -130,7 +138,31 @@ class BpmnController extends StateNotifier<BpmnEditorState> {
     state = state.copyWith(canUndo: true, canRedo: false, dirty: true, clearPublished: true);
   }
 
-  void selectNode(String id) => state = state.copyWith(selectedNodeId: id, clearSelectedFlow: true);
+  void selectNode(String id) => state = state.copyWith(selectedNodeId: id, selectedNodeIds: {id}, clearSelectedFlow: true);
+
+  /// Replaces the selection with [ids] (only ids that exist). One id behaves like [selectNode]; none clears the node selection.
+  void selectNodes(Iterable<String> ids) {
+    final valid = {for (final id in ids) if (state.diagram.node(id) != null) id};
+    if (valid.isEmpty) {
+      state = state.copyWith(clearSelectedNode: true);
+    } else {
+      state = state.copyWith(
+        selectedNodeId: valid.length == 1 ? valid.first : null,
+        clearPrimary: valid.length > 1,
+        selectedNodeIds: valid,
+        clearSelectedFlow: true,
+      );
+    }
+  }
+
+  /// Adds [id] to the selection, or removes it when already selected (shift/ctrl-click).
+  void toggleNode(String id) {
+    final next = {...state.selectedNodeIds};
+    if (!next.remove(id)) next.add(id);
+    selectNodes(next);
+  }
+
+  void selectAllNodes() => selectNodes(state.diagram.nodeList.map((n) => n.id));
   void selectFlow(String id) => state = state.copyWith(selectedFlowId: id, clearSelectedNode: true);
   void clearSelection() => state = state.copyWith(clearSelectedNode: true, clearSelectedFlow: true);
 
@@ -145,7 +177,16 @@ class BpmnController extends StateNotifier<BpmnEditorState> {
   }
 
   void removeSelected() {
-    if (state.selectedNodeId != null) {
+    if (state.selectedNodeIds.length > 1) {
+      _checkpoint();
+      var d = state.diagram;
+      for (final id in state.selectedNodeIds) {
+        d = d.removeNode(id);
+      }
+      state = state.copyWith(diagram: d);
+      clearSelection();
+      unawaited(validate());
+    } else if (state.selectedNodeId != null) {
       _checkpoint();
       state = state.copyWith(diagram: state.diagram.removeNode(state.selectedNodeId!));
       clearSelection();
@@ -160,6 +201,24 @@ class BpmnController extends StateNotifier<BpmnEditorState> {
 
   void dragNode(String id, double x, double y) {
     state = state.copyWith(diagram: state.diagram.moveNode(id, x, y));
+  }
+
+  /// Moves every node in [starts] (id -> position when the drag began) by [dx],[dy]. No undo step until [endDragGroup].
+  void dragGroup(Map<String, Offset> starts, double dx, double dy) {
+    var d = state.diagram;
+    for (final e in starts.entries) {
+      d = d.moveNode(e.key, e.value.dx + dx, e.value.dy + dy);
+    }
+    state = state.copyWith(diagram: d);
+  }
+
+  /// Ends a group drag with one undo step. [before] is the diagram as it was when the drag began.
+  void endDragGroup(BpmnDiagram before) {
+    if (identical(before, state.diagram)) return;
+    final now = state.diagram;
+    state = state.copyWith(diagram: before);
+    _checkpoint();
+    state = state.copyWith(diagram: now);
   }
 
   void endDragNode(String id, {String? laneId, bool clearLane = false}) {

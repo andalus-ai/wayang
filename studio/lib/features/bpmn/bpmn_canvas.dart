@@ -2,11 +2,13 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart' hide DiagnosticLevel;
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
 import '../../models/bpmn.dart';
 import '../../providers/bpmn_provider.dart';
+import 'selection.dart';
 
 const double kLaneHeaderWidth = 120;
 const double kBpmnCanvasWidth = 3200;
@@ -47,9 +49,20 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
   double _dragStartNodeX = 0;
   double _dragStartNodeY = 0;
 
+  // Group drag: where every selected node was when the drag began, and the diagram before it (for one undo step).
+  Map<String, Offset>? _groupStarts;
+  BpmnDiagram? _groupBefore;
+
+  // Box select: while [_boxMode] is on, dragging on empty canvas draws a rectangle instead of panning.
+  bool _boxMode = false;
+  Offset? _boxStart;
+  Rect? _box;
+  final FocusNode _focus = FocusNode(debugLabel: 'bpmn-canvas');
+
   @override
   void dispose() {
     _transformController.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -131,7 +144,22 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
     }
 
     return LayoutBuilder(builder: (context, constraints) {
-    return ClipRect(
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.delete): controller.removeSelected,
+        const SingleActivator(LogicalKeyboardKey.backspace): controller.removeSelected,
+        const SingleActivator(LogicalKeyboardKey.escape): controller.clearSelection,
+        const SingleActivator(LogicalKeyboardKey.keyA, control: true): controller.selectAllNodes,
+        const SingleActivator(LogicalKeyboardKey.keyA, meta: true): controller.selectAllNodes,
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): controller.undo,
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): controller.undo,
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): controller.redo,
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true, shift: true): controller.redo,
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true): controller.redo,
+      },
+      child: Focus(
+    focusNode: _focus,
+    child: ClipRect(
       child: Stack(
         children: [
           Positioned.fill(
@@ -146,6 +174,7 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
                 color: AppColors.darkBg,
                 child: InteractiveViewer(
                   transformationController: _transformController,
+                  panEnabled: !_boxMode,
                   constrained: false,
                   minScale: 0.25,
                   maxScale: 2.5,
@@ -163,7 +192,27 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
                         Positioned.fill(
                           child: GestureDetector(
                             behavior: HitTestBehavior.translucent,
-                            onTapUp: (d) => _handleFlowTap(d.localPosition, diagram, controller),
+                            onTapUp: (d) {
+                              _focus.requestFocus();
+                              final before = ref.read(bpmnControllerProvider).selectedFlowId;
+                              _handleFlowTap(d.localPosition, diagram, controller);
+                              // A tap on empty canvas (no flow hit) clears the selection.
+                              if (ref.read(bpmnControllerProvider).selectedFlowId == before) controller.clearSelection();
+                            },
+                            onPanStart: _boxMode ? (d) => setState(() => _boxStart = d.localPosition) : null,
+                            onPanUpdate: _boxMode
+                                ? (d) => setState(() => _box = _boxStart == null ? null : rectBetween(_boxStart!, d.localPosition))
+                                : null,
+                            onPanEnd: _boxMode
+                                ? (_) {
+                                    final r = _box;
+                                    if (r != null) controller.selectNodes(nodesInRect(diagram, r));
+                                    setState(() {
+                                      _box = null;
+                                      _boxStart = null;
+                                    });
+                                  }
+                                : null,
                             child: CustomPaint(
                               painter: _FlowsPainter(
                                 diagram: diagram,
@@ -174,32 +223,72 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
                             ),
                           ),
                         ),
+                        if (_box != null)
+                          Positioned.fromRect(
+                            rect: _box!,
+                            child: IgnorePointer(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryBright.withValues(alpha: 0.10),
+                                  border: Border.all(color: AppColors.primaryBright, width: 1),
+                                ),
+                              ),
+                            ),
+                          ),
                         for (final node in diagram.nodeList)
                           Positioned(
                             left: node.x,
                             top: node.y,
                             child: _BpmnNodeWidget(
                               node: node,
-                              selected: state.selectedNodeId == node.id,
+                              selected: state.selectedNodeIds.contains(node.id),
                               diagnostics: diagnosticsByNode[node.id] ?? const [],
                               highlighted: state.highlight.contains(node.id),
-                              onTap: () => controller.selectNode(node.id),
+                              onTap: () {
+                                _focus.requestFocus();
+                                if (HardwareKeyboard.instance.isShiftPressed || HardwareKeyboard.instance.isControlPressed || HardwareKeyboard.instance.isMetaPressed) {
+                                  controller.toggleNode(node.id);
+                                } else {
+                                  controller.selectNode(node.id);
+                                }
+                              },
                               onPanStart: (details) {
                                 _dragNodeId = node.id;
                                 _dragStartCanvasPos = _canvasPositionOf(details.globalPosition);
                                 _dragStartNodeX = node.x;
                                 _dragStartNodeY = node.y;
-                                controller.selectNode(node.id);
+                                final current = ref.read(bpmnControllerProvider);
+                                if (current.selectedNodeIds.length > 1 && current.selectedNodeIds.contains(node.id)) {
+                                  // Dragging a member of a group moves the whole group.
+                                  _groupBefore = current.diagram;
+                                  _groupStarts = {
+                                    for (final id in current.selectedNodeIds)
+                                      if (current.diagram.node(id) case final n?) id: Offset(n.x, n.y),
+                                  };
+                                } else {
+                                  _groupStarts = null;
+                                  _groupBefore = null;
+                                  controller.selectNode(node.id);
+                                }
                               },
                               onPanUpdate: (details) {
                                 if (_dragNodeId != node.id) return;
                                 final now = _canvasPositionOf(details.globalPosition);
                                 final dx = now.dx - _dragStartCanvasPos.dx;
                                 final dy = now.dy - _dragStartCanvasPos.dy;
+                                if (_groupStarts != null) {
+                                  controller.dragGroup(_groupStarts!, dx, dy);
+                                  return;
+                                }
                                 controller.dragNode(node.id, _dragStartNodeX + dx, _dragStartNodeY + dy);
                               },
                               onPanEnd: (_) {
-                                if (_dragNodeId == node.id) {
+                                if (_groupStarts != null && _dragNodeId == node.id) {
+                                  // Lane membership is left as it was for a group move; one undo step for the whole move.
+                                  controller.endDragGroup(_groupBefore!);
+                                  _groupStarts = null;
+                                  _groupBefore = null;
+                                } else if (_dragNodeId == node.id) {
                                   final n = diagram.node(node.id);
                                   final size = bpmnNodeSize(node.type);
                                   final centerY = (n?.y ?? node.y) + size.height / 2;
@@ -242,10 +331,18 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
               onZoomOut: () => _zoomBy(1 / 1.2),
               onReset: _resetView,
               onFit: () => _zoomToFit(diagram, constraints.biggest),
+              boxMode: _boxMode,
+              onToggleBox: () => setState(() {
+                _boxMode = !_boxMode;
+                _box = null;
+                _boxStart = null;
+              }),
             ),
           ),
         ],
       ),
+    ),
+    ),
     );
     });
   }
@@ -293,11 +390,13 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
 }
 
 class _BpmnZoomControls extends StatelessWidget {
-  const _BpmnZoomControls({required this.onZoomIn, required this.onZoomOut, required this.onReset, required this.onFit});
+  const _BpmnZoomControls({required this.onZoomIn, required this.onZoomOut, required this.onReset, required this.onFit, required this.boxMode, required this.onToggleBox});
   final VoidCallback onZoomIn;
   final VoidCallback onZoomOut;
   final VoidCallback onReset;
   final VoidCallback onFit;
+  final bool boxMode;
+  final VoidCallback onToggleBox;
 
   @override
   Widget build(BuildContext context) {
@@ -311,6 +410,7 @@ class _BpmnZoomControls extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          Tooltip(message: boxMode ? 'Box select on (drag on empty canvas)' : 'Box select', child: InkWell(onTap: onToggleBox, borderRadius: BorderRadius.circular(AppRadius.sm), child: Padding(padding: const EdgeInsets.all(7), child: Icon(Icons.select_all_rounded, size: 17, color: boxMode ? AppColors.primaryBright : AppColors.textSecondaryDark)))),
           Tooltip(message: 'Zoom out', child: InkWell(onTap: onZoomOut, borderRadius: BorderRadius.circular(AppRadius.sm), child: const Padding(padding: EdgeInsets.all(7), child: Icon(Icons.remove_rounded, size: 17, color: AppColors.textSecondaryDark)))),
           Tooltip(message: 'Reset view', child: InkWell(onTap: onReset, borderRadius: BorderRadius.circular(AppRadius.sm), child: const Padding(padding: EdgeInsets.all(7), child: Icon(Icons.center_focus_strong_rounded, size: 17, color: AppColors.textSecondaryDark)))),
           Tooltip(message: 'Zoom to fit', child: InkWell(onTap: onFit, borderRadius: BorderRadius.circular(AppRadius.sm), child: const Padding(padding: EdgeInsets.all(7), child: Icon(Icons.fit_screen_rounded, size: 17, color: AppColors.textSecondaryDark)))),
