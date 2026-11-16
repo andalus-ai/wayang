@@ -5,7 +5,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
-import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -77,9 +76,13 @@ public final class DeploymentLifecycleReconciliationService {
 
         DeploymentState pending = pendingState(operation);
         if (current.state() != pending) {
-            if (isFinalState(operation, current.state())) {
+            String appliedPhase = appliedPhase(operation, receipt.status());
+            String appliedKey = eventKey(command.idempotencyKey(), appliedPhase);
+            boolean eventAlreadyApplied = ledger.events(command.deploymentId()).stream()
+                    .anyMatch(event -> event.idempotencyKey().equals(appliedKey));
+            if (eventAlreadyApplied && isFinalState(operation, current.state())) {
                 return result(DeploymentLifecycleReconciliationResult.Status.ALREADY_RECONCILED, current,
-                        "Lifecycle already reflects a terminal outcome");
+                        "Lifecycle event for this operation was already committed");
             }
             return result(DeploymentLifecycleReconciliationResult.Status.CONFLICT, current,
                     "Lifecycle state " + current.state() + " is not pending " + operation);
@@ -168,6 +171,15 @@ public final class DeploymentLifecycleReconciliationService {
             case "DEACTIVATE" -> state == DeploymentState.DEACTIVATED || state == DeploymentState.FAILED;
             case "ROLLBACK" -> state == DeploymentState.ROLLED_BACK || state == DeploymentState.FAILED;
             default -> false;
+        };
+    }
+
+    private static String appliedPhase(String operation, DeploymentOperationStatus status) {
+        if (status == DeploymentOperationStatus.FAILED) return resultPhase(operation);
+        return switch (operation) {
+            case "ACTIVATE" -> "health-result";
+            case "DEACTIVATE", "ROLLBACK" -> resultPhase(operation);
+            default -> throw new IllegalArgumentException("Unsupported deployment operation: " + operation);
         };
     }
 
