@@ -168,6 +168,68 @@ def _load_catalog(catalog_path: Path) -> tuple[list[tuple[str, Path, bytes, list
     return retained, segment_size, digest.hexdigest()
 
 
+def parse_timeline_history(path: Path, timeline: int) -> tuple[tuple[int, int], ...]:
+    """Parse PostgreSQL .history ancestry as (parent timeline, fork LSN)."""
+    try:
+        content = path.read_text(encoding="ascii")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise CatalogError(f"cannot read timeline history {path.name}: {exc}") from exc
+    ancestry: list[tuple[int, int]] = []
+    previous_timeline = 0
+    previous_lsn = -1
+    for line_number, raw_line in enumerate(content.splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        fields = line.split(None, 2)
+        if len(fields) != 3:
+            raise CatalogError(f"malformed timeline history {path.name} at line {line_number}")
+        try:
+            parent = int(fields[0], 10)
+            fork_lsn = parse_lsn(fields[1])
+        except (ValueError, CatalogError) as exc:
+            raise CatalogError(f"malformed timeline history {path.name} at line {line_number}") from exc
+        if parent < 1 or parent >= timeline or parent <= previous_timeline:
+            raise CatalogError(f"invalid ancestry order in timeline history {path.name} at line {line_number}")
+        if fork_lsn < previous_lsn:
+            raise CatalogError(f"fork LSNs move backwards in timeline history {path.name}")
+        if not fields[2].strip():
+            raise CatalogError(f"missing fork reason in timeline history {path.name} at line {line_number}")
+        ancestry.append((parent, fork_lsn))
+        previous_timeline = parent
+        previous_lsn = fork_lsn
+    if not ancestry:
+        raise CatalogError(f"timeline history {path.name} has no valid parent ancestry")
+    return tuple(ancestry)
+
+def validate_recovery_timeline_chain(backup_id: str, ranges: list[dict[str, Any]], histories: dict[int, tuple[tuple[int, int], ...]]) -> None:
+    """Require each ancestry fork to be covered on both sides by recovery ranges."""
+    by_timeline: dict[int, list[tuple[int, int]]] = {}
+    for wal_range in ranges:
+        timeline = wal_range["Timeline"]
+        start = parse_lsn(wal_range["Start-LSN"])
+        end = parse_lsn(wal_range["End-LSN"])
+        by_timeline.setdefault(timeline, []).append((start, end))
+    if len(by_timeline) < 2:
+        return
+    for child_timeline in sorted(by_timeline):
+        if child_timeline <= 1:
+            continue
+        ancestry = histories.get(child_timeline)
+        if ancestry is None:
+            raise CatalogError(f"backup {backup_id}: missing parsed ancestry for timeline {child_timeline}")
+        for index, (parent_timeline, fork_lsn) in enumerate(ancestry):
+            child = ancestry[index + 1][0] if index + 1 < len(ancestry) else child_timeline
+            parent_ranges = by_timeline.get(parent_timeline, [])
+            child_ranges = by_timeline.get(child, [])
+            if not parent_ranges or not child_ranges:
+                missing = parent_timeline if not parent_ranges else child
+                raise CatalogError(f"backup {backup_id}: recovery ranges omit timeline {missing}")
+            if fork_lsn == 0 or not any(start <= fork_lsn - 1 <= end for start, end in parent_ranges):
+                raise CatalogError(f"backup {backup_id}: timeline {parent_timeline} recovery range does not reach byte before fork {fork_lsn:X}")
+            if not any(start <= fork_lsn <= end for start, end in child_ranges):
+                raise CatalogError(f"backup {backup_id}: timeline {child} recovery range does not cover fork point {fork_lsn:X}")
+
 def build_plan(archive_dir: Path, catalog_path: Path, cutoff_epoch: float) -> RetentionPlan:
     retained, segment_size, snapshot_sha256 = _load_catalog(catalog_path)
     if not archive_dir.is_dir():
@@ -210,6 +272,7 @@ def build_plan(archive_dir: Path, catalog_path: Path, cutoff_epoch: float) -> Re
             files[path.name] = path
 
     history = {name for name in files if HISTORY_NAME.fullmatch(name)}
+    parsed_histories: dict[int, tuple[tuple[int, int], ...]] = {}
     for timeline in required_timelines:
         if timeline > 1:
             history_name = f"{timeline:08X}.history"
@@ -217,6 +280,13 @@ def build_plan(archive_dir: Path, catalog_path: Path, cutoff_epoch: float) -> Re
                 raise CatalogError(
                     f"missing timeline history file {history_name}; refusing to plan deletion"
                 )
+            parsed_histories[timeline] = parse_timeline_history(files[history_name], timeline)
+
+    for backup_id, _manifest_path, _manifest_bytes, recovery_ranges in retained:
+        if recovery_ranges is not None:
+            distinct_timelines = {item.get("Timeline") for item in recovery_ranges if isinstance(item, dict)}
+            if len(distinct_timelines) > 1:
+                validate_recovery_timeline_chain(backup_id, recovery_ranges, parsed_histories)
 
     missing = sorted(required - files.keys())
     if missing:

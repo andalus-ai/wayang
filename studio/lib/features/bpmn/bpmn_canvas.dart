@@ -7,9 +7,11 @@ import 'package:flutter/services.dart' hide DiagnosticLevel;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
+import '../../core/widgets.dart' show showToast;
 import '../../models/bpmn.dart';
 import '../../providers/bpmn_provider.dart';
 import 'context_menu.dart';
+import 'diagram_svg.dart';
 import 'guides.dart';
 import 'minimap.dart';
 import 'selection.dart';
@@ -208,6 +210,12 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
                               if (ref.read(bpmnControllerProvider).selectedFlowId == before) controller.clearSelection();
                             },
                             onSecondaryTapUp: (d) => _emptyOrFlowMenu(d.globalPosition, d.localPosition),
+                            onDoubleTapDown: (d) => _doubleTapAt = d.localPosition,
+                            onDoubleTap: () {
+                              final at = _doubleTapAt;
+                              final flow = at == null ? null : _flowAt(at, ref.read(bpmnControllerProvider).diagram);
+                              if (flow != null) _editFlowLabel(flow.id);
+                            },
                             onPanStart: _boxMode ? (d) => setState(() => _boxStart = d.localPosition) : null,
                             onPanUpdate: _boxMode
                                 ? (d) => setState(() => _box = _boxStart == null ? null : rectBetween(_boxStart!, d.localPosition))
@@ -248,6 +256,27 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
                               ),
                             ),
                           ),
+                        for (final note in diagram.noteList)
+                          Positioned(
+                            left: note.x,
+                            top: note.y,
+                            width: BpmnNote.width,
+                            height: BpmnNote.height,
+                            child: _NoteCard(
+                              note: note,
+                              onEdit: () => _editNote(note.id),
+                              onMenu: (pos) => _noteMenu(pos, note.id),
+                              onDragStart: (global) {
+                                controller.beginNoteDrag();
+                                _noteDragFrom = _canvasPositionOf(global);
+                                _noteStart = Offset(note.x, note.y);
+                              },
+                              onDrag: (global) {
+                                final now = _canvasPositionOf(global);
+                                controller.dragNote(note.id, _noteStart.dx + now.dx - _noteDragFrom.dx, _noteStart.dy + now.dy - _noteDragFrom.dy);
+                              },
+                            ),
+                          ),
                         for (final node in diagram.nodeList)
                           Positioned(
                             left: node.x,
@@ -266,6 +295,7 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
                                 }
                               },
                               onContextMenu: (pos) => _nodeMenu(pos, node.id),
+                              onRename: () => _renameNode(node.id),
                               onPanStart: (details) {
                                 _dragNodeId = node.id;
                                 _dragStartCanvasPos = _canvasPositionOf(details.globalPosition);
@@ -409,6 +439,9 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
   }
 
   Size _viewportSize = Size.zero;
+  Offset? _doubleTapAt;
+  Offset _noteDragFrom = Offset.zero;
+  Offset _noteStart = Offset.zero;
 
   /// Ctrl/Cmd+F: pick a node by name, id or type; it is selected and brought to the middle of the view.
   Future<void> _find() async {
@@ -419,6 +452,42 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
     final s = bpmnNodeSize(picked.type);
     _transformController.value = matrixCenteredOn(_transformController.value, Offset(picked.x + s.width / 2, picked.y + s.height / 2), _viewportSize);
     _focus.requestFocus();
+  }
+
+  Future<void> _renameNode(String id) async {
+    final node = ref.read(bpmnControllerProvider).diagram.node(id);
+    if (node == null) return;
+    final text = await showDialog<String>(context: context, builder: (_) => _TextPromptDialog(title: 'Rename ${node.type.label}', label: 'Name', initial: node.label));
+    if (text != null && mounted) ref.read(bpmnControllerProvider.notifier).updateNodeLabel(id, text.trim());
+    _focus.requestFocus();
+  }
+
+  Future<void> _editFlowLabel(String id) async {
+    final flow = ref.read(bpmnControllerProvider).diagram.flows[id];
+    if (flow == null) return;
+    final text = await showDialog<String>(context: context, builder: (_) => _TextPromptDialog(title: 'Flow label', label: 'Label', initial: flow.label));
+    if (text != null && mounted) ref.read(bpmnControllerProvider.notifier).setFlowLabel(id, text.trim());
+    _focus.requestFocus();
+  }
+
+  Future<void> _editNote(String id) async {
+    final note = ref.read(bpmnControllerProvider).diagram.notes[id];
+    if (note == null) return;
+    final text = await showDialog<String>(
+      context: context,
+      builder: (_) => _TextPromptDialog(title: 'Note', label: 'Text', initial: note.text, maxLength: BpmnNote.maxText, lines: 5),
+    );
+    if (text != null && mounted) ref.read(bpmnControllerProvider.notifier).updateNoteText(id, text);
+    _focus.requestFocus();
+  }
+
+  void _noteMenu(Offset global, String id) {
+    final controller = ref.read(bpmnControllerProvider.notifier);
+    showBpmnContextMenu(context, global, [
+      const BpmnMenuItem('Note'),
+      BpmnMenuItem('Edit text', icon: Icons.edit_outlined, onTap: () => _editNote(id)),
+      BpmnMenuItem('Delete note', icon: Icons.delete_outline_rounded, destructive: true, divider: true, onTap: () => controller.removeNote(id)),
+    ]);
   }
 
   void _copy() {
@@ -443,6 +512,7 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
     final count = ref.read(bpmnControllerProvider).selectedNodeIds.length;
     showBpmnContextMenu(context, global, [
       BpmnMenuItem(count > 1 ? '$count nodes' : 'Node'),
+      if (count == 1) BpmnMenuItem('Rename', icon: Icons.edit_outlined, onTap: () => _renameNode(nodeId)),
       BpmnMenuItem('Duplicate', icon: Icons.copy_rounded, onTap: controller.duplicateSelected),
       BpmnMenuItem('Copy', icon: Icons.content_copy_rounded, onTap: _copy),
       BpmnMenuItem('Cut', icon: Icons.content_cut_rounded, onTap: _cut),
@@ -464,6 +534,7 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
       controller.selectFlow(flow.id);
       showBpmnContextMenu(context, global, [
         const BpmnMenuItem('Flow'),
+        BpmnMenuItem('Edit label', icon: Icons.edit_outlined, onTap: () => _editFlowLabel(flow.id)),
         BpmnMenuItem(flow.isDefault ? 'Not the default flow' : 'Make default flow',
             icon: Icons.alt_route_rounded, onTap: () => controller.setFlowDefault(flow.id, !flow.isDefault)),
         BpmnMenuItem('Delete flow', icon: Icons.delete_outline_rounded, destructive: true, divider: true, onTap: controller.removeSelected),
@@ -479,7 +550,12 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
         BpmnMenuItem(t.label, icon: t.icon, onTap: () => controller.addNode(t, local.dx, local.dy, laneId: laneId)),
       if (ref.read(bpmnClipboardProvider) != null)
         BpmnMenuItem('Paste here', icon: Icons.content_paste_rounded, divider: true, onTap: () => _paste(at: local)),
-      BpmnMenuItem('Select all', icon: Icons.select_all_rounded, divider: true, onTap: controller.selectAllNodes),
+      BpmnMenuItem('Add note here', icon: Icons.sticky_note_2_outlined, divider: true, onTap: () => _editNote(controller.addNote(local.dx, local.dy))),
+      BpmnMenuItem('Select all', icon: Icons.select_all_rounded, onTap: controller.selectAllNodes),
+      BpmnMenuItem('Copy diagram as SVG', icon: Icons.image_outlined, onTap: () async {
+        await Clipboard.setData(ClipboardData(text: diagramToSvg(ref.read(bpmnControllerProvider).diagram)));
+        if (mounted) showToast(context, 'Copied the diagram as SVG. Paste it into a file named something.svg.');
+      }),
       BpmnMenuItem('Tidy layout (all)', icon: Icons.auto_fix_high_rounded, onTap: () {
         controller.clearSelection();
         controller.autoLayout();
@@ -757,6 +833,7 @@ class _BpmnNodeWidget extends StatelessWidget {
     required this.highlighted,
     required this.onTap,
     required this.onContextMenu,
+    required this.onRename,
     required this.onPanStart,
     required this.onPanUpdate,
     required this.onPanEnd,
@@ -771,6 +848,7 @@ class _BpmnNodeWidget extends StatelessWidget {
   final bool highlighted;
   final VoidCallback onTap;
   final void Function(Offset globalPosition) onContextMenu;
+  final VoidCallback onRename;
   final GestureDragStartCallback onPanStart;
   final GestureDragUpdateCallback onPanUpdate;
   final GestureDragEndCallback onPanEnd;
@@ -804,6 +882,7 @@ class _BpmnNodeWidget extends StatelessWidget {
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: onTap,
+            onDoubleTap: onRename,
             onSecondaryTapUp: (d) => onContextMenu(d.globalPosition),
             onPanStart: onPanStart,
             onPanUpdate: onPanUpdate,
@@ -1035,6 +1114,86 @@ class _FindNodeDialogState extends State<_FindNodeDialog> {
         ]),
       ),
       actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+    );
+  }
+}
+
+
+class _TextPromptDialog extends StatefulWidget {
+  const _TextPromptDialog({required this.title, required this.label, required this.initial, this.maxLength = 200, this.lines = 1});
+  final int maxLength;
+  final int lines;
+  final String title;
+  final String label;
+  final String initial;
+
+  @override
+  State<_TextPromptDialog> createState() => _TextPromptDialogState();
+}
+
+class _TextPromptDialogState extends State<_TextPromptDialog> {
+  late final TextEditingController _c = TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(widget.title),
+        content: SizedBox(
+          width: 360,
+          child: TextField(
+            controller: _c,
+            autofocus: true,
+            maxLength: widget.maxLength,
+            minLines: widget.lines,
+            maxLines: widget.lines,
+            decoration: InputDecoration(labelText: widget.label),
+            onSubmitted: widget.lines == 1 ? (v) => Navigator.pop(context, v) : null,
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, _c.text), child: const Text('Save')),
+        ],
+      );
+}
+
+
+/// A sticky note: pale yellow, draggable, double-click to edit, right-click for the menu. Text only; it is never executed.
+class _NoteCard extends StatelessWidget {
+  const _NoteCard({required this.note, required this.onEdit, required this.onMenu, required this.onDragStart, required this.onDrag});
+
+  final BpmnNote note;
+  final VoidCallback onEdit;
+  final void Function(Offset globalPosition) onMenu;
+  final void Function(Offset globalPosition) onDragStart;
+  final void Function(Offset globalPosition) onDrag;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onDoubleTap: onEdit,
+      onSecondaryTapUp: (d) => onMenu(d.globalPosition),
+      onPanStart: (d) => onDragStart(d.globalPosition),
+      onPanUpdate: (d) => onDrag(d.globalPosition),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF3B0),
+          borderRadius: BorderRadius.circular(4),
+          boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 4, offset: Offset(1, 2))],
+        ),
+        child: Text(
+          note.text.isEmpty ? 'Double-click to write…' : note.text,
+          overflow: TextOverflow.fade,
+          style: TextStyle(fontSize: 12.5, color: note.text.isEmpty ? const Color(0x99000000) : const Color(0xFF222222)),
+        ),
+      ),
     );
   }
 }

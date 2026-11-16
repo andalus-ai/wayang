@@ -178,14 +178,28 @@ class _DecisionTableEditor extends ConsumerWidget {
     }
     final table = editorState.table!;
     final overlaps = ref.watch(decisionTableOverlapsProvider(table));
+    final filter = ref.watch(dmnRuleFilterProvider(tableId));
 
-    return LayoutBuilder(builder: (context, constraints) {
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): controller.undo,
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): controller.undo,
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): controller.redo,
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true, shift: true): controller.redo,
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true): controller.redo,
+      },
+      child: LayoutBuilder(builder: (context, constraints) {
       final narrow = constraints.maxWidth < 980;
       final grid = _DecisionGrid(
         table: table,
         controller: controller,
         dirty: editorState.dirty,
         saving: editorState.saving,
+        canUndo: editorState.canUndo,
+        canRedo: editorState.canRedo,
+        epoch: editorState.epoch,
+        filter: filter,
+        onFilter: (v) => ref.read(dmnRuleFilterProvider(tableId).notifier).state = v,
         overlaps: overlaps,
         report: editorState.report,
         publishedVersion: editorState.publishedVersion,
@@ -205,7 +219,8 @@ class _DecisionTableEditor extends ConsumerWidget {
           SizedBox(width: 340, child: test),
         ],
       );
-    });
+    }),
+    );
   }
 }
 
@@ -215,6 +230,11 @@ class _DecisionGrid extends StatelessWidget {
     required this.controller,
     required this.dirty,
     required this.saving,
+    required this.canUndo,
+    required this.canRedo,
+    required this.epoch,
+    required this.filter,
+    required this.onFilter,
     required this.overlaps,
     required this.report,
     required this.publishedVersion,
@@ -224,6 +244,11 @@ class _DecisionGrid extends StatelessWidget {
   final DmnController controller;
   final bool dirty;
   final bool saving;
+  final bool canUndo;
+  final bool canRedo;
+  final int epoch;
+  final String filter;
+  final ValueChanged<String> onFilter;
   final List<DmnOverlapWarning> overlaps;
   final ValidationReport? report;
   final int? publishedVersion;
@@ -231,6 +256,7 @@ class _DecisionGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visible = filterRuleIndexes(table, filter);
     return SurfacePanel(
       padding: const EdgeInsets.all(18),
       child: Column(
@@ -293,6 +319,9 @@ class _DecisionGrid extends StatelessWidget {
                     ],
                   ),
                 ),
+              IconButton(tooltip: 'Undo (Ctrl+Z)', icon: const Icon(Icons.undo_rounded, size: 18), onPressed: canUndo ? controller.undo : null),
+              IconButton(tooltip: 'Redo (Ctrl+Y)', icon: const Icon(Icons.redo_rounded, size: 18), onPressed: canRedo ? controller.redo : null),
+              const SizedBox(width: 6),
               OutlinedButton.icon(
                 onPressed: controller.validate,
                 icon: const Icon(Icons.fact_check_outlined, size: 15),
@@ -365,7 +394,21 @@ class _DecisionGrid extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          Row(children: [
+            SizedBox(
+              width: 280,
+              child: TextField(
+                onChanged: onFilter,
+                style: const TextStyle(fontSize: 12.5),
+                decoration: const InputDecoration(isDense: true, prefixIcon: Icon(Icons.search_rounded, size: 16), hintText: 'Filter rules (any word, any column)'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            if (filter.trim().isNotEmpty)
+              Text(visible.isEmpty ? 'No rule matches' : '${visible.length} of ${table.rules.length} rules (reordering is off while filtering)', style: const TextStyle(fontSize: 11.5, color: AppColors.textMutedDark)),
+          ]),
+          const SizedBox(height: 12),
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -396,33 +439,55 @@ class _DecisionGrid extends StatelessWidget {
                     const DataColumn(label: Text('')),
                   ],
                   rows: [
-                    for (var r = 0; r < table.rules.length; r++)
+                    for (final r in visible)
                       DataRow(key: ValueKey(table.rules[r].id), cells: [
                         DataCell(Text('${r + 1}', style: const TextStyle(color: AppColors.textMutedDark))),
                         for (var i = 0; i < table.inputs.length; i++)
                           DataCell(_EntryField(
-                            key: ValueKey('in-${table.rules[r].id}-${table.inputs[i].id}'),
+                            key: ValueKey('in-$epoch-${table.rules[r].id}-${table.inputs[i].id}'),
                             value: i < table.rules[r].inputEntries.length ? table.rules[r].inputEntries[i] : '-',
                             color: AppColors.info,
                             onChanged: (v) => controller.setInputEntry(table.rules[r].id, i, v),
                           )),
                         for (var i = 0; i < table.outputs.length; i++)
                           DataCell(_EntryField(
-                            key: ValueKey('out-${table.rules[r].id}-${table.outputs[i].id}'),
+                            key: ValueKey('out-$epoch-${table.rules[r].id}-${table.outputs[i].id}'),
                             value: i < table.rules[r].outputEntries.length ? table.rules[r].outputEntries[i] : '',
                             color: AppColors.success,
                             onChanged: (v) => controller.setOutputEntry(table.rules[r].id, i, v),
                           )),
                         DataCell(_EntryField(
-                          key: ValueKey('note-${table.rules[r].id}'),
+                          key: ValueKey('note-$epoch-${table.rules[r].id}'),
                           value: table.rules[r].annotation,
                           color: AppColors.textMutedDark,
                           onChanged: (v) => controller.setRuleAnnotation(table.rules[r].id, v),
                         )),
-                        DataCell(IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded, size: 16, color: AppColors.danger),
-                          onPressed: () => controller.removeRule(table.rules[r].id),
-                        )),
+                        DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
+                          IconButton(
+                            tooltip: 'Move up',
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(Icons.arrow_upward_rounded, size: 15),
+                            onPressed: filter.isNotEmpty || r == 0 ? null : () => controller.moveRule(table.rules[r].id, -1),
+                          ),
+                          IconButton(
+                            tooltip: 'Move down',
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(Icons.arrow_downward_rounded, size: 15),
+                            onPressed: filter.isNotEmpty || r == table.rules.length - 1 ? null : () => controller.moveRule(table.rules[r].id, 1),
+                          ),
+                          IconButton(
+                            tooltip: 'Duplicate rule',
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(Icons.copy_rounded, size: 15),
+                            onPressed: () => controller.duplicateRule(table.rules[r].id),
+                          ),
+                          IconButton(
+                            tooltip: 'Delete rule',
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(Icons.delete_outline_rounded, size: 16, color: AppColors.danger),
+                            onPressed: () => controller.removeRule(table.rules[r].id),
+                          ),
+                        ])),
                       ]),
                   ],
                 ),
@@ -515,13 +580,29 @@ class _EntryField extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: 140,
-      child: TextFormField(
-        initialValue: value,
-        style: TextStyle(fontSize: 12, fontFamily: 'monospace', color: color),
-        decoration: const InputDecoration(isDense: true, border: InputBorder.none),
-        onFieldSubmitted: onChanged,
-        onEditingComplete: () {},
-        onChanged: onChanged,
+      // Arrow up/down (and Enter) move to the cell above/below; left/right keep moving the caret, Tab moves along the row.
+      child: Focus(
+        canRequestFocus: false,
+        onKeyEvent: (node, event) {
+          if (event is! KeyDownEvent) return KeyEventResult.ignored;
+          final key = event.logicalKey;
+          final scope = FocusScope.of(context);
+          if (key == LogicalKeyboardKey.arrowDown || key == LogicalKeyboardKey.enter) {
+            return scope.focusInDirection(TraversalDirection.down) ? KeyEventResult.handled : KeyEventResult.ignored;
+          }
+          if (key == LogicalKeyboardKey.arrowUp) {
+            return scope.focusInDirection(TraversalDirection.up) ? KeyEventResult.handled : KeyEventResult.ignored;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: TextFormField(
+          initialValue: value,
+          style: TextStyle(fontSize: 12, fontFamily: 'monospace', color: color),
+          decoration: const InputDecoration(isDense: true, border: InputBorder.none),
+          onFieldSubmitted: onChanged,
+          onEditingComplete: () {},
+          onChanged: onChanged,
+        ),
       ),
     );
   }

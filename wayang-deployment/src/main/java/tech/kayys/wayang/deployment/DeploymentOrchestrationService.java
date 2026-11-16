@@ -17,23 +17,32 @@ public final class DeploymentOrchestrationService {
     private final DeploymentTargetRegistry targets;
     private final Clock clock;
     private final DeploymentOperationExecutionGate executionGate;
+    private final DeploymentLifecycleReconciliationContextStore reconciliationContexts;
 
     public DeploymentOrchestrationService(DeploymentLedger ledger, DeploymentLifecycleService lifecycle,
             DeploymentTargetRegistry targets, Clock clock) {
-        this(ledger, lifecycle, targets, clock, null);
+        this(ledger, lifecycle, targets, clock, null, null);
     }
 
     /**
-     * Receipt-aware constructor. Use the durable methods below for side-effecting operations.
-     * The legacy methods remain available for source compatibility and do not use receipts.
+     * Receipt-aware constructor. The overload with a reconciliation context store enables automatic
+     * recovery to reload the original command and audit context without persisting plaintext secrets.
+     * Legacy methods remain available for source compatibility and do not use receipts.
      */
     public DeploymentOrchestrationService(DeploymentLedger ledger, DeploymentLifecycleService lifecycle,
             DeploymentTargetRegistry targets, Clock clock, DeploymentOperationReceiptService receipts) {
+        this(ledger, lifecycle, targets, clock, receipts, null);
+    }
+
+    public DeploymentOrchestrationService(DeploymentLedger ledger, DeploymentLifecycleService lifecycle,
+            DeploymentTargetRegistry targets, Clock clock, DeploymentOperationReceiptService receipts,
+            DeploymentLifecycleReconciliationContextStore reconciliationContexts) {
         this.ledger = Objects.requireNonNull(ledger, "ledger");
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.targets = Objects.requireNonNull(targets, "targets");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.executionGate = receipts == null ? null : new DeploymentOperationExecutionGate(receipts);
+        this.reconciliationContexts = reconciliationContexts;
     }
 
     public DeploymentExecutionResult activate(DeploymentCommand command, String actor, String reason,
@@ -147,6 +156,7 @@ public final class DeploymentOrchestrationService {
         var activatingRef = new java.util.concurrent.atomic.AtomicReference<DeploymentSnapshot>();
         var execution = executionGate.execute("ACTIVATE", command, Duration.ofMinutes(15),
                 () -> {
+                    persistReconciliationContext("ACTIVATE", command, safeActor, safeReason, correlation, timeout);
                     if (!DeploymentLifecycleService.allowed(current.state(), DeploymentState.ACTIVATING)) {
                         throw new IllegalStateException("Deployment cannot be activated from " + current.state());
                     }
@@ -190,6 +200,7 @@ public final class DeploymentOrchestrationService {
         var deactivatingRef = new java.util.concurrent.atomic.AtomicReference<DeploymentSnapshot>();
         var execution = executionGate.execute("DEACTIVATE", command, Duration.ofMinutes(15),
                 () -> {
+                    persistReconciliationContext("DEACTIVATE", command, safeActor, safeReason, correlation, timeout);
                     if (!DeploymentLifecycleService.allowed(current.state(), DeploymentState.DEACTIVATING)) {
                         throw new IllegalStateException("Deployment cannot be deactivated from " + current.state());
                     }
@@ -228,6 +239,7 @@ public final class DeploymentOrchestrationService {
         var rollingBackRef = new java.util.concurrent.atomic.AtomicReference<DeploymentSnapshot>();
         var execution = executionGate.execute("ROLLBACK", command, Duration.ofMinutes(15),
                 () -> {
+                    persistReconciliationContext("ROLLBACK", command, safeActor, safeReason, correlation, timeout);
                     if (!DeploymentLifecycleService.allowed(current.state(), DeploymentState.ROLLING_BACK)) {
                         throw new IllegalStateException("Deployment cannot be rolled back from " + current.state());
                     }
@@ -258,6 +270,13 @@ public final class DeploymentOrchestrationService {
                         eventKey(command.idempotencyKey(), "rollback-result"));
         return new DeploymentOrchestrationExecution<>(true,
                 new DeploymentTargetOperationResult(result, operation, health), result, execution.receipt());
+    }
+
+    private void persistReconciliationContext(String operation, DeploymentCommand command, String actor,
+            String reason, String correlationId, Duration timeout) {
+        if (reconciliationContexts == null) return;
+        reconciliationContexts.save(new DeploymentLifecycleReconciliationContext(
+                operation, command, actor, reason, correlationId, timeout));
     }
 
     private void requireExecutionGate() {

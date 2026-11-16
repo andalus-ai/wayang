@@ -34,7 +34,10 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
 
     def put_archive_file(self, name, mtime=1_600_000_000):
         path = self.archive / name
-        path.write_bytes(b"wal-or-marker")
+        if name.endswith(".history"):
+            path.write_text("1 0/01000000 no recovery target specified\n", encoding="ascii")
+        else:
+            path.write_bytes(b"wal-or-marker")
         os.utime(path, (mtime, mtime))
         return path
 
@@ -189,6 +192,144 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
 
         self.assertEqual((history,), plan.protected_history_files)
         self.assertEqual((unrelated,), plan.eligible_wal_files)
+
+    def test_parent_and_child_timeline_ranges_are_unioned(self):
+        manifest = self.write_manifest("backup.json", [self.range(timeline=1, end="0/00000000")])
+        required = {
+            "000000010000000000000000",
+            "000000020000000000000001",
+            "000000020000000000000002",
+        }
+        for name in required:
+            self.put_archive_file(name)
+        history = "00000002.history"
+        self.put_archive_file(history)
+        unrelated = "000000010000000000000010"
+        self.put_archive_file(unrelated)
+        self.write_catalog([{
+            "backup_id": "timeline-fork",
+            "retained": True,
+            "manifest": manifest,
+            "recovery_wal_ranges": [
+                self.range(timeline=1, start="0/00000000", end="0/00FFFFFF"),
+                self.range(timeline=2, start="0/01000000", end="0/02000000"),
+            ],
+        }])
+
+        plan = build_plan(self.archive, self.catalog_path, self.cutoff)
+
+        self.assertEqual(tuple(sorted(required)), plan.required_wal_files)
+        self.assertEqual((history,), plan.protected_history_files)
+        self.assertEqual((unrelated,), plan.eligible_wal_files)
+
+    def test_successive_timeline_forks_validate_ancestry_and_boundaries(self):
+        manifest = self.write_manifest("backup.json", [self.range(timeline=1, end="0/00000000")])
+        required = {
+            "000000010000000000000000",
+            "000000020000000000000001",
+            "000000030000000000000002",
+            "000000030000000000000003",
+        }
+        for name in required:
+            self.put_archive_file(name)
+        self.put_archive_file("00000002.history").write_text(
+            "1 0/01000000 first promotion\n", encoding="ascii"
+        )
+        self.put_archive_file("00000003.history").write_text(
+            "1 0/01000000 first promotion\n2 0/02000000 second promotion\n",
+            encoding="ascii"
+        )
+        self.write_catalog([
+            {
+                "backup_id": "successive-forks",
+                "retained": True,
+                "manifest": manifest,
+                "recovery_wal_ranges": [
+                    self.range(timeline=1, start="0/00000000", end="0/00FFFFFF"),
+                    self.range(timeline=2, start="0/01000000", end="0/01FFFFFF"),
+                    self.range(timeline=3, start="0/02000000", end="0/03000000"),
+                ],
+            }
+        ])
+
+        plan = build_plan(self.archive, self.catalog_path, self.cutoff)
+
+        self.assertEqual(tuple(sorted(required)), plan.required_wal_files)
+        self.assertEqual(("00000002.history", "00000003.history"), plan.protected_history_files)
+
+    def test_disjoint_ranges_cannot_hide_a_fork_boundary_gap(self):
+        manifest = self.write_manifest("backup.json", [self.range(timeline=1, end="0/00000000")])
+        self.put_archive_file("000000010000000000000000")
+        self.put_archive_file("000000020000000000000001")
+        self.put_archive_file("00000002.history").write_text(
+            "1 0/01000000 first promotion\n", encoding="ascii"
+        )
+        self.write_catalog([{
+            "backup_id": "fork-gap",
+            "retained": True,
+            "manifest": manifest,
+            "recovery_wal_ranges": [
+                self.range(timeline=1, start="0/00000000", end="0/00FFFFFF"),
+                self.range(timeline=2, start="0/01000001", end="0/01800000"),
+                self.range(timeline=2, start="0/01F00000", end="0/02000000"),
+            ],
+        }])
+
+        with self.assertRaisesRegex(CatalogError, "does not cover fork point 1000000"):
+            build_plan(self.archive, self.catalog_path, self.cutoff)
+    def test_successive_fork_with_missing_intermediate_timeline_range_fails(self):
+        manifest = self.write_manifest("backup.json", [self.range(timeline=1, end="0/00000000")])
+        for name in (
+            "000000010000000000000000",
+            "000000030000000000000002",
+        ):
+            self.put_archive_file(name)
+        self.put_archive_file("00000002.history").write_text(
+            "1 0/01000000 first promotion\n", encoding="ascii"
+        )
+        self.put_archive_file("00000003.history").write_text(
+            "1 0/01000000 first promotion\n2 0/02000000 second promotion\n",
+            encoding="ascii"
+        )
+        self.write_catalog([
+            {
+                "backup_id": "missing-intermediate",
+                "retained": True,
+                "manifest": manifest,
+                "recovery_wal_ranges": [
+                    self.range(timeline=1, start="0/00000000", end="0/00FFFFFF"),
+                    self.range(timeline=3, start="0/02000000", end="0/03000000"),
+                ],
+            }
+        ])
+
+        with self.assertRaisesRegex(CatalogError, "recovery ranges omit timeline 2"):
+            build_plan(self.archive, self.catalog_path, self.cutoff)
+
+    def test_malformed_timeline_history_fails_closed(self):
+        manifest = self.write_manifest("backup.json", [self.range(timeline=2, end="0/00000000")])
+        self.put_archive_file("000000020000000000000000")
+        self.put_archive_file("00000002.history").write_text("not a PostgreSQL history row\n", encoding="ascii")
+        self.write_catalog([{"backup_id": "bad-history", "retained": True, "manifest": manifest}])
+
+        with self.assertRaisesRegex(CatalogError, "malformed timeline history"):
+            build_plan(self.archive, self.catalog_path, self.cutoff)
+    def test_multi_timeline_recovery_requires_child_history_file(self):
+        manifest = self.write_manifest("backup.json", [self.range(timeline=1, end="0/00000000")])
+        self.put_archive_file("000000010000000000000000")
+        self.put_archive_file("000000020000000000000001")
+        self.write_catalog([{
+            "backup_id": "timeline-fork",
+            "retained": True,
+            "manifest": manifest,
+            "recovery_wal_ranges": [
+                self.range(timeline=1, start="0/00000000", end="0/01000000"),
+                self.range(timeline=2, start="0/01000000", end="0/02000000"),
+            ],
+        }])
+
+        with self.assertRaisesRegex(CatalogError, "missing timeline history file 00000002.history"):
+            build_plan(self.archive, self.catalog_path, self.cutoff)
 
     def test_missing_timeline_history_fails_closed(self):
         manifest = self.write_manifest("backup.json", [self.range(timeline=2, end="0/00000000")])

@@ -16,6 +16,14 @@
   to it and an amber guide line shows the match. Guides take priority over the grid.
 - **Find:** Ctrl/Cmd+F or the magnifier in the zoom controls opens a search over node names, ids and element types (every word must match,
   names that start with the query first). Picking one selects it and brings it to the middle of the view.
+- **Rename:** double-click a node to rename it, or a flow to edit its label (flow labels are saved in the document's `studio.meta.flowLabels`, never sent to the engine) (also "Rename" / "Edit label" in the context menu). One undo step; saving an
+  unchanged name records nothing. Double-click makes a single click on a node or flow register a moment later.
+- **Notes:** right-click empty canvas, "Add note here". Drag a note to move it (one undo step), double-click to edit (up to 1000 characters), right-click for
+  edit/delete. Notes are saved in `studio.meta.notes` of the document: text for people, never part of the process and never sent to the engine. They
+  appear on the minimap and in the SVG export (wrapped, at most six lines); they are not selected, copied or tidied.
+- **Export as image:** right-click empty canvas, "Copy diagram as SVG", then paste into a file ending `.svg` (Studio has no file-save yet).
+  The picture has lanes, flows with arrows and labels, and node names; it contains no scripts or external references, every label is escaped,
+  and node settings are never included.
 - **Help:** `?`, F1 or the keyboard icon in the zoom controls lists all of this in the app.
 - **Keys** (canvas focused, after a click on it): Delete/Backspace remove, Esc clears, Ctrl/Cmd+A selects all, Ctrl/Cmd+Z undo,
   Ctrl+Y or Ctrl/Cmd+Shift+Z redo.

@@ -39,6 +39,11 @@ Map<String, dynamic> bpmnToDocument(BpmnDiagram d) {
       'default': f.isDefault,
     });
   }
+  // Flow labels are drawing text, not process logic: they live in the studio envelope so the engine never sees them.
+  final flowLabels = <String, dynamic>{
+    for (final f in d.flows.values)
+      if (f.label.trim().isNotEmpty) f.id: f.label,
+  };
   return {
     'id': d.id,
     'name': d.name,
@@ -53,6 +58,11 @@ Map<String, dynamic> bpmnToDocument(BpmnDiagram d) {
           for (final l in d.sortedLanes) {'id': l.id, 'name': l.name, 'order': l.order, 'height': l.height},
         ],
         'nodeLanes': nodeLanes,
+        if (flowLabels.isNotEmpty) 'flowLabels': flowLabels,
+        if (d.notes.isNotEmpty)
+          'notes': [
+            for (final n in d.noteList) {'id': n.id, 'x': n.x, 'y': n.y, 'text': n.text},
+          ],
       },
     },
   };
@@ -113,6 +123,7 @@ BpmnDiagram bpmnFromDocument(Map<String, dynamic> doc, {int? revision}) {
     i++;
   }
 
+  final flowLabels = asMap(meta['flowLabels']);
   final flows = <String, BpmnFlow>{};
   for (final f in asList(doc['flows'])) {
     final m = asMap(f);
@@ -123,19 +134,32 @@ BpmnDiagram bpmnFromDocument(Map<String, dynamic> doc, {int? revision}) {
       throw const DocumentFormatException('A flow has no id, source or target.');
     }
     final cond = m['condition'];
+    final storedLabel = flowLabels[id];
     flows[id] = BpmnFlow(
       id: id,
       from: source,
       to: target,
+      label: storedLabel is String ? storedLabel : '',
       condition: cond is String && cond.trim().isNotEmpty ? cond : null,
       isDefault: m['default'] == true,
     );
+  }
+
+  // Sticky notes: tolerant of anything odd (a hand-edited document must still open), capped so a huge list cannot slow the canvas.
+  final notes = <String, BpmnNote>{};
+  for (final raw in asList(meta['notes']).take(200)) {
+    final m = asMap(raw);
+    final id = m['id'], x = m['x'], y = m['y'];
+    if (id is! String || id.isEmpty || x is! num || y is! num) continue;
+    final text = m['text'] is String ? m['text'] as String : '';
+    notes[id] = BpmnNote(id: id, x: x.toDouble(), y: y.toDouble(), text: text.length > BpmnNote.maxText ? text.substring(0, BpmnNote.maxText) : text);
   }
 
   return BpmnDiagram(
     id: (doc['id'] as String?) ?? '',
     name: (doc['name'] as String?) ?? (doc['id'] as String?) ?? 'Untitled process',
     lanes: lanes,
+    notes: notes,
     nodes: nodes,
     flows: flows,
     revision: revision,
