@@ -134,6 +134,14 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
         const SingleActivator(LogicalKeyboardKey.escape): controller.clearSelection,
         const SingleActivator(LogicalKeyboardKey.keyA, control: true): controller.selectAllNodes,
         const SingleActivator(LogicalKeyboardKey.keyA, meta: true): controller.selectAllNodes,
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): () => _nudge(-1, 0, false),
+        const SingleActivator(LogicalKeyboardKey.arrowRight): () => _nudge(1, 0, false),
+        const SingleActivator(LogicalKeyboardKey.arrowUp): () => _nudge(0, -1, false),
+        const SingleActivator(LogicalKeyboardKey.arrowDown): () => _nudge(0, 1, false),
+        const SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true): () => _nudge(-1, 0, true),
+        const SingleActivator(LogicalKeyboardKey.arrowRight, shift: true): () => _nudge(1, 0, true),
+        const SingleActivator(LogicalKeyboardKey.arrowUp, shift: true): () => _nudge(0, -1, true),
+        const SingleActivator(LogicalKeyboardKey.arrowDown, shift: true): () => _nudge(0, 1, true),
         const SingleActivator(LogicalKeyboardKey.keyC, control: true): _copy,
         const SingleActivator(LogicalKeyboardKey.keyC, meta: true): _copy,
         const SingleActivator(LogicalKeyboardKey.keyX, control: true): _cut,
@@ -267,11 +275,15 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
                                 final now = _canvasPositionOf(details.globalPosition);
                                 final dx = now.dx - _dragStartCanvasPos.dx;
                                 final dy = now.dy - _dragStartCanvasPos.dy;
+                                final snap = ref.read(bpmnSnapProvider) ? bpmnGrid : 0.0;
+                                // Snapping puts the dragged node on the grid; a group keeps its shape and moves by the same amount.
+                                final sx = snapToGrid(_dragStartNodeX + dx, snap) - _dragStartNodeX;
+                                final sy = snapToGrid(_dragStartNodeY + dy, snap) - _dragStartNodeY;
                                 if (_groupStarts != null) {
-                                  controller.dragGroup(_groupStarts!, dx, dy);
+                                  controller.dragGroup(_groupStarts!, sx, sy);
                                   return;
                                 }
-                                controller.dragNode(node.id, _dragStartNodeX + dx, _dragStartNodeY + dy);
+                                controller.dragNode(node.id, _dragStartNodeX + sx, _dragStartNodeY + sy);
                               },
                               onPanEnd: (_) {
                                 if (_groupStarts != null && _dragNodeId == node.id) {
@@ -334,6 +346,8 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
               onReset: _resetView,
               onFit: () => _zoomToFit(diagram, constraints.biggest),
               boxMode: _boxMode,
+              snap: ref.watch(bpmnSnapProvider),
+              onToggleSnap: () => ref.read(bpmnSnapProvider.notifier).state = !ref.read(bpmnSnapProvider),
               onToggleBox: () => setState(() {
                 _boxMode = !_boxMode;
                 _box = null;
@@ -362,6 +376,11 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
       }
     }
     return closest;
+  }
+
+  void _nudge(int sx, int sy, bool fine) {
+    final step = nudgeStep(fine: fine, grid: bpmnGrid);
+    ref.read(bpmnControllerProvider.notifier).nudgeSelected(sx * step, sy * step);
   }
 
   void _copy() {
@@ -473,13 +492,15 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
 }
 
 class _BpmnZoomControls extends StatelessWidget {
-  const _BpmnZoomControls({required this.onZoomIn, required this.onZoomOut, required this.onReset, required this.onFit, required this.boxMode, required this.onToggleBox});
+  const _BpmnZoomControls({required this.onZoomIn, required this.onZoomOut, required this.onReset, required this.onFit, required this.boxMode, required this.onToggleBox, required this.snap, required this.onToggleSnap});
   final VoidCallback onZoomIn;
   final VoidCallback onZoomOut;
   final VoidCallback onReset;
   final VoidCallback onFit;
   final bool boxMode;
   final VoidCallback onToggleBox;
+  final bool snap;
+  final VoidCallback onToggleSnap;
 
   @override
   Widget build(BuildContext context) {
@@ -493,6 +514,7 @@ class _BpmnZoomControls extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          Tooltip(message: snap ? 'Snap to grid on' : 'Snap to grid', child: InkWell(onTap: onToggleSnap, borderRadius: BorderRadius.circular(AppRadius.sm), child: Padding(padding: const EdgeInsets.all(7), child: Icon(Icons.grid_4x4_rounded, size: 17, color: snap ? AppColors.primaryBright : AppColors.textSecondaryDark)))),
           Tooltip(message: boxMode ? 'Box select on (drag on empty canvas)' : 'Box select', child: InkWell(onTap: onToggleBox, borderRadius: BorderRadius.circular(AppRadius.sm), child: Padding(padding: const EdgeInsets.all(7), child: Icon(Icons.select_all_rounded, size: 17, color: boxMode ? AppColors.primaryBright : AppColors.textSecondaryDark)))),
           Tooltip(message: 'Zoom out', child: InkWell(onTap: onZoomOut, borderRadius: BorderRadius.circular(AppRadius.sm), child: const Padding(padding: EdgeInsets.all(7), child: Icon(Icons.remove_rounded, size: 17, color: AppColors.textSecondaryDark)))),
           Tooltip(message: 'Reset view', child: InkWell(onTap: onReset, borderRadius: BorderRadius.circular(AppRadius.sm), child: const Padding(padding: EdgeInsets.all(7), child: Icon(Icons.center_focus_strong_rounded, size: 17, color: AppColors.textSecondaryDark)))),

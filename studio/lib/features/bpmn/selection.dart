@@ -43,3 +43,9 @@ Map<String, String?> lanesForNodes(BpmnDiagram diagram, Iterable<String> ids) {
       if (diagram.node(id) case final n?) id: laneIdForY(lanes, tops, n.y + bpmnNodeSize(n.type).height / 2),
   };
 }
+
+/// [v] moved to the nearest multiple of [grid] (a grid of 0 or less leaves it alone).
+double snapToGrid(double v, double grid) => grid <= 0 ? v : (v / grid).roundToDouble() * grid;
+
+/// The step by which an arrow key moves the selection: a grid cell, or one pixel with shift held for fine adjustment.
+double nudgeStep({required bool fine, double grid = 20}) => fine ? 1 : grid;
