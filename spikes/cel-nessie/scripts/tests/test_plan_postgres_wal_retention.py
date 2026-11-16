@@ -228,6 +228,7 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
             "000000010000000000000000",
             "000000020000000000000001",
             "000000030000000000000002",
+            "000000030000000000000003",
         }
         for name in required:
             self.put_archive_file(name)
