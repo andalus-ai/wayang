@@ -69,7 +69,7 @@ docker exec -e PGPASSWORD=postgres "$source_container" pg_basebackup \
 sql "$source_container" -c "INSERT INTO timeline_marker VALUES ('parent-timeline-marker')"
 sql "$source_container" -c "SELECT pg_switch_wal()" >/dev/null
 for attempt in $(seq 1 60); do
-  archived="$(sql "$source_container" -c "SELECT COALESCE(last_archived_wal IS NOT NULL, FALSE) FROM pg_stat_archiver")"
+  archived="$(docker exec "$source_container" sh -c "test -s /wal-archive/$(ls /var/lib/postgresql/data/pg_wal/000000010000000000000000 2>/dev/null | xargs -r basename) && echo t || echo f" 2>/dev/null || echo f)"
   [[ "$archived" == "t" ]] && break
   sleep 2
 done
@@ -120,8 +120,8 @@ if [[ "$in_recovery" != "f" ]]; then
   exit 1
 fi
 
-timeline_id="$(sql "$branch_container" -c "SELECT timeline_id FROM pg_control_checkpoint()")"
-if [[ "$timeline_id" != "2" ]]; then
+timeline_id="$(sql "$branch_container" -c "SELECT left(pg_walfile_name(pg_current_wal_lsn()), 8)")"
+if [[ "$timeline_id" != "00000002" ]]; then
   echo "Expected promoted timeline 2, got $timeline_id" >&2
   docker logs "$branch_container" >&2 || true
   exit 1
@@ -222,11 +222,11 @@ python3 spikes/cel-nessie/scripts/simulate-postgres-wal-retention.py \
 
 # A physical restore of the original timeline-1 backup must follow the
 # timeline-2 history and replay child WAL to target_time.
-docker run --rm --user root \
-  --volume "$backup_volume:/restore-data" postgres:17 \
-  -c "touch /restore-data/recovery.signal && chown postgres:postgres /restore-data/recovery.signal"
+docker run --rm --user root --entrypoint sh \
+  --volume "$backup_volume:/from:ro" --volume "$restore_volume:/to" postgres:17 \
+  -c "cp -a /from/. /to/ && touch /to/recovery.signal && chown -R postgres:postgres /to"
 docker run --detach --name "$restore_container" \
-  --volume "$backup_volume:/var/lib/postgresql/data" \
+  --volume "$restore_volume:/var/lib/postgresql/data" \
   --volume /tmp/wayang-multitimeline-simulated-wal:/simulated-wal:ro \
   postgres:17 \
   -c "restore_command=cp /simulated-wal/%f %p" \
