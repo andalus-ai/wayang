@@ -30,7 +30,7 @@ public interface DeploymentOperationReceiptStore {
     List<DeploymentOperationReceipt> findExpiredRunning(Instant now, int limit);
 
     /** Returns a bounded page of terminal receipts for lifecycle reconciliation. */
-    default List<DeploymentOperationReceipt> findTerminalReceipts(int limit) {
+    default List<DeploymentOperationReceipt> findTerminalReceipts(Instant now, int limit) {
         throw new UnsupportedOperationException("This receipt store does not support terminal receipt scans");
     }
 
