@@ -210,6 +210,36 @@ public final class JdbcDeploymentOperationReceiptStore implements DeploymentOper
     }
 
     @Override
+    public List<DeploymentOperationReceipt> findTerminalReceipts(Instant now, int limit) {
+        if (now == null) throw new IllegalArgumentException("now is required");
+        if (limit < 1 || limit > 1000) throw new IllegalArgumentException("limit must be between 1 and 1000");
+        String sql = """
+                SELECT r.deployment_id, r.operation_key, r.command_fingerprint, r.operation, r.status, r.attempt,
+                       r.target_operation_key, r.result_code, r.result_detail, r.lease_until, r.created_at, r.updated_at
+                FROM wayang_deployment_operation_receipt r
+                LEFT JOIN wayang_deployment_reconciliation_work w
+                  ON w.deployment_id = r.deployment_id AND w.operation_key = r.operation_key
+                WHERE r.status IN ('SUCCEEDED', 'FAILED', 'UNKNOWN')
+                  AND (w.deployment_id IS NULL
+                    OR (w.status = 'WAITING' AND w.retry_at <= ?)
+                    OR (w.status = 'CLAIMED' AND w.lease_until <= ?))
+                ORDER BY r.updated_at, r.deployment_id, r.operation_key
+                """;
+        try (Connection c = dataSource.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setTimestamp(1, Timestamp.from(now));
+            ps.setTimestamp(2, Timestamp.from(now));
+            ps.setMaxRows(limit);
+            try (ResultSet rs = ps.executeQuery()) {
+                List<DeploymentOperationReceipt> found = new ArrayList<>();
+                while (rs.next()) found.add(read(rs));
+                return List.copyOf(found);
+            }
+        } catch (SQLException failure) {
+            throw new IllegalStateException("Unable to scan terminal deployment receipts", failure);
+        }
+    }
+
+    @Override
     public DeploymentOperationReceipt markUnknown(String deploymentId, String operationKey, String reason, Instant now) {
         updateUnknown(deploymentId, operationKey, reason, now);
         return find(deploymentId, operationKey).orElseThrow();
