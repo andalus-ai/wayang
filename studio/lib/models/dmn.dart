@@ -337,3 +337,18 @@ extension DmnDecisionTableXml on DmnDecisionTable {
     return buffer.toString();
   }
 }
+
+/// Indexes (into [DmnDecisionTable.rules]) of the rules that match [query]: every word must appear, case-insensitively, in the rule's id, any
+/// condition, any result or its note. An empty query matches every rule.
+List<int> filterRuleIndexes(DmnDecisionTable table, String query) {
+  final words = query.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  return [
+    for (var i = 0; i < table.rules.length; i++)
+      if (words.isEmpty || _ruleMatches(table.rules[i], words)) i,
+  ];
+}
+
+bool _ruleMatches(DmnRule r, List<String> words) {
+  final hay = [r.id, ...r.inputEntries, ...r.outputEntries, r.annotation].join('\n').toLowerCase();
+  return words.every(hay.contains);
+}

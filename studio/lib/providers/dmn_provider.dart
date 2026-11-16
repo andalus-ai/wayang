@@ -23,6 +23,9 @@ final decisionTableOverlapsProvider = Provider.family<List<DmnOverlapWarning>, D
   return detectRuleOverlaps(table);
 });
 
+/// The text typed in the rule filter box of a table; kept per table while the editor is open.
+final dmnRuleFilterProvider = StateProvider.autoDispose.family<String, String>((ref, tableId) => '');
+
 class DmnEditorState {
   const DmnEditorState({
     this.loading = true,

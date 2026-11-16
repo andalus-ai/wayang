@@ -178,6 +178,7 @@ class _DecisionTableEditor extends ConsumerWidget {
     }
     final table = editorState.table!;
     final overlaps = ref.watch(decisionTableOverlapsProvider(table));
+    final filter = ref.watch(dmnRuleFilterProvider(tableId));
 
     return CallbackShortcuts(
       bindings: {
@@ -197,6 +198,8 @@ class _DecisionTableEditor extends ConsumerWidget {
         canUndo: editorState.canUndo,
         canRedo: editorState.canRedo,
         epoch: editorState.epoch,
+        filter: filter,
+        onFilter: (v) => ref.read(dmnRuleFilterProvider(tableId).notifier).state = v,
         overlaps: overlaps,
         report: editorState.report,
         publishedVersion: editorState.publishedVersion,
@@ -230,6 +233,8 @@ class _DecisionGrid extends StatelessWidget {
     required this.canUndo,
     required this.canRedo,
     required this.epoch,
+    required this.filter,
+    required this.onFilter,
     required this.overlaps,
     required this.report,
     required this.publishedVersion,
@@ -242,6 +247,8 @@ class _DecisionGrid extends StatelessWidget {
   final bool canUndo;
   final bool canRedo;
   final int epoch;
+  final String filter;
+  final ValueChanged<String> onFilter;
   final List<DmnOverlapWarning> overlaps;
   final ValidationReport? report;
   final int? publishedVersion;
@@ -249,6 +256,7 @@ class _DecisionGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visible = filterRuleIndexes(table, filter);
     return SurfacePanel(
       padding: const EdgeInsets.all(18),
       child: Column(
@@ -386,7 +394,21 @@ class _DecisionGrid extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          Row(children: [
+            SizedBox(
+              width: 280,
+              child: TextField(
+                onChanged: onFilter,
+                style: const TextStyle(fontSize: 12.5),
+                decoration: const InputDecoration(isDense: true, prefixIcon: Icon(Icons.search_rounded, size: 16), hintText: 'Filter rules (any word, any column)'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            if (filter.trim().isNotEmpty)
+              Text(visible.isEmpty ? 'No rule matches' : '${visible.length} of ${table.rules.length} rules (reordering is off while filtering)', style: const TextStyle(fontSize: 11.5, color: AppColors.textMutedDark)),
+          ]),
+          const SizedBox(height: 12),
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -417,7 +439,7 @@ class _DecisionGrid extends StatelessWidget {
                     const DataColumn(label: Text('')),
                   ],
                   rows: [
-                    for (var r = 0; r < table.rules.length; r++)
+                    for (final r in visible)
                       DataRow(key: ValueKey(table.rules[r].id), cells: [
                         DataCell(Text('${r + 1}', style: const TextStyle(color: AppColors.textMutedDark))),
                         for (var i = 0; i < table.inputs.length; i++)
@@ -445,13 +467,13 @@ class _DecisionGrid extends StatelessWidget {
                             tooltip: 'Move up',
                             visualDensity: VisualDensity.compact,
                             icon: const Icon(Icons.arrow_upward_rounded, size: 15),
-                            onPressed: r == 0 ? null : () => controller.moveRule(table.rules[r].id, -1),
+                            onPressed: filter.isNotEmpty || r == 0 ? null : () => controller.moveRule(table.rules[r].id, -1),
                           ),
                           IconButton(
                             tooltip: 'Move down',
                             visualDensity: VisualDensity.compact,
                             icon: const Icon(Icons.arrow_downward_rounded, size: 15),
-                            onPressed: r == table.rules.length - 1 ? null : () => controller.moveRule(table.rules[r].id, 1),
+                            onPressed: filter.isNotEmpty || r == table.rules.length - 1 ? null : () => controller.moveRule(table.rules[r].id, 1),
                           ),
                           IconButton(
                             tooltip: 'Duplicate rule',
@@ -558,13 +580,29 @@ class _EntryField extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: 140,
-      child: TextFormField(
-        initialValue: value,
-        style: TextStyle(fontSize: 12, fontFamily: 'monospace', color: color),
-        decoration: const InputDecoration(isDense: true, border: InputBorder.none),
-        onFieldSubmitted: onChanged,
-        onEditingComplete: () {},
-        onChanged: onChanged,
+      // Arrow up/down (and Enter) move to the cell above/below; left/right keep moving the caret, Tab moves along the row.
+      child: Focus(
+        canRequestFocus: false,
+        onKeyEvent: (node, event) {
+          if (event is! KeyDownEvent) return KeyEventResult.ignored;
+          final key = event.logicalKey;
+          final scope = FocusScope.of(context);
+          if (key == LogicalKeyboardKey.arrowDown || key == LogicalKeyboardKey.enter) {
+            return scope.focusInDirection(TraversalDirection.down) ? KeyEventResult.handled : KeyEventResult.ignored;
+          }
+          if (key == LogicalKeyboardKey.arrowUp) {
+            return scope.focusInDirection(TraversalDirection.up) ? KeyEventResult.handled : KeyEventResult.ignored;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: TextFormField(
+          initialValue: value,
+          style: TextStyle(fontSize: 12, fontFamily: 'monospace', color: color),
+          decoration: const InputDecoration(isDense: true, border: InputBorder.none),
+          onFieldSubmitted: onChanged,
+          onEditingComplete: () {},
+          onChanged: onChanged,
+        ),
       ),
     );
   }
