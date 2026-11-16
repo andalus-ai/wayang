@@ -25,6 +25,7 @@ class ManagementArtifactClientTest {
     private HttpServer server;
     private ManagementArtifactClient client;
     private final AtomicReference<String> authorization = new AtomicReference<>();
+    private final AtomicReference<String> responseDigest = new AtomicReference<>();
 
     @TempDir Path directory;
 
@@ -65,6 +66,7 @@ class ManagementArtifactClientTest {
     @Test
     void rejectsBytesThatDoNotMatchTheCommandDigestAndCleansTemporaryFile() throws Exception {
         String wrongDigest = "sha256:" + "0".repeat(64);
+        responseDigest.set(wrongDigest);
         Path target = directory.resolve("bad.zip");
 
         assertThrows(IOException.class, () -> client.download("token",
