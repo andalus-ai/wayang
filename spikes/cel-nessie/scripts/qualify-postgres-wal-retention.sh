@@ -50,7 +50,7 @@ wait_for_postgres() {
 }
 
 wait_for_postgres
-docker exec --user root "$source_container" chown postgres:postgres /wal-archive /base-backup
+docker exec --user root "$source_container" chown postgres:postgres /wal-archive /base-backup /base-backup-2
 export PGPASSWORD=postgres
 run_sql() {
   docker exec -i -e PGPASSWORD=postgres "$source_container" \
@@ -81,7 +81,10 @@ for attempt in $(seq 1 60); do
   if docker run --rm \
       --volumes-from "$source_container":ro \
       postgres:17 pg_verifybackup --wal-directory=/wal-archive /base-backup \
-      > /tmp/wayang-pg-verifybackup.log 2>&1; then
+      > /tmp/wayang-pg-verifybackup.log 2>&1 \
+      && docker run --rm --volumes-from "$source_container":ro postgres:17 \
+        pg_verifybackup --wal-directory=/wal-archive /base-backup-2 \
+        > /tmp/wayang-pg-verifybackup-2.log 2>&1; then
     verify_output="$(cat /tmp/wayang-pg-verifybackup.log)"
     verified=1
     break

@@ -23,13 +23,20 @@ class SimulationError(ValueError):
     """The plan or archive is unsafe to simulate."""
 
 
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def inventory(directory: Path) -> dict[str, str]:
     result: dict[str, str] = {}
     for path in sorted(directory.iterdir()):
         if path.is_symlink() or not path.is_file():
             raise SimulationError(f"archive must contain regular files only: {path.name}")
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        result[path.name] = digest
+        result[path.name] = file_sha256(path)
     return result
 
 
@@ -57,9 +64,11 @@ def load_plan(path: Path) -> dict[str, Any]:
 
 def simulate(archive: Path, plan_path: Path, destination: Path,
              remove_required_wal: bool = False) -> dict[str, Any]:
+    if archive.is_symlink():
+        raise SimulationError("source archive must not be a symbolic link")
     archive = archive.resolve(strict=True)
     destination = destination.resolve(strict=False)
-    if not archive.is_dir() or archive.is_symlink():
+    if not archive.is_dir():
         raise SimulationError("source archive must be a real directory")
     if destination.exists() or destination.is_symlink():
         raise SimulationError("simulation destination must not already exist")
