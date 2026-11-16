@@ -50,6 +50,10 @@ public final class ManagementArtifactClient {
         Objects.requireNonNull(destination, "destination");
 
         URI endpoint = resolveSameOrigin(artifactUri);
+        String expectedPath = "/api/v1/runtime/artifacts/" + expectedArtifactDigest;
+        if (!endpoint.normalize().getPath().equals(expectedPath)) {
+            throw new IllegalArgumentException("artifactUri path must identify the expected artifact digest");
+        }
         Path target = destination.toAbsolutePath().normalize();
         Path parent = target.getParent();
         if (parent == null || !Files.isDirectory(parent, LinkOption.NOFOLLOW_LINKS)
