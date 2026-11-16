@@ -194,7 +194,6 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
         manifest = self.write_manifest("backup.json", [self.range(timeline=1, end="0/00000000")])
         required = {
             "000000010000000000000000",
-            "000000010000000000000001",
             "000000020000000000000001",
             "000000020000000000000002",
         }
@@ -209,7 +208,7 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
             "retained": True,
             "manifest": manifest,
             "recovery_wal_ranges": [
-                self.range(timeline=1, start="0/00000000", end="0/01000000"),
+                self.range(timeline=1, start="0/00000000", end="0/00FFFFFF"),
                 self.range(timeline=2, start="0/01000000", end="0/02000000"),
             ],
         }])
