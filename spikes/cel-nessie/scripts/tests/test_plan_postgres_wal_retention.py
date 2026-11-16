@@ -14,6 +14,7 @@ SPEC.loader.exec_module(MODULE)
 CatalogError = MODULE.CatalogError
 build_plan = MODULE.build_plan
 expand_wal_range = MODULE.expand_wal_range
+require_snapshot_match = MODULE.require_snapshot_match
 
 
 SEGMENT_SIZE = 16 * 1024 * 1024
@@ -147,6 +148,69 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
         self.write_catalog([{"backup_id": "base", "retained": True, "manifest": manifest}])
         with self.assertRaisesRegex(CatalogError, "symbolic link"):
             build_plan(self.archive, self.catalog_path, self.cutoff)
+
+    def test_snapshot_fingerprint_is_stable_for_unchanged_catalog(self):
+        manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
+        self.put_archive_file("000000010000000000000000")
+        self.write_catalog([{"backup_id": "base", "retained": True, "manifest": manifest}])
+
+        first = build_plan(self.archive, self.catalog_path, self.cutoff)
+        second = build_plan(self.archive, self.catalog_path, self.cutoff)
+
+        self.assertEqual(first.catalog_snapshot_sha256, second.catalog_snapshot_sha256)
+        require_snapshot_match(second, first.catalog_snapshot_sha256)
+
+    def test_manifest_change_invalidates_previous_snapshot(self):
+        manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
+        self.put_archive_file("000000010000000000000000")
+        self.write_catalog([{"backup_id": "base", "retained": True, "manifest": manifest}])
+        first = build_plan(self.archive, self.catalog_path, self.cutoff)
+
+        self.write_manifest("backup.json", [self.range(end="0/01000000")])
+        with self.assertRaisesRegex(CatalogError, "missing required WAL"):
+            build_plan(self.archive, self.catalog_path, self.cutoff)
+
+        self.write_manifest("backup.json", [self.range(end="0/00000000", start="0/00000000")])
+        manifest_path = self.root / "backup.json"
+        manifest_path.write_text(manifest_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+        second = build_plan(self.archive, self.catalog_path, self.cutoff)
+        with self.assertRaisesRegex(CatalogError, "snapshot changed"):
+            require_snapshot_match(second, first.catalog_snapshot_sha256)
+
+    def test_catalog_change_invalidates_previous_snapshot(self):
+        manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
+        self.put_archive_file("000000010000000000000000")
+        self.write_catalog([{"backup_id": "base", "retained": True, "manifest": manifest}])
+        first = build_plan(self.archive, self.catalog_path, self.cutoff)
+
+        self.catalog_path.write_text(self.catalog_path.read_text(encoding="utf-8").replace(
+            '"backup_id": "base"', '"backup_id": "base-updated"'
+        ), encoding="utf-8")
+        second = build_plan(self.archive, self.catalog_path, self.cutoff)
+        with self.assertRaisesRegex(CatalogError, "snapshot changed"):
+            require_snapshot_match(second, first.catalog_snapshot_sha256)
+
+    def test_manifest_path_traversal_and_symlink_fail_closed(self):
+        outside = self.root.parent / (self.root.name + "-outside.json")
+        outside.write_text(json.dumps({"WAL-Ranges": [self.range(end="0/00000000")]}), encoding="utf-8")
+        self.write_catalog([{"backup_id": "escape", "retained": True, "manifest": "../" + outside.name}])
+        with self.assertRaisesRegex(CatalogError, "escapes catalog directory"):
+            build_plan(self.archive, self.catalog_path, self.cutoff)
+
+        link = self.root / "linked-manifest.json"
+        link.symlink_to(outside)
+        self.write_catalog([{"backup_id": "link", "retained": True, "manifest": link.name}])
+        with self.assertRaisesRegex(CatalogError, "symbolic link"):
+            build_plan(self.archive, self.catalog_path, self.cutoff)
+        outside.unlink()
+
+    def test_invalid_expected_snapshot_fingerprint_fails_closed(self):
+        manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
+        self.put_archive_file("000000010000000000000000")
+        self.write_catalog([{"backup_id": "base", "retained": True, "manifest": manifest}])
+        plan = build_plan(self.archive, self.catalog_path, self.cutoff)
+        with self.assertRaisesRegex(CatalogError, "lowercase SHA-256"):
+            require_snapshot_match(plan, "not-a-digest")
 
     def test_invalid_segment_size_fails_closed(self):
         self.write_catalog([], segment_size=12345)
