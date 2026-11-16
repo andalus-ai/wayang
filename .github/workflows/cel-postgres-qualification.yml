@@ -107,6 +107,31 @@ jobs:
       - name: Qualify physical base backup and point-in-time recovery
         run: bash spikes/cel-nessie/scripts/qualify-postgres-pitr.sh
 
+  postgres-wal-multitimeline:
+    name: PostgreSQL multi-timeline WAL recovery
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Qualify parent and child timeline recovery
+        run: bash spikes/cel-nessie/scripts/qualify-postgres-multitimeline-recovery.sh
+      - name: Upload multi-timeline recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-multitimeline-recovery
+          path: |
+            /tmp/wayang-multitimeline-plan.json
+            /tmp/wayang-multitimeline-simulation.json
+            /tmp/wayang-multitimeline-recovery.txt
+            /tmp/wayang-multitimeline-no-history.log
+          if-no-files-found: ignore
+          retention-days: 7
+
   postgres-wal-archive-retention:
     name: PostgreSQL WAL archive integrity and retention safety
     runs-on: ubuntu-latest
