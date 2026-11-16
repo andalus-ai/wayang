@@ -7,6 +7,7 @@ import '../core/utils.dart';
 import '../data/api_client.dart';
 import '../data/bpmn_mapper.dart';
 import '../data/wayang_repository.dart';
+import '../features/bpmn/auto_layout.dart';
 import '../models/bpmn.dart';
 import '../models/wayang.dart';
 import 'app_providers.dart';
@@ -222,6 +223,19 @@ class BpmnController extends StateNotifier<BpmnEditorState> {
     state = state.copyWith(diagram: d);
     selectNodes(map.values);
     unawaited(validate());
+  }
+
+  /// Tidies the diagram into left-to-right columns: the selection when two or more nodes are selected, else every node. One undo step.
+  void autoLayout() {
+    final sel = state.selectedNodeIds;
+    final positions = layeredLayout(state.diagram, only: sel.length > 1 ? sel : null);
+    if (positions.isEmpty) return;
+    _checkpoint();
+    var d = state.diagram;
+    for (final e in positions.entries) {
+      d = d.moveNode(e.key, e.value.dx, e.value.dy);
+    }
+    state = state.copyWith(diagram: d);
   }
 
   /// Lines the selected nodes up on their leftmost x (or topmost y). Needs two or more. One undo step.

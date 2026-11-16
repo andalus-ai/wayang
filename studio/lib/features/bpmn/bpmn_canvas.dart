@@ -367,6 +367,7 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
       BpmnMenuItem(count > 1 ? '$count nodes' : 'Node'),
       BpmnMenuItem('Duplicate', icon: Icons.copy_rounded, onTap: controller.duplicateSelected),
       if (count > 1) ...[
+        BpmnMenuItem('Tidy layout', icon: Icons.auto_fix_high_rounded, onTap: controller.autoLayout),
         BpmnMenuItem('Align left', icon: Icons.align_horizontal_left_rounded, onTap: () => controller.alignSelected(horizontal: true)),
         BpmnMenuItem('Align top', icon: Icons.align_vertical_top_rounded, onTap: () => controller.alignSelected(horizontal: false)),
       ],
@@ -397,6 +398,10 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
       for (final t in BpmnElementType.values)
         BpmnMenuItem(t.label, icon: t.icon, onTap: () => controller.addNode(t, local.dx, local.dy, laneId: laneId)),
       BpmnMenuItem('Select all', icon: Icons.select_all_rounded, divider: true, onTap: controller.selectAllNodes),
+      BpmnMenuItem('Tidy layout (all)', icon: Icons.auto_fix_high_rounded, onTap: () {
+        controller.clearSelection();
+        controller.autoLayout();
+      }),
     ]);
   }
 
