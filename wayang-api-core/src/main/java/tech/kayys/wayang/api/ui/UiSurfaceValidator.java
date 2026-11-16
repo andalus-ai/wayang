@@ -35,6 +35,8 @@ public final class UiSurfaceValidator {
     public record Result(boolean ok, List<String> problems, Map<String, Object> surface) {
     }
 
+    private static final java.util.regex.Pattern ID = java.util.regex.Pattern.compile("[A-Za-z0-9_.:-]{1,200}");
+
     private final List<String> problems = new ArrayList<>();
     private int nodes;
 
@@ -238,6 +240,39 @@ public final class UiSurfaceValidator {
                     problem(path + ".route", "must be a route inside the app, starting with a single '/'");
                 }
                 a.put("route", limit(route, MAX_SHORT));
+            }
+            case "task.complete" -> {
+                // A reference to a waiting task of a run, never its token: the viewer's session resolves the task and the server re-checks rights.
+                for (String k : new String[] {"runId", "nodeId"}) {
+                    String v = m.get(k) instanceof String x ? x : "";
+                    if (!ID.matcher(v).matches()) {
+                        problem(path + "." + k, "must be an id (letters, digits and . _ : -, up to " + MAX_SHORT + " characters)");
+                    }
+                    a.put(k, limit(v, MAX_SHORT));
+                }
+                Map<String, Object> outputs = new LinkedHashMap<>();
+                if (m.get("outputs") instanceof Map<?, ?> om) {
+                    if (om.size() > MAX_METADATA) {
+                        problem(path + ".outputs", "more than " + MAX_METADATA + " entries");
+                    } else {
+                        for (var e : om.entrySet()) {
+                            String k = String.valueOf(e.getKey());
+                            Object v = e.getValue();
+                            if (!ID.matcher(k).matches()) {
+                                problem(path + ".outputs", "keys must be ids");
+                            } else if (v instanceof String sv) {
+                                outputs.put(k, limit(sv, MAX_SHORT));
+                            } else if (v instanceof Number || v instanceof Boolean) {
+                                outputs.put(k, v);
+                            } else {
+                                problem(path + ".outputs." + limit(k, 40), "only text, numbers and booleans are accepted");
+                            }
+                        }
+                    }
+                } else if (m.get("outputs") != null) {
+                    problem(path + ".outputs", "must be an object");
+                }
+                a.put("outputs", outputs);
             }
             case "submit", "invoke", "approve", "reject" ->
                 problem(path, "'" + type + "' actions are not supported yet: they need a binding to something the viewer may act on");

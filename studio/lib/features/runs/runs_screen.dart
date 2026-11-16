@@ -299,7 +299,7 @@ class _RunDetail extends ConsumerWidget {
             const SizedBox(height: 14),
             if (r.variables['surface'] is Map) ...[
               const PanelSectionLabel('Surface'),
-              _RunSurface(surface: Map<String, dynamic>.from(r.variables['surface'] as Map)),
+              _RunSurface(runId: r.id, surface: Map<String, dynamic>.from(r.variables['surface'] as Map)),
               const SizedBox(height: 14),
             ],
             const PanelSectionLabel('Variables'),
@@ -363,7 +363,8 @@ class _EventLogState extends ConsumerState<_EventLog> {
 
 /// A run's `surface` variable, checked by the server first and then drawn. A surface the server refuses is shown as its problems, never drawn.
 class _RunSurface extends ConsumerStatefulWidget {
-  const _RunSurface({required this.surface});
+  const _RunSurface({required this.runId, required this.surface});
+  final String runId;
   final Map<String, dynamic> surface;
 
   @override
@@ -379,6 +380,29 @@ class _RunSurfaceState extends ConsumerState<_RunSurface> {
     _check = ref.read(repositoryProvider).validateSurface(jsonEncode(widget.surface));
   }
 
+  /// The task comes from the viewer's own task list (the server decides what they may see), must belong to this run, and is only completed
+  /// after the person confirms a text taken from the task itself, not from the button.
+  Future<void> _completeTask(SurfaceAction a) async {
+    final repo = ref.read(repositoryProvider);
+    try {
+      final task = taskForAction(a, widget.runId, await repo.listTasks());
+      if (task == null) {
+        if (mounted) showToast(context, 'That task is not waiting any more.', isError: true);
+        return;
+      }
+      if (!mounted) return;
+      final what = a.outputs.isEmpty ? '' : '\nSends: ${a.outputs.entries.map((e) => '${e.key}=${e.value}').join(', ')}';
+      final ok = await showConfirmDialog(context, title: 'Complete task', message: "Complete '${task.title ?? task.nodeId}'?$what", confirmLabel: 'Complete');
+      if (!ok) return;
+      await repo.completeTask(task.token, a.outputs);
+      ref.invalidate(runsProvider);
+      ref.invalidate(runDetailProvider(widget.runId));
+      ref.invalidate(tasksProvider);
+    } catch (e) {
+      if (mounted) showToast(context, errText(e), isError: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => FutureBuilder<SurfaceCheck>(
         future: _check,
@@ -391,7 +415,9 @@ class _RunSurfaceState extends ConsumerState<_RunSurface> {
           }
           return SurfaceView(
             surface: c.surface!,
-            onAction: (a) {
+            allowTaskActions: true,
+            onAction: (a) async {
+              if (a.kind == 'task.complete') return _completeTask(a);
               if (a.kind != 'navigate' || a.route == null) return;
               final key = a.route!.split('/').where((x) => x.isNotEmpty).firstOrNull;
               if (key != null && [platformSectionDashboard, ...platformSectionsAfterPlugins].any((x) => x.key == key)) {
