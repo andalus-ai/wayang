@@ -16,7 +16,7 @@
   to it and an amber guide line shows the match. Guides take priority over the grid.
 - **Find:** Ctrl/Cmd+F or the magnifier in the zoom controls opens a search over node names, ids and element types (every word must match,
   names that start with the query first). Picking one selects it and brings it to the middle of the view.
-- **Rename:** double-click a node to rename it, or a flow to edit its label (also "Rename" / "Edit label" in the context menu). One undo step; saving an
+- **Rename:** double-click a node to rename it, or a flow to edit its label (flow labels are saved in the document's `studio.meta.flowLabels`, never sent to the engine) (also "Rename" / "Edit label" in the context menu). One undo step; saving an
   unchanged name records nothing. Double-click makes a single click on a node or flow register a moment later.
 - **Help:** `?`, F1 or the keyboard icon in the zoom controls lists all of this in the app.
 - **Keys** (canvas focused, after a click on it): Delete/Backspace remove, Esc clears, Ctrl/Cmd+A selects all, Ctrl/Cmd+Z undo,
