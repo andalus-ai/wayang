@@ -256,6 +256,26 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
         self.assertEqual(tuple(sorted(required)), plan.required_wal_files)
         self.assertEqual(("00000002.history", "00000003.history"), plan.protected_history_files)
 
+    def test_disjoint_ranges_cannot_hide_a_fork_boundary_gap(self):
+        manifest = self.write_manifest("backup.json", [self.range(timeline=1, end="0/00000000")])
+        self.put_archive_file("000000010000000000000000")
+        self.put_archive_file("000000020000000000000001")
+        self.put_archive_file("00000002.history").write_text(
+            "1 0/01000000 first promotion\\n", encoding="ascii"
+        )
+        self.write_catalog([{
+            "backup_id": "fork-gap",
+            "retained": True,
+            "manifest": manifest,
+            "recovery_wal_ranges": [
+                self.range(timeline=1, start="0/00000000", end="0/00FFFFFF"),
+                self.range(timeline=2, start="0/01000001", end="0/01800000"),
+                self.range(timeline=2, start="0/01F00000", end="0/02000000"),
+            ],
+        }])
+
+        with self.assertRaisesRegex(CatalogError, "does not cover fork point 1000000"):
+            build_plan(self.archive, self.catalog_path, self.cutoff)
     def test_successive_fork_with_missing_intermediate_timeline_range_fails(self):
         manifest = self.write_manifest("backup.json", [self.range(timeline=1, end="0/00000000")])
         for name in (
