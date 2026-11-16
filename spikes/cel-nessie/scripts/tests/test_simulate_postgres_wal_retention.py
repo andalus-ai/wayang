@@ -58,7 +58,7 @@ class WalRetentionSimulationTest(unittest.TestCase):
         self.assertEqual(report["removed_candidate_files"], [CANDIDATE])
 
     def test_copy_adds_read_access_for_restore_user_without_changing_source(self):
-        source = self.archive / CANDIDATE
+        source = self.archive / REQUIRED
         source.chmod(0o600)
         destination = self.root / "readable-copy"
 
