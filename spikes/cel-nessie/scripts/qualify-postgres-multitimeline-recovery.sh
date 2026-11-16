@@ -226,6 +226,12 @@ python3 spikes/cel-nessie/scripts/simulate-postgres-wal-retention.py \
   --destination /tmp/wayang-multitimeline-simulated-wal \
   > /tmp/wayang-multitimeline-simulation.json
 
+docker run --rm \
+  --volume "$backup_volume:/base-backup:ro" \
+  --volume /tmp/wayang-multitimeline-simulated-wal:/simulated-wal:ro \
+  postgres:17 pg_verifybackup --wal-directory=/simulated-wal /base-backup \
+  > /tmp/wayang-multitimeline-pg-verifybackup.log 2>&1
+
 # A physical restore of the original timeline-1 backup must follow the
 # timeline-2 history and replay child WAL to target_time.
 docker run --rm --user root --entrypoint sh \
