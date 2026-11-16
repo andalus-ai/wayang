@@ -1,10 +1,19 @@
+import importlib.util
 import json
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from plan_postgres_wal_retention import CatalogError, build_plan, expand_wal_range
+SCRIPT_PATH = Path(__file__).parents[1] / "plan-postgres-wal-retention.py"
+SPEC = importlib.util.spec_from_file_location("plan_postgres_wal_retention", SCRIPT_PATH)
+MODULE = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = MODULE
+SPEC.loader.exec_module(MODULE)
+CatalogError = MODULE.CatalogError
+build_plan = MODULE.build_plan
+expand_wal_range = MODULE.expand_wal_range
 
 
 SEGMENT_SIZE = 16 * 1024 * 1024
@@ -127,6 +136,16 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
             {"backup_id": "same", "retained": True, "manifest": "missing.json"},
         ])
         with self.assertRaisesRegex(CatalogError, "duplicate backup_id"):
+            build_plan(self.archive, self.catalog_path, self.cutoff)
+
+    def test_archive_symlink_fails_closed(self):
+        manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
+        self.put_archive_file("000000010000000000000000")
+        target = self.root / "target"
+        target.write_text("not an archive file", encoding="utf-8")
+        (self.archive / "linked").symlink_to(target)
+        self.write_catalog([{"backup_id": "base", "retained": True, "manifest": manifest}])
+        with self.assertRaisesRegex(CatalogError, "symbolic link"):
             build_plan(self.archive, self.catalog_path, self.cutoff)
 
     def test_invalid_segment_size_fails_closed(self):
