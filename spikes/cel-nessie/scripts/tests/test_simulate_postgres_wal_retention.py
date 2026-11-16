@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import stat
 import tempfile
 import unittest
 from pathlib import Path
@@ -56,12 +57,25 @@ class WalRetentionSimulationTest(unittest.TestCase):
         self.assertFalse(report["deletion_performed_on_source"])
         self.assertEqual(report["removed_candidate_files"], [CANDIDATE])
 
+    def test_copy_adds_read_access_for_restore_user_without_changing_source(self):
+        source = self.archive / REQUIRED
+        source.chmod(0o600)
+        destination = self.root / "readable-copy"
+
+        simulate(self.archive, self.plan, destination)
+
+        source_mode = stat.S_IMODE(source.stat().st_mode)
+        copy_mode = stat.S_IMODE((destination / REQUIRED).stat().st_mode)
+        self.assertEqual(0o600, source_mode)
+        self.assertTrue(copy_mode & stat.S_IRGRP)
+        self.assertTrue(copy_mode & stat.S_IROTH)
+
     def test_negative_control_can_remove_required_wal_from_copy(self):
         destination = self.root / "negative"
         report = simulate(self.archive, self.plan, destination, remove_required_wal=True)
 
         self.assertFalse((destination / REQUIRED).exists())
-        self.assertFalse((self.archive / REQUIRED).exists() is False)
+        self.assertTrue((self.archive / REQUIRED).is_file())
         self.assertEqual(report["removed_required_files"], [REQUIRED])
         self.assertEqual(report["required_wal_present"], [])
 

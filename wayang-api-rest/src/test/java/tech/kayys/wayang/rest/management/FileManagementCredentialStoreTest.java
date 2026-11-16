@@ -40,7 +40,8 @@ class FileManagementCredentialStoreTest {
     void rejectsBlankAndMultilineCredentials() throws Exception {
         FileManagementCredentialStore store = store(directory.resolve("registration-token"));
         assertThrows(IllegalArgumentException.class, () -> store.save(" "));
-        assertThrows(IllegalArgumentException.class, () -> store.save("secret\\nsecond-line"));
+        assertThrows(IllegalArgumentException.class, () -> store.save("secret\nsecond-line"));
+        assertThrows(IllegalArgumentException.class, () -> store.save("secret\rsecond-line"));
         assertFalse(Files.exists(directory.resolve("registration-token")));
     }
 

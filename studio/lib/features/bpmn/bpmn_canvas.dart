@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart' hide DiagnosticLevel;
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/services.dart' hide DiagnosticLevel;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,8 +10,10 @@ import '../../core/theme.dart';
 import '../../models/bpmn.dart';
 import '../../providers/bpmn_provider.dart';
 import 'context_menu.dart';
+import 'guides.dart';
 import 'minimap.dart';
 import 'selection.dart';
+import 'shortcuts_help.dart';
 
 const double kLaneHeaderWidth = 120;
 const double kBpmnCanvasWidth = 3200;
@@ -57,6 +60,9 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
 
   // Box select: while [_boxMode] is on, dragging on empty canvas draws a rectangle instead of panning.
   bool _boxMode = false;
+
+  // Alignment guides shown while a drag is close to lining up with another node.
+  Guides _guides = Guides.none;
   Offset? _boxStart;
   Rect? _box;
   final FocusNode _focus = FocusNode(debugLabel: 'bpmn-canvas');
@@ -127,6 +133,7 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
     }
 
     return LayoutBuilder(builder: (context, constraints) {
+    _viewportSize = constraints.biggest;
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.delete): controller.removeSelected,
@@ -134,6 +141,18 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
         const SingleActivator(LogicalKeyboardKey.escape): controller.clearSelection,
         const SingleActivator(LogicalKeyboardKey.keyA, control: true): controller.selectAllNodes,
         const SingleActivator(LogicalKeyboardKey.keyA, meta: true): controller.selectAllNodes,
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): () => _nudge(-1, 0, false),
+        const SingleActivator(LogicalKeyboardKey.arrowRight): () => _nudge(1, 0, false),
+        const SingleActivator(LogicalKeyboardKey.arrowUp): () => _nudge(0, -1, false),
+        const SingleActivator(LogicalKeyboardKey.arrowDown): () => _nudge(0, 1, false),
+        const SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true): () => _nudge(-1, 0, true),
+        const SingleActivator(LogicalKeyboardKey.arrowRight, shift: true): () => _nudge(1, 0, true),
+        const SingleActivator(LogicalKeyboardKey.arrowUp, shift: true): () => _nudge(0, -1, true),
+        const SingleActivator(LogicalKeyboardKey.arrowDown, shift: true): () => _nudge(0, 1, true),
+        const SingleActivator(LogicalKeyboardKey.f1): () => showBpmnShortcutHelp(context),
+        const SingleActivator(LogicalKeyboardKey.slash, shift: true): () => showBpmnShortcutHelp(context),
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true): _find,
+        const SingleActivator(LogicalKeyboardKey.keyF, meta: true): _find,
         const SingleActivator(LogicalKeyboardKey.keyC, control: true): _copy,
         const SingleActivator(LogicalKeyboardKey.keyC, meta: true): _copy,
         const SingleActivator(LogicalKeyboardKey.keyX, control: true): _cut,
@@ -213,6 +232,10 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
                             ),
                           ),
                         ),
+                        if (!_guides.isEmpty)
+                          Positioned.fill(
+                            child: IgnorePointer(child: CustomPaint(painter: GuidesPainter(_guides, AppColors.warning.withValues(alpha: 0.8)))),
+                          ),
                         if (_box != null)
                           Positioned.fromRect(
                             rect: _box!,
@@ -267,13 +290,25 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
                                 final now = _canvasPositionOf(details.globalPosition);
                                 final dx = now.dx - _dragStartCanvasPos.dx;
                                 final dy = now.dy - _dragStartCanvasPos.dy;
+                                final snap = ref.read(bpmnSnapProvider) ? bpmnGrid : 0.0;
+                                // Snapping puts the dragged node on the grid; a group keeps its shape and moves by the same amount.
+                                var sx = snapToGrid(_dragStartNodeX + dx, snap) - _dragStartNodeX;
+                                var sy = snapToGrid(_dragStartNodeY + dy, snap) - _dragStartNodeY;
+                                // Alignment guides win over the grid: a node that lines up with a neighbour snaps to it.
+                                final cur = ref.read(bpmnControllerProvider).diagram;
+                                final movers = _groupStarts ?? {node.id: Offset(_dragStartNodeX, _dragStartNodeY)};
+                                final g = alignmentGuides(cur, movers.keys.toSet(), boxOfMoved(cur, movers, sx, sy));
+                                sx += g.dx;
+                                sy += g.dy;
+                                if (!listEquals(_guides.vertical, g.vertical) || !listEquals(_guides.horizontal, g.horizontal)) setState(() => _guides = g);
                                 if (_groupStarts != null) {
-                                  controller.dragGroup(_groupStarts!, dx, dy);
+                                  controller.dragGroup(_groupStarts!, sx, sy);
                                   return;
                                 }
-                                controller.dragNode(node.id, _dragStartNodeX + dx, _dragStartNodeY + dy);
+                                controller.dragNode(node.id, _dragStartNodeX + sx, _dragStartNodeY + sy);
                               },
                               onPanEnd: (_) {
+                                if (!_guides.isEmpty) setState(() => _guides = Guides.none);
                                 if (_groupStarts != null && _dragNodeId == node.id) {
                                   // Each moved node joins the lane it now sits in, like a single drag; one undo step for the whole move.
                                   controller.endDragGroup(_groupBefore!, lanes: lanesForNodes(ref.read(bpmnControllerProvider).diagram, _groupStarts!.keys));
@@ -334,6 +369,10 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
               onReset: _resetView,
               onFit: () => _zoomToFit(diagram, constraints.biggest),
               boxMode: _boxMode,
+              onFind: _find,
+              onHelp: () => showBpmnShortcutHelp(context),
+              snap: ref.watch(bpmnSnapProvider),
+              onToggleSnap: () => ref.read(bpmnSnapProvider.notifier).state = !ref.read(bpmnSnapProvider),
               onToggleBox: () => setState(() {
                 _boxMode = !_boxMode;
                 _box = null;
@@ -362,6 +401,24 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
       }
     }
     return closest;
+  }
+
+  void _nudge(int sx, int sy, bool fine) {
+    final step = nudgeStep(fine: fine, grid: bpmnGrid);
+    ref.read(bpmnControllerProvider.notifier).nudgeSelected(sx * step, sy * step);
+  }
+
+  Size _viewportSize = Size.zero;
+
+  /// Ctrl/Cmd+F: pick a node by name, id or type; it is selected and brought to the middle of the view.
+  Future<void> _find() async {
+    final diagram = ref.read(bpmnControllerProvider).diagram;
+    final picked = await showDialog<BpmnNode>(context: context, builder: (_) => _FindNodeDialog(diagram: diagram));
+    if (picked == null || !mounted) return;
+    ref.read(bpmnControllerProvider.notifier).selectNode(picked.id);
+    final s = bpmnNodeSize(picked.type);
+    _transformController.value = matrixCenteredOn(_transformController.value, Offset(picked.x + s.width / 2, picked.y + s.height / 2), _viewportSize);
+    _focus.requestFocus();
   }
 
   void _copy() {
@@ -473,13 +530,17 @@ class _BpmnCanvasState extends ConsumerState<BpmnCanvas> {
 }
 
 class _BpmnZoomControls extends StatelessWidget {
-  const _BpmnZoomControls({required this.onZoomIn, required this.onZoomOut, required this.onReset, required this.onFit, required this.boxMode, required this.onToggleBox});
+  const _BpmnZoomControls({required this.onZoomIn, required this.onZoomOut, required this.onReset, required this.onFit, required this.boxMode, required this.onToggleBox, required this.snap, required this.onToggleSnap, required this.onFind, required this.onHelp});
   final VoidCallback onZoomIn;
   final VoidCallback onZoomOut;
   final VoidCallback onReset;
   final VoidCallback onFit;
   final bool boxMode;
   final VoidCallback onToggleBox;
+  final bool snap;
+  final VoidCallback onToggleSnap;
+  final VoidCallback onFind;
+  final VoidCallback onHelp;
 
   @override
   Widget build(BuildContext context) {
@@ -493,6 +554,9 @@ class _BpmnZoomControls extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          Tooltip(message: 'Shortcuts (?)', child: InkWell(onTap: onHelp, borderRadius: BorderRadius.circular(AppRadius.sm), child: const Padding(padding: EdgeInsets.all(7), child: Icon(Icons.keyboard_outlined, size: 17, color: AppColors.textSecondaryDark)))),
+          Tooltip(message: 'Find a node (Ctrl+F)', child: InkWell(onTap: onFind, borderRadius: BorderRadius.circular(AppRadius.sm), child: const Padding(padding: EdgeInsets.all(7), child: Icon(Icons.search_rounded, size: 17, color: AppColors.textSecondaryDark)))),
+          Tooltip(message: snap ? 'Snap to grid on' : 'Snap to grid', child: InkWell(onTap: onToggleSnap, borderRadius: BorderRadius.circular(AppRadius.sm), child: Padding(padding: const EdgeInsets.all(7), child: Icon(Icons.grid_4x4_rounded, size: 17, color: snap ? AppColors.primaryBright : AppColors.textSecondaryDark)))),
           Tooltip(message: boxMode ? 'Box select on (drag on empty canvas)' : 'Box select', child: InkWell(onTap: onToggleBox, borderRadius: BorderRadius.circular(AppRadius.sm), child: Padding(padding: const EdgeInsets.all(7), child: Icon(Icons.select_all_rounded, size: 17, color: boxMode ? AppColors.primaryBright : AppColors.textSecondaryDark)))),
           Tooltip(message: 'Zoom out', child: InkWell(onTap: onZoomOut, borderRadius: BorderRadius.circular(AppRadius.sm), child: const Padding(padding: EdgeInsets.all(7), child: Icon(Icons.remove_rounded, size: 17, color: AppColors.textSecondaryDark)))),
           Tooltip(message: 'Reset view', child: InkWell(onTap: onReset, borderRadius: BorderRadius.circular(AppRadius.sm), child: const Padding(padding: EdgeInsets.all(7), child: Icon(Icons.center_focus_strong_rounded, size: 17, color: AppColors.textSecondaryDark)))),
@@ -921,6 +985,56 @@ class _BpmnPortDot extends StatelessWidget {
         shape: BoxShape.circle,
         border: Border.all(color: color, width: 1.4),
       ),
+    );
+  }
+}
+
+
+class _FindNodeDialog extends StatefulWidget {
+  const _FindNodeDialog({required this.diagram});
+  final BpmnDiagram diagram;
+
+  @override
+  State<_FindNodeDialog> createState() => _FindNodeDialogState();
+}
+
+class _FindNodeDialogState extends State<_FindNodeDialog> {
+  String _q = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final hits = findNodes(widget.diagram, _q);
+    return AlertDialog(
+      title: const Text('Find a node'),
+      content: SizedBox(
+        width: 420,
+        height: 340,
+        child: Column(children: [
+          TextField(
+            autofocus: true,
+            decoration: const InputDecoration(prefixIcon: Icon(Icons.search_rounded), hintText: 'Name, id or type'),
+            onChanged: (v) => setState(() => _q = v),
+            onSubmitted: (_) {
+              if (hits.isNotEmpty) Navigator.pop(context, hits.first);
+            },
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: hits.isEmpty
+                ? const Center(child: Text('No node matches.'))
+                : ListView(children: [
+                    for (final n in hits)
+                      ListTile(
+                        dense: true,
+                        title: Text(n.label.isEmpty ? n.id : n.label),
+                        subtitle: Text('${n.type.label} · ${n.id}', style: const TextStyle(fontSize: 11)),
+                        onTap: () => Navigator.pop(context, n),
+                      ),
+                  ]),
+          ),
+        ]),
+      ),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
     );
   }
 }

@@ -285,6 +285,19 @@ class BpmnController extends StateNotifier<BpmnEditorState> {
     unawaited(validate());
   }
 
+  /// Moves every selected node by [dx],[dy]. One undo step per call. Does nothing with an empty selection.
+  void nudgeSelected(double dx, double dy) {
+    final ids = state.selectedNodeIds;
+    if (ids.isEmpty || (dx == 0 && dy == 0)) return;
+    _checkpoint();
+    var d = state.diagram;
+    for (final id in ids) {
+      final n = d.node(id);
+      if (n != null) d = d.moveNode(id, n.x + dx, n.y + dy);
+    }
+    state = state.copyWith(diagram: d);
+  }
+
   /// Lines the selected nodes up on their leftmost x (or topmost y). Needs two or more. One undo step.
   void alignSelected({required bool horizontal}) {
     final nodes = [for (final id in state.selectedNodeIds) if (state.diagram.node(id) case final n?) n];
@@ -485,6 +498,12 @@ final runHighlightProvider = StateProvider<Set<String>>((ref) => const {});
 
 /// The process open in the designer (null until one is picked or created).
 final activeBpmnDiagramIdProvider = StateProvider<String?>((ref) => null);
+
+/// Grid size in canvas pixels, used by snap-to-grid and by arrow-key nudging.
+const double bpmnGrid = 20;
+
+/// Whether dragging snaps nodes to the grid.
+final bpmnSnapProvider = StateProvider<bool>((ref) => false);
 
 /// Nodes (with the flows that run between them) copied from a diagram, ready to paste into this or another process. Kept in memory
 /// only: it is not written to the system clipboard and is gone when Studio closes.
