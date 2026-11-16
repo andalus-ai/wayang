@@ -127,5 +127,6 @@ jobs:
             /tmp/wayang-pg-verifybackup-missing.log
             /tmp/wayang-wal-retention-plan.json
             /tmp/wayang-wal-retention-simulation.json
+            /tmp/wayang-wal-restore-rehearsal.txt
           if-no-files-found: ignore
           retention-days: 7
