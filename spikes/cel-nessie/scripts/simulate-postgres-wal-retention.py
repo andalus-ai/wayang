@@ -12,6 +12,7 @@ import hashlib
 import json
 import re
 import shutil
+import stat
 import sys
 from pathlib import Path
 from typing import Any
@@ -86,6 +87,12 @@ def simulate(archive: Path, plan_path: Path, destination: Path,
     removed = candidates | (required if remove_required_wal else set())
     try:
         shutil.copytree(archive, destination, copy_function=shutil.copy2)
+        # PostgreSQL recovery runs as the postgres OS user in the restore
+        # container. Make the disposable copy readable by that user even when
+        # the source archive was exported with owner-only permissions.
+        for copied in destination.iterdir():
+            if copied.is_file() and not copied.is_symlink():
+                copied.chmod(stat.S_IMODE(copied.stat().st_mode) | stat.S_IRGRP | stat.S_IROTH)
         for name in sorted(removed):
             (destination / name).unlink()
         after = inventory(archive)
