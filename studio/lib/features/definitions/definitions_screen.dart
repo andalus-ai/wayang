@@ -10,6 +10,7 @@ import '../../data/api_client.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
 import '../mapper/pipeline_builder.dart';
+import 'agent_builder.dart';
 
 /// Definition editor for agents and pipelines. Pipelines expose a visual EIP graph
 /// projection alongside JSON editing; both use the same canonical document and API.
@@ -145,7 +146,9 @@ class _DefinitionsScreenState extends ConsumerState<DefinitionsScreen> {
             title: widget.kind.label,
             subtitle: widget.kind == DefinitionKind.pipeline
                 ? 'Compose integration steps visually or edit the underlying JSON. Server validation remains authoritative.'
-                : 'JSON editor — the document is validated by the server before it can be published.',
+                : widget.kind == DefinitionKind.agent
+                    ? 'Build an agent with the form or edit the underlying JSON. The server validates before anything can be published.'
+                    : 'JSON editor — the document is validated by the server before it can be published.',
             icon: widget.kind == DefinitionKind.agent ? Icons.smart_toy_outlined : Icons.hub_outlined,
             actions: [ElevatedButton.icon(onPressed: _new, icon: const Icon(Icons.add_rounded, size: 18), label: const Text('New'))],
           ),
@@ -183,11 +186,14 @@ class _DefinitionsScreenState extends ConsumerState<DefinitionsScreen> {
                                 Row(children: [
                                   Text(_id!, style: const TextStyle(fontWeight: FontWeight.w700)),
                                   const Spacer(),
-                                  if (widget.kind == DefinitionKind.pipeline) ...[
+                                  if (widget.kind == DefinitionKind.pipeline || widget.kind == DefinitionKind.agent) ...[
                                     SegmentedButton<bool>(
                                       showSelectedIcon: false,
-                                      segments: const [
-                                        ButtonSegment(value: true, icon: Icon(Icons.account_tree_outlined, size: 15), label: Text('Graph')),
+                                      segments: [
+                                        ButtonSegment(
+                                            value: true,
+                                            icon: Icon(widget.kind == DefinitionKind.agent ? Icons.tune_rounded : Icons.account_tree_outlined, size: 15),
+                                            label: Text(widget.kind == DefinitionKind.agent ? 'Form' : 'Graph')),
                                         ButtonSegment(value: false, icon: Icon(Icons.code_rounded, size: 15), label: Text('JSON')),
                                       ],
                                       selected: {_visualBuilder},
@@ -211,7 +217,9 @@ class _DefinitionsScreenState extends ConsumerState<DefinitionsScreen> {
                                   ),
                                 const SizedBox(height: 10),
                                 Expanded(
-                                  child: widget.kind == DefinitionKind.pipeline && _visualBuilder
+                                  child: widget.kind == DefinitionKind.agent && _visualBuilder
+                                      ? AgentBuilder(controller: _text)
+                                      : widget.kind == DefinitionKind.pipeline && _visualBuilder
                                       ? PipelineBuilder(controller: _text)
                                       : TextField(
                                           controller: _text,
