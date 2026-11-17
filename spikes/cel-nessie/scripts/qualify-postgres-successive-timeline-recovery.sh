@@ -92,7 +92,7 @@ docker run --rm --user root --volume "$backup1_volume:/from:ro" --volume "$timel
 start_archiver "$timeline2_container" "$timeline2_volume"
 wait_ready "$timeline2_container"
 if [[ "$(sql "$timeline2_container" -c "SELECT pg_is_in_recovery()")" == "t" ]]; then
-  docker exec "$timeline2_container" pg_ctl promote -D /var/lib/postgresql/data -w
+  docker exec --user postgres "$timeline2_container" pg_ctl promote -D /var/lib/postgresql/data -w
 fi
 for attempt in $(seq 1 60); do
   in_recovery="$(sql "$timeline2_container" -c "SELECT pg_is_in_recovery()")"
@@ -130,7 +130,7 @@ if [[ "$(sql "$timeline3_container" -c "SELECT pg_is_in_recovery()")" != "t" ]];
   exit 1
 fi
 sql "$timeline3_container" -c "SELECT 1 FROM timeline_marker WHERE marker='timeline2-marker'" >/dev/null
-docker exec "$timeline3_container" pg_ctl promote -D /var/lib/postgresql/data -w
+docker exec --user postgres "$timeline3_container" pg_ctl promote -D /var/lib/postgresql/data -w
 for attempt in $(seq 1 60); do
   in_recovery="$(sql "$timeline3_container" -c "SELECT pg_is_in_recovery()")"
   [[ "$in_recovery" == "f" ]] && break
