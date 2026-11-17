@@ -156,7 +156,7 @@ wait_archive "$timeline3_container" "$timeline3_last_wal"
 # Build recovery ranges from the actual PostgreSQL-generated history files.
 catalog_dir="/tmp/wayang-successive-timeline-catalog"
 mkdir -p "$catalog_dir/archive"
-docker cp "$backup1_volume:/backup_manifest" "$catalog_dir/backup_manifest"
+docker run --rm --volume "$backup1_volume:/base-backup:ro" --entrypoint cat postgres:17 /base-backup/backup_manifest > "$catalog_dir/backup_manifest"
 docker cp "$timeline3_container:/wal-archive/." "$catalog_dir/archive/"
 segment_size="$(docker exec "$timeline3_container" pg_controldata /var/lib/postgresql/data | awk -F: '/Bytes per WAL segment/ { gsub(/[[:space:]]/, "", $2); print $2 }')"
 fork1_lsn="$(awk '$1 == 1 { print $2; exit }' "$catalog_dir/archive/00000002.history")"
