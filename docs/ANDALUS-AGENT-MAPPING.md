@@ -23,6 +23,25 @@ Wayang itself enforces only what it can on the way out: persona composition and 
 | Guardrails | `ToolGuardrailCheck` (SPI) / `DefaultToolGuardrailCheck` runs `GuardrailsService.preCheck` on tool name and arguments and **fails open** on error or timeout (5 s). `AgentDefinition.constraints()` is a free map that no framework or runtime code reads. | No per-agent guardrail config; fail-open is documented as flippable "in production" but there is no switch. |
 | Memory | Wayang passes `input.history`; the adapter does not use it (documented). | Out of scope here. |
 
+## Verified while preparing the first Andalus change (blocks items 2 and 3 below)
+
+Read in `andalus` 9d717f6 (`DefaultAgentToolExecutor`, `PolicyEvaluationContexts`, `ToolPermissionContext`) and `andalus-framework` d979007; still not run.
+
+* **The governance policies never see the caller.** `DefaultAgentToolExecutor` evaluates policies with `ToolPermissionContext.standalone(executionId, tool, level)`:
+  tenant `null`, user `null`, roles `["*"]`, and `PolicyEvaluationContexts.create` sets `agentId` to `null`. The framework already ships `AgentToolPolicy`
+  (a per-agent tool allow-list), but it only applies when `context.agentId()` equals its agent, so on this path it can never match; tenant and role policies
+  likewise see no tenant and a wildcard role.
+* **Per-execution state lives in an application-scoped singleton.** `DefaultAgentToolExecutor` is `@ApplicationScoped` and keeps `currentExecutionId`,
+  `currentTenantId`, `currentUserId` and `currentBudget` in volatile fields that `DefaultAgentExecution` overwrites through `bindExecutionContext(...)` at the start
+  of each execution. Two executions running at once share them: the budget, the audit/ledger tags and the cache provenance of one can be attributed to the other
+  (*to confirm under concurrency: I did not run it, and an injected executor per execution might exist outside the code I read*).
+
+Consequence: adding `agentId` (or the Wayang `requireApproval` list) to that singleton would put another per-execution field into the same race, so one agent's
+allow-list or approval rule could be applied to another agent's call. I did not make that change. The sound shape is an immutable, per-execution wrapper
+(`ScopedToolExecutor(delegate, executionId, tenantId, userId, agentId, budget, constraints)`) created by `AgentExecutionService.create(...)`, which builds a full
+`PolicyEvaluationContext` and calls `ToolPolicyEvaluator.evaluate(PolicyEvaluationContext)` before delegating, with a test that runs two executions concurrently.
+That touches the execution kernel's constructors and lifecycle, so it wants the Andalus owners' agreement before code.
+
 ## Proposed split
 
 **Wayang side (small, after the owners confirm the entry point):** an `AgentSpecMapper` in `wayang-adapter-andalus` producing an `AgentDefinition`:
