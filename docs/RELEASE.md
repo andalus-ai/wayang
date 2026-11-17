@@ -165,3 +165,20 @@ or in the database table `wayang_agent_memory` with `wayang.store=jdbc` (shared 
 `WAYANG_STATE_DIR` (`memory-<hash>.json`, one process only), which survives restarts. It holds chat text: protect that directory like the
 secrets directory. Agents run by the Andalus adapter receive the history in `input.history` but the adapter does not use it yet. There is no
 summary of old turns: the oldest exchange simply falls off.
+
+## Agent persona and guardrails
+
+Two more optional `options` of an agent, both validated when the definition is saved or published (a malformed one is a 422, not a run-time surprise):
+
+* `options.persona: {role, tone, language, boundaries: [..]}` (each text up to 200 characters, up to 20 boundary lines, at least one field). It is
+  put before the agent's system prompt as a fixed block (`Role:`, `Tone:`, `Reply in:`, `Boundaries (never do these):`). Persona text is literal: it is
+  not run through `{{ }}` templating. It steers the model; it is **not** a security control.
+* `options.guardrails: {maxOutputChars, redact: [email, phone, card], blockedTerms: [..]}` is **enforced by Wayang on what the agent returns**
+  (every text value of its result), on every runtime that uses the agent step, whatever the model does: a value containing a blocked term
+  (case-insensitive) is replaced by `[withheld by a guardrail]`, then emails, phone numbers and Luhn-valid card numbers are replaced by
+  `[email removed]` and so on, then the value is cut to `maxOutputChars` (1..100000). Redaction is pattern based and best effort: it misses unusual
+  formats and a long digit run can be taken for a phone number. It applies before the answer is remembered by agent memory. It does not filter
+  the prompt sent to the model, tool arguments, or tool output, and it does not replace `maxSteps`, `timeoutSeconds` or `requireApproval`, which
+  the runtime (Andalus adapter: not enforced by Wayang, see `AndalusAgentInvoker`) honours.
+
+Verification: unit tests for both records and the handler; the handler test runs only in CI (no Quarkus/Maven here); not exercised against a real model.
