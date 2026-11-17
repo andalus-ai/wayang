@@ -24,19 +24,22 @@ public class DeploymentLifecycleReconciliationScheduledTask {
     private final Instance<DeploymentLifecycleReconciliationWorker> worker;
     private final boolean enabled;
     private final int batchSize;
+    private final DeploymentLifecycleReconciliationMetrics metrics;
 
     public DeploymentLifecycleReconciliationScheduledTask(
             Instance<DeploymentLifecycleReconciliationWorker> worker,
             @ConfigProperty(name = "wayang.deployment.reconciliation.enabled", defaultValue = "false")
             boolean enabled,
             @ConfigProperty(name = "wayang.deployment.reconciliation.batch-size", defaultValue = "100")
-            int batchSize) {
+            int batchSize,
+            DeploymentLifecycleReconciliationMetrics metrics) {
         this.worker = Objects.requireNonNull(worker, "worker");
         if (batchSize < 1 || batchSize > 1000) {
             throw new IllegalArgumentException("wayang.deployment.reconciliation.batch-size must be between 1 and 1000");
         }
         this.enabled = enabled;
         this.batchSize = batchSize;
+        this.metrics = Objects.requireNonNull(metrics, "metrics");
     }
 
     /**
@@ -56,12 +59,14 @@ public class DeploymentLifecycleReconciliationScheduledTask {
 
         try {
             DeploymentLifecycleReconciliationWorkerResult result = worker.get().runOnce(batchSize);
+            metrics.record(result);
             if (result.scanned() > 0) {
                 LOG.infof("Deployment lifecycle reconciliation tick: scanned=%d claimed=%d reconciled=%d waiting=%d unresolved=%d conflicts=%d skipped=%d",
                         result.scanned(), result.claimed(), result.reconciled(), result.waiting(),
                         result.unresolved(), result.conflicts(), result.skipped());
             }
         } catch (RuntimeException failure) {
+            metrics.recordFailure();
             // Do not log exception messages: JDBC and adapter exceptions can contain sensitive details.
             LOG.error("Deployment lifecycle reconciliation tick failed; durable work remains eligible for a later tick");
         }
