@@ -261,7 +261,7 @@ public final class WayangApi {
                     }
                 }
                 case DECISION -> DmnLoader.load(doc);
-                case AGENT -> AgentSpecLoader.fromMap(doc);
+                case AGENT -> items.addAll(tech.kayys.wayang.api.definition.AgentToolCheck.check(AgentSpecLoader.fromMap(doc)));
                 case PIPELINE -> EipLoader.build(doc, tech.kayys.wayang.eip.Services.scratch((n, c, i) -> {
                     throw new tech.kayys.wayang.eip.Invoker.Permanent("validation only");
                 }));
