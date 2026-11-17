@@ -37,3 +37,28 @@ loop, or unbounded executor.
 - This module does not define application-specific datasource, tenant routing,
   encryption key management, health/readiness policy, or metrics export. Those
   belong in the hosting application/integration layer.
+
+## Health and metrics
+
+The module exposes a SmallRye readiness check at the Quarkus health endpoint.
+It reports DOWN only when reconciliation is enabled but the worker CDI bean is
+not resolvable. Disabled reconciliation reports UP. Queue backlog, WAITING work,
+UNRESOLVED receipts, and CONFLICT outcomes do not make the application unready.
+
+Micrometer counters are registered under `wayang.deployment.reconciliation.*`:
+
+- `ticks` and `tick.failures`
+- `receipts.scanned`, `receipts.claimed`, `receipts.reconciled`
+- `receipts.waiting`, `receipts.unresolved`, `receipts.conflicts`, `receipts.skipped`
+- `tick.duration` timer
+
+Queue-depth gauges use the `queue` metric with a bounded `status` tag for each
+durable work status. They start at `-1` until an optional
+`DeploymentLifecycleReconciliationQueueSnapshotProvider` is supplied and a
+snapshot succeeds. The provider is called after worker ticks, not on every
+metrics scrape. Implementations should return aggregate counts only; never add
+tenant IDs, deployment IDs, operation keys, or other high-cardinality labels.
+
+The module registers Micrometer meters; the hosting application chooses and
+configures the exporter/registry endpoint (for example, Prometheus) and its
+authentication/network exposure.
