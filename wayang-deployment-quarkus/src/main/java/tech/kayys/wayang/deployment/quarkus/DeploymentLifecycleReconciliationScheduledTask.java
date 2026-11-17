@@ -22,18 +22,21 @@ public class DeploymentLifecycleReconciliationScheduledTask {
     private static final Logger LOG = Logger.getLogger(DeploymentLifecycleReconciliationScheduledTask.class);
 
     private final Instance<DeploymentLifecycleReconciliationWorker> worker;
+    private final DeploymentLifecycleReconciliationMetrics metrics;
     private final boolean enabled;
     private final int batchSize;
     private final DeploymentLifecycleReconciliationMetrics metrics;
 
     public DeploymentLifecycleReconciliationScheduledTask(
             Instance<DeploymentLifecycleReconciliationWorker> worker,
+            DeploymentLifecycleReconciliationMetrics metrics,
             @ConfigProperty(name = "wayang.deployment.reconciliation.enabled", defaultValue = "false")
             boolean enabled,
             @ConfigProperty(name = "wayang.deployment.reconciliation.batch-size", defaultValue = "100")
             int batchSize,
             DeploymentLifecycleReconciliationMetrics metrics) {
         this.worker = Objects.requireNonNull(worker, "worker");
+        this.metrics = Objects.requireNonNull(metrics, "metrics");
         if (batchSize < 1 || batchSize > 1000) {
             throw new IllegalArgumentException("wayang.deployment.reconciliation.batch-size must be between 1 and 1000");
         }
@@ -52,7 +55,9 @@ public class DeploymentLifecycleReconciliationScheduledTask {
             concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void runScheduledTick() {
         if (!enabled) return;
+        long started = System.nanoTime();
         if (!worker.isResolvable()) {
+            metrics.recordFailure(System.nanoTime() - started);
             LOG.error("Deployment reconciliation is enabled but no worker bean is available");
             return;
         }
