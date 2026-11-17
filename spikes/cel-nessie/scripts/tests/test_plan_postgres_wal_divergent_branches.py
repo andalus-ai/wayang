@@ -145,22 +145,21 @@ class DivergentTimelineRetentionTest(unittest.TestCase):
         with self.assertRaisesRegex(CatalogError, "timeline 1 recovery range does not reach byte before fork"):
             build_plan(self.archive, self.catalog, self.cutoff)
 
-    def test_sibling_timeline_is_not_required_in_other_branch_path(self):
+    def test_unretained_sibling_branch_is_not_a_recovery_dependency(self):
         self.seed_sibling_branches()
         catalog = json.loads(self.catalog.read_text(encoding="utf-8"))
-        branch_a = catalog["backups"][0]
-        branch_a["recovery_wal_ranges"] = [
-            self.wal_range(1, "0/00000000", "0/00FFFFFF"),
-            self.wal_range(2, "0/01000000", "0/02000000"),
-        ]
-        self.catalog.write_text(json.dumps(catalog), encoding="utf-8")
+        self.catalog.write_text(json.dumps({
+            "wal_segment_size_bytes": SEGMENT_SIZE,
+            "backups": [catalog["backups"][1]],
+        }), encoding="utf-8")
+        (self.archive / "00000002.history").unlink()
 
         plan = build_plan(self.archive, self.catalog, self.cutoff)
 
-        # Both branches remain protected globally, but neither branch is forced
-        # to traverse the other's sibling timeline in its own ancestry chain.
-        self.assertIn("000000020000000000000001", plan.required_wal_files)
-        self.assertIn("000000030000000000000002", plan.required_wal_files)
+        self.assertEqual(("retained-branch-b",), plan.retained_backup_ids)
+        self.assertNotIn("000000020000000000000001", plan.required_wal_files)
+        self.assertIn("000000020000000000000001", plan.eligible_wal_files)
+        self.assertIn("00000003.history", plan.protected_history_files)
 
 
 if __name__ == "__main__":
