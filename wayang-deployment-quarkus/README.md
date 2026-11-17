@@ -37,3 +37,31 @@ loop, or unbounded executor.
 - This module does not define application-specific datasource, tenant routing,
   encryption key management, health/readiness policy, or metrics export. Those
   belong in the hosting application/integration layer.
+
+## Health and metrics
+
+When SmallRye Health is enabled by this module, the readiness check is exposed
+through the application's standard `/q/health/ready` endpoint.
+
+- Disabled integration reports UP; it is an opt-in capability.
+- Enabled integration reports DOWN only when the reconciliation worker CDI bean
+  is unavailable.
+- WAITING, UNRESOLVED, and CONFLICT work do not make the application unready.
+  They are durable work outcomes and should be monitored/handled operationally.
+- This readiness check validates bean availability only. It does not prove that
+  the database, encryption key provider, or target health adapters are reachable.
+
+Micrometer exports low-cardinality cumulative counters:
+
+- `wayang.deployment.reconciliation.scanned`
+- `wayang.deployment.reconciliation.claimed`
+- `wayang.deployment.reconciliation.reconciled`
+- `wayang.deployment.reconciliation.waiting`
+- `wayang.deployment.reconciliation.unresolved`
+- `wayang.deployment.reconciliation.conflicts`
+- `wayang.deployment.reconciliation.skipped`
+- `wayang.deployment.reconciliation.failed_ticks`
+- `wayang.deployment.reconciliation.last.success.epoch.millis` (gauge)
+
+No deployment IDs, tenant IDs, operation keys, exception messages, or context
+values are used as metric labels.
