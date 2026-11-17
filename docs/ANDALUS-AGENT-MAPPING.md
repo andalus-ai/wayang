@@ -62,3 +62,10 @@ Order of value: 3 and 2 (they stop an agent doing more than its definition says)
 
 Whether `ExecutionService` has an implementation elsewhere; whether Andalus wants `constraints` keys or a typed field; whether per-agent policy belongs in the
 agent definition or in Andalus's deployment policy. I would ask the Andalus owners these three before writing code on either side.
+
+## Wayang side, implemented
+
+`AgentSpecMapper` (in `wayang-adapter-andalus`) builds the `AgentDefinition` as described above, and `AndalusAgentInvoker.byDefinition(executionService)` hands it
+to `ExecutionService.startAgent(AgentDefinition, inputs)` with the prompt Wayang rendered for the run (`input.system`). The default constructor is unchanged
+(lookup by id). Opt-in, because it needs an `ExecutionService` that implements the definition overload (see the first row of the table) and because model and
+tool references are by name. `constraints` is data only until Andalus reads it. Verified by unit tests with proxy stand-ins for `ExecutionService`; never run against a real Andalus.
