@@ -66,6 +66,7 @@ class DivergentTimelineRetentionTest(unittest.TestCase):
         self.archive_file("00000003.history", "1 0/02000000 branch-b promotion\n")
         for name in (
             "000000010000000000000000",
+            "000000010000000000000001",
             "000000020000000000000001",
             "000000020000000000000002",
             "000000030000000000000002",
@@ -110,6 +111,7 @@ class DivergentTimelineRetentionTest(unittest.TestCase):
         self.assertEqual(
             (
                 "000000010000000000000000",
+                "000000010000000000000001",
                 "000000020000000000000001",
                 "000000020000000000000002",
                 "000000030000000000000002",
