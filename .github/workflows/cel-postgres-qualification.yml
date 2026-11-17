@@ -133,6 +133,28 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  postgres-wal-successive-timelines:
+    name: PostgreSQL successive timeline promotions and PITR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Qualify two promotions and timeline-3 PITR
+        run: bash spikes/cel-nessie/scripts/qualify-postgres-successive-timeline-recovery.sh
+      - name: Upload successive-timeline recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-successive-timeline-recovery
+          path: |
+            /tmp/wayang-successive-timeline-plan.json
+            /tmp/wayang-successive-timeline-simulation.json
+            /tmp/wayang-successive-timeline-recovery.txt
+            /tmp/wayang-successive-timeline-pg-verifybackup.log
+            /tmp/wayang-successive-timeline-no-history.log
+          if-no-files-found: ignore
+          retention-days: 7
+
   postgres-wal-archive-retention:
     name: PostgreSQL WAL archive integrity and retention safety
     runs-on: ubuntu-latest

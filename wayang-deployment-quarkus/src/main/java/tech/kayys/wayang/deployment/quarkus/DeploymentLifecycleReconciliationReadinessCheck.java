@@ -1,6 +1,5 @@
 package tech.kayys.wayang.deployment.quarkus;
 
-import io.quarkus.arc.Unremovable;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -10,13 +9,13 @@ import org.eclipse.microprofile.health.Readiness;
 import tech.kayys.wayang.deployment.DeploymentLifecycleReconciliationWorker;
 
 /**
- * Reports whether the optional reconciliation capability is wired.
+ * Readiness for the optional reconciliation integration.
  *
- * Backlog size, WAITING work, and UNRESOLVED receipts deliberately do not affect readiness.
+ * Unresolved or waiting work is deliberately not an application readiness failure:
+ * those are durable operational outcomes requiring retry or operator attention.
  */
 @Readiness
 @ApplicationScoped
-@Unremovable
 public class DeploymentLifecycleReconciliationReadinessCheck implements HealthCheck {
     private final Instance<DeploymentLifecycleReconciliationWorker> worker;
     private final boolean enabled;
@@ -31,16 +30,15 @@ public class DeploymentLifecycleReconciliationReadinessCheck implements HealthCh
 
     @Override
     public HealthCheckResponse call() {
-        boolean workerResolvable = worker.isResolvable();
-        boolean ready = isReady(enabled, workerResolvable);
+        if (!enabled) {
+            return HealthCheckResponse.named("wayang-deployment-reconciliation")
+                    .up().withData("enabled", false).build();
+        }
+        if (!worker.isResolvable()) {
+            return HealthCheckResponse.named("wayang-deployment-reconciliation")
+                    .down().withData("enabled", true).withData("reason", "worker-bean-unavailable").build();
+        }
         return HealthCheckResponse.named("wayang-deployment-reconciliation")
-                .status(ready)
-                .withData("enabled", enabled)
-                .withData("workerResolvable", workerResolvable)
-                .build();
-    }
-
-    static boolean isReady(boolean enabled, boolean workerResolvable) {
-        return !enabled || workerResolvable;
+                .up().withData("enabled", true).build();
     }
 }

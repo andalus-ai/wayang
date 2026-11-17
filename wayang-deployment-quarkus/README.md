@@ -40,25 +40,28 @@ loop, or unbounded executor.
 
 ## Health and metrics
 
-The module exposes a SmallRye readiness check at the Quarkus health endpoint.
-It reports DOWN only when reconciliation is enabled but the worker CDI bean is
-not resolvable. Disabled reconciliation reports UP. Queue backlog, WAITING work,
-UNRESOLVED receipts, and CONFLICT outcomes do not make the application unready.
+When SmallRye Health is enabled by this module, the readiness check is exposed
+through the application's standard `/q/health/ready` endpoint.
 
-Micrometer counters are registered under `wayang.deployment.reconciliation.*`:
+- Disabled integration reports UP; it is an opt-in capability.
+- Enabled integration reports DOWN only when the reconciliation worker CDI bean
+  is unavailable.
+- WAITING, UNRESOLVED, and CONFLICT work do not make the application unready.
+  They are durable work outcomes and should be monitored/handled operationally.
+- This readiness check validates bean availability only. It does not prove that
+  the database, encryption key provider, or target health adapters are reachable.
 
-- `ticks` and `tick.failures`
-- `receipts.scanned`, `receipts.claimed`, `receipts.reconciled`
-- `receipts.waiting`, `receipts.unresolved`, `receipts.conflicts`, `receipts.skipped`
-- `tick.duration` timer
+Micrometer exports low-cardinality cumulative counters:
 
-Queue-depth gauges use the `queue` metric with a bounded `status` tag for each
-durable work status. They start at `-1` until an optional
-`DeploymentLifecycleReconciliationQueueSnapshotProvider` is supplied and a
-snapshot succeeds. The provider is called after worker ticks, not on every
-metrics scrape. Implementations should return aggregate counts only; never add
-tenant IDs, deployment IDs, operation keys, or other high-cardinality labels.
+- `wayang.deployment.reconciliation.scanned`
+- `wayang.deployment.reconciliation.claimed`
+- `wayang.deployment.reconciliation.reconciled`
+- `wayang.deployment.reconciliation.waiting`
+- `wayang.deployment.reconciliation.unresolved`
+- `wayang.deployment.reconciliation.conflicts`
+- `wayang.deployment.reconciliation.skipped`
+- `wayang.deployment.reconciliation.failed_ticks`
+- `wayang.deployment.reconciliation.last.success.epoch.millis` (gauge)
 
-The module registers Micrometer meters; the hosting application chooses and
-configures the exporter/registry endpoint (for example, Prometheus) and its
-authentication/network exposure.
+No deployment IDs, tenant IDs, operation keys, exception messages, or context
+values are used as metric labels.
