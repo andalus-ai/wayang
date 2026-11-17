@@ -56,6 +56,7 @@ start_archiver() {
   docker run --detach --name "$container" \
     --volume "$volume:/var/lib/postgresql/data" \
     --volume "$archive_volume:/wal-archive" \
+    --volume "$backup2_volume:/backup2" \
     postgres:17 \
     -c "restore_command=cp /wal-archive/%f %p" \
     -c archive_mode=on \
