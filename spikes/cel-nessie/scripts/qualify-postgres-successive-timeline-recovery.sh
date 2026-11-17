@@ -254,8 +254,15 @@ if [[ "${in_recovery:-t}" != "f" ]]; then
   echo "PITR did not complete on timeline 3" >&2
   exit 1
 fi
-restored_timeline="$(sql "$restore_container" -c "SELECT left(pg_walfile_name(pg_current_wal_lsn()), 8)")"
-test "$restored_timeline" = "00000003"
+# recovery_target_action=promote creates a new writable timeline after
+# reaching the target on timeline 3. PostgreSQL records timeline 3 as the
+# parent of that post-recovery timeline in pg_control_checkpoint().
+restored_parent_timeline="$(sql "$restore_container" -c "SELECT prev_timeline_id FROM pg_control_checkpoint()")"
+if [[ "$restored_parent_timeline" != "3" ]]; then
+  echo "PITR did not branch from timeline 3 (previous timeline=$restored_parent_timeline)" >&2
+  docker logs "$restore_container" >&2 || true
+  exit 1
+fi
 
 assert_marker() {
   local marker="$1" expected="$2"
