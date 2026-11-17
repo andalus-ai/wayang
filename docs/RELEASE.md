@@ -182,3 +182,12 @@ Two more optional `options` of an agent, both validated when the definition is s
   the runtime (Andalus adapter: not enforced by Wayang, see `AndalusAgentInvoker`) honours.
 
 Verification: unit tests for both records and the handler; the handler test runs only in CI (no Quarkus/Maven here); not exercised against a real model.
+
+## Agent tool checks at validate and publish
+
+Saving-time validation of an agent (the editor's Validate, and the 422 on publish) also checks each tool: it needs a `type` (the connector it calls),
+`config.parameters` must be a JSON object, every `${...}` must be a well-formed `${secret:NAME}` or `${config:NAME}`, and a text under a
+credential-looking key (names containing `secret`, `password`, `apikey`, `authorization`, `credential`, `cookie`, or ending in `token`) must be
+made of such references (optionally after `Bearer ` or `Basic `), never a literal. A finding names the tool and the config path and never repeats
+the value. Not checked: whether the named secret exists, and whether the connector type is wired into the release; both are still answered at run time
+(the model is told the tool is unavailable). Keys such as `maxTokens` are not treated as credentials, and nothing under `parameters` is.
