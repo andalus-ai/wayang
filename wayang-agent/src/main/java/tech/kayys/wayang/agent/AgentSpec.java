@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
  * @param timeoutSeconds  wall-clock limit (1..3600)
  * @param requireApproval tool names that need human approval before every call
  * @param outputKeys      keys the caller expects back in the result map (documented contract, not enforced by this class)
+ * @param options         optional {@code memory} ({@link AgentMemory}), {@code persona} ({@link AgentPersona}) and {@code guardrails} ({@link AgentGuardrails})
  */
 public record AgentSpec(String id, String name, String model, String systemPrompt, String inputTemplate,
         List<Tool> tools, int maxSteps, int timeoutSeconds, List<String> requireApproval, List<String> outputKeys,
@@ -58,6 +59,8 @@ public record AgentSpec(String id, String name, String model, String systemPromp
         outputKeys = outputKeys == null ? List.of() : List.copyOf(outputKeys);
         options = options == null ? Map.of() : Map.copyOf(options);
         AgentMemory.of(id, options); // a malformed memory option is a definition error, not a run-time surprise
+        AgentPersona.of(id, options);
+        AgentGuardrails.of(id, options);
         java.util.Set<String> names = new java.util.HashSet<>();
         for (Tool t : tools) {
             if (!names.add(t.name())) {
