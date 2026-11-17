@@ -29,8 +29,8 @@ class AgentSpecMapperTest {
         var options = Map.<String, Object>of(
                 "persona", Map.of("role", "Support", "tone", "calm"),
                 "guardrails", Map.of("redact", List.of("email")));
-        AgentDefinition d = AgentSpecMapper.toDefinition(spec("support.triage", options), null);
-        assertEquals("support.triage", d.identity().id());
+        AgentDefinition d = AgentSpecMapper.toDefinition(spec("support-triage", options), null);
+        assertEquals("support-triage", d.identity().id());
         assertEquals("Concierge", d.identity().name());
         assertEquals("Support", d.role());
         assertEquals("Role: Support\nTone: calm\n\nHelp {{ who }}.", d.goal());
@@ -52,12 +52,6 @@ class AgentSpecMapperTest {
         assertFalse(d.constraints().containsKey("requireApproval"));
         assertFalse(d.constraints().containsKey("guardrails"));
         assertEquals("raw", AgentSpecMapper.toDefinition(s, "  ").goal());
-    }
-
-    @Test
-    void invalidAndalusIdIsExplainedWithoutBuildingAnything() {
-        var e = assertThrows(IllegalArgumentException.class, () -> AgentSpecMapper.toDefinition(spec("bad id!", Map.of()), null));
-        assertTrue(e.getMessage().contains("bad id!"));
     }
 
     @Test

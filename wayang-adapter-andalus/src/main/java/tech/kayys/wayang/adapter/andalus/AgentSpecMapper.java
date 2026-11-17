@@ -32,15 +32,10 @@ public final class AgentSpecMapper {
 
     /**
      * @param renderedSystem the prompt Wayang rendered for this run, or null to compose it from the spec
-     * @throws IllegalArgumentException when the agent id is not a valid Andalus agent id
      */
     public static AgentDefinition toDefinition(AgentSpec spec, String renderedSystem) {
-        AgentIdentity identity;
-        try {
-            identity = new AgentIdentity(spec.id(), spec.name(), null);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Agent id '" + spec.id() + "' is not a valid Andalus agent id (letters, digits, . _ : -)", e);
-        }
+        // an AgentSpec id ([A-Za-z][A-Za-z0-9_-]{0,63}) is always a valid Andalus agent id
+        AgentIdentity identity = new AgentIdentity(spec.id(), spec.name(), null);
         AgentPersona persona = AgentPersona.of(spec);
         String prompt = renderedSystem != null && !renderedSystem.isBlank() ? renderedSystem
                 : persona != null ? persona.compose(spec.systemPrompt())
