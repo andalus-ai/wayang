@@ -74,7 +74,7 @@ class DeploymentLifecycleReconciliationWorkerTest {
         var command = command("op-missing-context");
         var receipt = receipt(command, DeploymentOperationStatus.SUCCEEDED);
         var work = new FakeWorkStore();
-        var worker = worker(new FakeReceiptStore(receipt), ignored -> Optional.empty(), work,
+        var worker = worker(new FakeReceiptStore(receipt), emptyContexts(), work,
                 new DeploymentLifecycleReconciliationService(ledger, lifecycle, new DeploymentTargetRegistry(), clock()));
 
         var report = worker.runOnce(10);
@@ -106,6 +106,15 @@ class DeploymentLifecycleReconciliationWorkerTest {
         return new DeploymentOperationReceipt(command.deploymentId(), command.idempotencyKey(),
                 DeploymentCommandFingerprint.of("ACTIVATE", command), "ACTIVATE", status, 1,
                 "target-" + command.idempotencyKey(), status.name(), "target result", null, NOW, NOW);
+    }
+
+    private static DeploymentLifecycleReconciliationContextStore emptyContexts() {
+        return new DeploymentLifecycleReconciliationContextStore() {
+            @Override public void save(DeploymentLifecycleReconciliationContext ignored) { }
+            @Override public Optional<DeploymentLifecycleReconciliationContext> find(DeploymentOperationReceipt receipt) {
+                return Optional.empty();
+            }
+        };
     }
 
     private static DeploymentLifecycleReconciliationContextStore context(DeploymentCommand command) {
