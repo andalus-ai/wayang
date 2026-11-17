@@ -45,8 +45,10 @@ The PostgreSQL 17 qualification script uses disposable Docker volumes:
 - Missing timeline-3 history is rejected even when WAL files remain.
 - `pg_verifybackup` accepts the simulated archive for the original base
   backup.
-- The timeline-3 PITR restore contains baseline, timeline-1, timeline-2, and
-  timeline-3 markers, but excludes both post-target markers.
+- The PITR restore reaches the target on timeline 3, then promotes to a new
+  writable timeline whose recorded parent is timeline 3. It contains baseline,
+  timeline-1, timeline-2, and timeline-3 markers, but excludes both post-target
+  markers.
 - Restore reads only from the simulated archive; no source archive deletion is
   performed.
 
