@@ -120,4 +120,24 @@ class RuntimeTest {
         eng.complete(run, run.waitingOn().token(), Map.of());
         assertEquals(ReferenceEngine.Status.COMPLETED, run.status());
     }
+
+    @Test
+    void agentHandlerComposesPersonaAndEnforcesGuardrailsOnTheResult() {
+        var seen = new java.util.ArrayList<String>();
+        var handler = new AgentHandler((spec, in) -> {
+            seen.add(String.valueOf(in.get("system")));
+            return Map.of("output", "Write to bob@example.com. " + "x".repeat(100));
+        }, Map.<String, tech.kayys.wayang.agent.AgentSpec>of());
+        var agent = Map.<String, Object>of("id", "a", "model", "m", "systemPrompt", "Hi {{ who }}.",
+                "options", Map.of("persona", Map.of("role", "Concierge"),
+                        "guardrails", Map.of("redact", List.of("email"), "maxOutputChars", 40)));
+        var node = new tech.kayys.wayang.bpmn.PlanNode("n", "n", ElementType.SERVICE_TASK, "wayang-agent", Map.of("agent", agent), List.of(), List.of());
+        var outcome = handler.handle("r", node, Map.of("who", "Ana"));
+        assertEquals("Role: Concierge\n\nHi Ana.", seen.get(0));
+        var done = assertInstanceOf(NodeOutcome.Completed.class, outcome);
+        String out = String.valueOf(done.outputs().get("output"));
+        assertFalse(out.contains("bob@"));
+        assertTrue(out.startsWith("Write to [email removed]."));
+        assertTrue(out.length() <= 41);
+    }
 }

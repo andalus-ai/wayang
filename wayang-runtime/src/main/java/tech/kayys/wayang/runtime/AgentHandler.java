@@ -64,7 +64,9 @@ public final class AgentHandler implements DomainHandler {
             }
             var scope = FlowRuntime.scopeOf(vars);
             Map<String, Object> input = new LinkedHashMap<>();
-            input.put("system", PromptTemplate.render(spec.systemPrompt(), scope));
+            String system = PromptTemplate.render(spec.systemPrompt(), scope);
+            var persona = tech.kayys.wayang.agent.AgentPersona.of(spec);
+            input.put("system", persona == null ? system : persona.compose(system));
             input.put("prompt", PromptTemplate.render(spec.inputTemplate(), scope));
             input.put("variables", FlowRuntime.nest(vars));
             tech.kayys.wayang.agent.AgentMemory mem = memory == null ? null : tech.kayys.wayang.agent.AgentMemory.of(spec);
@@ -88,6 +90,11 @@ public final class AgentHandler implements DomainHandler {
                 return new NodeOutcome.Completed(Map.of("output", "I do not keep any memory of conversations.", "forgotten", false));
             }
             Map<String, Object> result = invoker.invoke(spec, input);
+            var guardrails = tech.kayys.wayang.agent.AgentGuardrails.of(spec);
+            if (guardrails != null && result != null) {
+                // enforced here, on every runtime, before the answer is remembered or handed to the process
+                result = guardrails.applyTo(result);
+            }
             if (mem != null && result != null && result.get("output") instanceof String answer && !answer.isBlank()) {
                 memory.append(ns, convKey, new tech.kayys.wayang.agent.ConversationMemory.Turn(String.valueOf(input.get("prompt")), answer,
                         System.currentTimeMillis()), mem.turns());
