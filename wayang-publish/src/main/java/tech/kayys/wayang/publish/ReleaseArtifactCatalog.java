@@ -46,6 +46,8 @@ final class ReleaseArtifactCatalog {
             Map.entry("wayang.multimodal.transcribe", List.of("wayang-multimodal")),
             Map.entry("wayang.multimodal.speak", List.of("wayang-multimodal")),
             Map.entry("wayang.multimodal.describe", List.of("wayang-multimodal")),
+            Map.entry("wayang.knowledge.rag-ingest", List.of("wayang-knowledge")),
+            Map.entry("wayang.knowledge.rag-search", List.of("wayang-knowledge")),
             Map.entry("wayang.mcp.openapi", List.of("wayang-mcp"))
     );
 
@@ -54,6 +56,8 @@ final class ReleaseArtifactCatalog {
             Map.entry("wayang-runtime", List.of("wayang-expression", "wayang-dmn", "wayang-business-process", "wayang-integration", "wayang-agent")),
             Map.entry("wayang-connectors", List.of("wayang-runtime")),
             Map.entry("wayang-multimodal", List.of("wayang-runtime", "wayang-connectors")),
+            Map.entry("wayang-rag", List.of()),
+            Map.entry("wayang-knowledge", List.of("wayang-runtime", "wayang-rag")),
             Map.entry("wayang-mcp", List.of("wayang-runtime", "wayang-connectors")),
             Map.entry("wayang-business-process", List.of("wayang-expression")),
             Map.entry("wayang-dmn", List.of("wayang-expression")),

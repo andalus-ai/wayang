@@ -22,6 +22,7 @@
         <module>wayang-connectors</module>
         <module>wayang-multimodal</module>
         <module>wayang-rag</module>
+        <module>wayang-knowledge</module>
         <module>wayang-publish</module>
         <module>wayang-deployment</module>
         <module>wayang-deployment-quarkus</module>
