@@ -27,6 +27,15 @@ public final class ServiceHandler implements DomainHandler {
         default Map<String, Object> call(Map<String, Object> config, Map<String, Object> inputs) throws Exception {
             return call(inputs);
         }
+
+        /**
+         * A connector that keeps state in the process (a cache, a knowledge base) returns true to receive the run's tenant as
+         * {@code config["wayang.tenant"]}, set by the engine and never by the node's author, so it can keep tenants apart.
+         * Defaults to false: other connectors never see it.
+         */
+        default boolean tenantScoped() {
+            return false;
+        }
     }
 
     /** Thrown by connectors to say whether trying again can help (e.g. 503 yes, 404 no). */
@@ -87,6 +96,9 @@ public final class ServiceHandler implements DomainHandler {
                     cfg.put(k, v);
                 }
             });
+            if (c.tenantScoped()) {
+                cfg.put(SecretResolver.TENANT_VARIABLE, vars.get(SecretResolver.TENANT_VARIABLE) instanceof String t ? t : "");
+            }
             Map<String, Object> out = c.call(cfg, in);
             out = out == null ? Map.of() : out;
             if (node.config().get("outputMapping") != null) {
