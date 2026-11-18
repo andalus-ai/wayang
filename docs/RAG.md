@@ -61,6 +61,8 @@ tools:
   - {name: search_contracts, type: rag-search, description: "Search the contract library", config: {knowledge: contracts, retrieval: {method: bm25, topK: 5}}}
 ```
 
+In Studio's agent form, **Add knowledge search** inserts this tool with the `query` parameter already declared. Publishing checks that a `rag-search`/`rag-ingest` tool names its knowledge base and that `rag-search` declares a `query` parameter.
+
 Ingest first with a `rag-ingest` node (`{knowledge: contracts, chunking: {type: clause}}`). Ingest and search must repeat the same `chunking` and `embedder` settings, otherwise the call fails instead of silently reconfiguring the base; `retrieval` may differ per node.
 
 - The knowledge **name comes from node configuration, never from model input**, so an agent only reaches knowledge its author wired to it.

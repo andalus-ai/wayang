@@ -194,6 +194,24 @@ final _ref = RegExp(r'\$\{(secret|config):[A-Za-z0-9_.-]{1,100}\}');
 final _credentialKey = RegExp(r'(.*(secret|password|passwd|apikey|api_key|authorization|credential|cookie).*|.*tokens?)', caseSensitive: false);
 final _counterKey = RegExp(r'((max|min|num).*|.*(count|limit|size))', caseSensitive: false);
 
+/// A ready-made retrieval tool: the model supplies only the query; the knowledge base is fixed by the author.
+AgentToolForm knowledgeSearchTool(String name, String knowledge) => AgentToolForm(
+      name: name,
+      type: 'rag-search',
+      description: 'Search the "$knowledge" documents and return the most relevant passages with their sources.',
+      config: {
+        'knowledge': knowledge,
+        'retrieval': {'method': 'bm25', 'topK': 5},
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'query': {'type': 'string', 'description': 'What to look for'},
+          },
+          'required': ['query'],
+        },
+      },
+    );
+
 /// Early hints for the form, mirroring the server's publish checks (AgentToolCheck). The server stays authoritative.
 List<String> toolHints(AgentToolForm t) {
   final out = <String>[];
@@ -219,6 +237,16 @@ List<String> toolHints(AgentToolForm t) {
     }
   }
 
+  if (t.type.trim() == 'rag-search' || t.type.trim() == 'rag-ingest') {
+    final k = t.config['knowledge'];
+    if (k is! String || !RegExp(r'^[A-Za-z][A-Za-z0-9_-]{0,63}$').hasMatch(k)) {
+      out.add('Name the knowledge base in config.knowledge (letters, digits, - and _).');
+    }
+    final p = t.config['parameters'];
+    if (t.type.trim() == 'rag-search' && !(p is Map && p['properties'] is Map && (p['properties'] as Map).containsKey('query'))) {
+      out.add('A rag-search tool needs a "query" parameter in config.parameters.');
+    }
+  }
   walk('config', t.config, null);
   return out;
 }

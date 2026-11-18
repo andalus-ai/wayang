@@ -124,13 +124,21 @@ class _AgentBuilderState extends State<AgentBuilder> {
         ),
         _section('Tools'),
         for (var i = 0; i < tools.length; i++) _tool(doc, tools, i),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: () => _put(withTools(_doc ?? doc, [...tools, AgentToolForm(name: _freshToolName(tools))]), rebuild: true),
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('Add tool'),
-          ),
+        Wrap(
+          spacing: 8,
+          children: [
+            TextButton.icon(
+              onPressed: () => _put(withTools(_doc ?? doc, [...tools, AgentToolForm(name: _freshToolName(tools))]), rebuild: true),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Add tool'),
+            ),
+            TextButton.icon(
+              key: const ValueKey('add-knowledge-tool'),
+              onPressed: () => _put(withTools(_doc ?? doc, [...tools, knowledgeSearchTool('search_knowledge', 'my-knowledge')]), rebuild: true),
+              icon: const Icon(Icons.menu_book_rounded, size: 18),
+              label: const Text('Add knowledge search'),
+            ),
+          ],
         ),
         const SizedBox(height: 24),
       ],
