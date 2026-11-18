@@ -57,7 +57,7 @@ final class ReleaseArtifactCatalog {
             Map.entry("wayang-connectors", List.of("wayang-runtime")),
             Map.entry("wayang-multimodal", List.of("wayang-runtime", "wayang-connectors")),
             Map.entry("wayang-rag", List.of()),
-            Map.entry("wayang-knowledge", List.of("wayang-runtime", "wayang-rag")),
+            Map.entry("wayang-knowledge", List.of("wayang-runtime", "wayang-connectors", "wayang-rag")),
             Map.entry("wayang-mcp", List.of("wayang-runtime", "wayang-connectors")),
             Map.entry("wayang-business-process", List.of("wayang-expression")),
             Map.entry("wayang-dmn", List.of("wayang-expression")),

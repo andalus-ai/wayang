@@ -1,9 +1,12 @@
 package tech.kayys.wayang.knowledge;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import tech.kayys.wayang.connectors.MediaHttp;
+import tech.kayys.wayang.connectors.UrlGuard;
 import tech.kayys.wayang.rag.Embedder;
 import tech.kayys.wayang.rag.HashingEmbedder;
 import tech.kayys.wayang.rag.KnowledgeBase;
@@ -25,12 +28,17 @@ final class KnowledgeRegistry {
     }
 
     private final Map<String, Entry> bases = new LinkedHashMap<>();
+    private final MediaHttp http;
+
+    KnowledgeRegistry(UrlGuard guard) {
+        this.http = new MediaHttp(guard);
+    }
 
     /** The base for {@code config}, created on first use. A later call with different chunking/limits settings is an error, not a silent reconfigure. */
     synchronized KnowledgeBase get(Map<String, Object> config, boolean create) {
         String name = name(config);
         Map<String, Object> def = definition(config);
-        String sig = def + "|" + config.get("embedder");
+        String sig = def + "|" + embedderSignature(config.get("embedder"));
         Entry e = bases.get(name);
         if (e != null) {
             if (!e.signature.equals(sig)) {
@@ -87,24 +95,43 @@ final class KnowledgeRegistry {
         return d;
     }
 
-    private static Embedder embedder(Object o) {
+    /** The embedder settings without the API key, so a credential is never part of anything kept or compared as text. */
+    private static String embedderSignature(Object o) {
+        if (o instanceof Map<?, ?> m) {
+            Map<Object, Object> c = new LinkedHashMap<>(m);
+            c.remove("apiKey");
+            return c.toString();
+        }
+        return String.valueOf(o);
+    }
+
+    private Embedder embedder(Object o) {
         if (o == null || "none".equals(o)) {
             return null;
         }
         if (o instanceof Map<?, ?> m) {
+            Object type = m.get("type");
+            List<String> allowed = "openai".equals(type) ? List.of("type", "model", "dimensions", "baseUrl", "apiKey") : List.of("type", "dimensions");
             for (Object k : m.keySet()) {
-                if (!"type".equals(k) && !"dimensions".equals(k)) {
+                if (!allowed.contains(k)) {
                     throw new RagException("embedder has an unknown setting '" + k + "'");
                 }
             }
-            if ("hashing".equals(m.get("type"))) {
-                Object d = m.get("dimensions");
-                if (d != null && !(d instanceof Number)) {
-                    throw new RagException("embedder dimensions must be a number");
-                }
+            Object d = m.get("dimensions");
+            if (d != null && !(d instanceof Number)) {
+                throw new RagException("embedder dimensions must be a number");
+            }
+            if ("hashing".equals(type)) {
                 return new HashingEmbedder(d instanceof Number n ? n.intValue() : 512);
             }
+            if ("openai".equals(type)) {
+                if (!(m.get("model") instanceof String model) || model.isBlank() || !(d instanceof Number n)) {
+                    throw new RagException("an openai embedder needs 'model' and 'dimensions' (the size of its vectors)");
+                }
+                String base = m.get("baseUrl") instanceof String b && !b.isBlank() ? b : "https://api.openai.com/v1";
+                return new OpenAiEmbedder(http, base, model, n.intValue(), m.get("apiKey") instanceof String k ? k : null);
+            }
         }
-        throw new RagException("embedder must be 'none' or {type: hashing, dimensions}; model-backed embedders are not available yet");
+        throw new RagException("embedder must be 'none', {type: hashing, dimensions} or {type: openai, model, dimensions, baseUrl, apiKey}");
     }
 }

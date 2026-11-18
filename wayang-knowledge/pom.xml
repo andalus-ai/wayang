@@ -18,6 +18,11 @@
         </dependency>
         <dependency>
             <groupId>tech.kayys.wayang</groupId>
+            <artifactId>wayang-connectors</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>tech.kayys.wayang</groupId>
             <artifactId>wayang-rag</artifactId>
             <version>${project.version}</version>
         </dependency>

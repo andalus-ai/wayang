@@ -76,11 +76,13 @@ public final class KnowledgeBase {
     public int add(Document doc) {
         List<Chunk> chunks = chunker.chunk(doc);
         List<Entry> entries = new ArrayList<>(chunks.size());
-        for (Chunk c : chunks) {
+        List<float[]> vectors = embedder == null || chunks.isEmpty() ? null : embedAll(chunks.stream().map(Chunk::text).toList());
+        for (int i = 0; i < chunks.size(); i++) {
+            Chunk c = chunks.get(i);
             List<String> toks = Tokens.of(c.text());
             Map<String, Integer> tf = new HashMap<>();
             toks.forEach(t -> tf.merge(t, 1, Integer::sum));
-            entries.add(new Entry(c, embedder == null ? null : unit(embed(c.text())), tf, toks.size()));
+            entries.add(new Entry(c, vectors == null ? null : unit(check(vectors.get(i))), tf, toks.size()));
         }
         lock.writeLock().lock();
         try {
@@ -320,6 +322,21 @@ public final class KnowledgeBase {
     }
 
     // ---- vectors ----
+
+    private List<float[]> embedAll(List<String> texts) {
+        List<float[]> v = embedder.embedAll(texts);
+        if (v == null || v.size() != texts.size()) {
+            throw new RagException("the embedder returned the wrong number of vectors");
+        }
+        return v;
+    }
+
+    private float[] check(float[] v) {
+        if (v == null || v.length != embedder.dimensions()) {
+            throw new RagException("the embedder returned a vector of the wrong size");
+        }
+        return v;
+    }
 
     private float[] embed(String text) {
         float[] v = embedder.embed(text);
