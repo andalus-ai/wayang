@@ -28,13 +28,18 @@ public class DeploymentLifecycleReconciliationReadinessCheck implements HealthCh
         this.enabled = enabled;
     }
 
+    /** Disabled never affects readiness; enabled requires the worker bean to be resolvable. */
+    static boolean isReady(boolean enabled, boolean workerResolvable) {
+        return !enabled || workerResolvable;
+    }
+
     @Override
     public HealthCheckResponse call() {
         if (!enabled) {
             return HealthCheckResponse.named("wayang-deployment-reconciliation")
                     .up().withData("enabled", false).build();
         }
-        if (!worker.isResolvable()) {
+        if (!isReady(true, worker.isResolvable())) {
             return HealthCheckResponse.named("wayang-deployment-reconciliation")
                     .down().withData("enabled", true).withData("reason", "worker-bean-unavailable").build();
         }
