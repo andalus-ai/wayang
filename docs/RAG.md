@@ -1,7 +1,7 @@
 # RAG foundation (`wayang-rag`)
 
 Slice 1 of retrieval-augmented agents: turn files into searchable knowledge, with several selectable methods. JDK only, no new dependencies.
-**Not yet wired** into connectors, agent tools, REST or Studio (next slices below).
+Slice 2 (`wayang-knowledge`) exposes it as connectors, below. REST upload endpoints and Studio are not built yet.
 
 ## Formats (text extraction)
 
@@ -47,7 +47,28 @@ Plus an exact-match metadata filter (also `docId`, `docName`). Unknown settings 
 - **Retrieved text is untrusted.** A document can contain instructions; the agent consuming it must treat it as data (use guardrails, keep tools least-privilege).
 - Verification: compiled and its tests run on a real JVM locally against stand-in JUnit stubs; real confirmation is the CI `java` job.
 
+## Connectors and agent tools (`wayang-knowledge`)
+
+Optional extension, loaded when the profile has the `KNOWLEDGE` feature (on in `full` and `agentic`). Generated releases add it automatically when a process or an agent tool uses `rag-ingest` or `rag-search`.
+
+**`rag-ingest`** config `{knowledge, chunking, embedder, maxDocuments, maxChunks}`; input `documents` (up to 50) or one document: `fileName` plus `text` or `contentBase64` (at most 8 MiB decoded), optional `id` and `metadata` (short strings). Replaces a document with the same id. Output `ingested`, `chunks`, `documents`, `skipped` (name and reason, never content). No URL fetching.
+
+**`rag-search`** config `{knowledge, retrieval}`; input `query` (at most 2000 characters), optional `filter`. Output `hits`, `count` and `context`: numbered passages labelled with their source and framed as reference data.
+
+```yaml
+# a research / legal agent: the author wires the knowledge, the model only supplies the query
+tools:
+  - {name: search_contracts, type: rag-search, description: "Search the contract library", config: {knowledge: contracts, retrieval: {method: bm25, topK: 5}}}
+```
+
+Ingest first with a `rag-ingest` node (`{knowledge: contracts, chunking: {type: clause}}`). Ingest and search must repeat the same `chunking` and `embedder` settings, otherwise the call fails instead of silently reconfiguring the base; `retrieval` may differ per node.
+
+- The knowledge **name comes from node configuration, never from model input**, so an agent only reaches knowledge its author wired to it.
+- Bases live in the process, at most 20, and are **shared by every run and tenant in that process**: use distinct names. Not durable.
+- `embedder` is `none` (default, keyword search only) or `{type: hashing}` (lexical, see limits). A model-backed embedder is a later slice; asking for `vector`/`hybrid` without one is an error at ingest time.
+- That an agent runtime passes an agent tool of type `rag-search` to the Wayang connector is the existing tool contract; it was exercised here only at the connector level, not through a live agent run.
+
 ## Next slices
 
-1. Extension module with `rag-ingest` / `rag-retrieve` connectors, component descriptors, an agent tool type `rag`, bounded upload endpoints, per-run knowledge-base lifecycle.
-2. PDF extractor module, real embedder adapter, external vector stores, persistence, Studio knowledge UI.
+1. REST upload endpoints, Studio knowledge UI, and a RAG agent template.
+2. PDF extractor module, real embedder adapter, external vector stores, persistence, per-tenant isolation.

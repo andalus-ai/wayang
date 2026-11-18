@@ -569,6 +569,21 @@ class PublishTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void aRagToolBringsTheKnowledgeModuleOnlyWhenUsed() {
+        Map<String, Object> m = (Map<String, Object>) Json.read(bundle(false, true, "Library"));
+        ((List<Object>) m.get("definitions")).add(Map.of("kind", "AGENT", "id", "researcher", "publishedVersion", 1, "document", Map.of("id", "researcher", "model", "ollama/x",
+                "tools", List.of(Map.of("name", "lookup", "type", "rag-search", "config", Map.of("knowledge", "contracts"))))));
+        for (ReleaseOptions o : List.of(OPTS, GAM)) {
+            var p = Publisher.generate(Json.write(m), o);
+            assertEquals(List.of("rag-search"), p.connectors());
+            assertTrue(p.components().contains("wayang.knowledge.rag-search"), p.components().toString());
+            assertTrue(text(p, "pom.xml").contains("wayang-knowledge"), o.target().toString());
+        }
+        assertFalse(text(Publisher.generate(bundle(true, false, "Plain"), OPTS), "pom.xml").contains("wayang-knowledge"));
+    }
+
+    @Test
     void anOpenapiNodeBringsTheMcpModuleInBothTargets() {
         // the same bundle as the http one, with the node turned into an openapi call (the spec link, an operation, fixed headers)
         String httpBundle = bundle(true, false, "Pets");

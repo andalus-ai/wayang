@@ -105,6 +105,7 @@ public final class Publisher {
             throw new IllegalArgumentException("These trigger types are not available in a release: " + unknownTriggers);
         }
         boolean multimodal = used.stream().anyMatch(MULTIMODAL_CONNECTORS::contains);
+        boolean knowledge = used.stream().anyMatch(KNOWLEDGE_CONNECTORS::contains);
         boolean mcp = used.stream().anyMatch(MCP_CONNECTORS::contains);
         boolean needsConnectors = !used.isEmpty() || !pollSources.isEmpty() || !providers.isEmpty();
         List<String> notes = new ArrayList<>();
@@ -139,7 +140,7 @@ public final class Publisher {
         List<String> secrets = bundle.requiredSecrets().stream().distinct().sorted().toList();
         Map<String, byte[]> f = new TreeMap<>();
         String pkgPath = o.packageName().replace('.', '/');
-        f.put("pom.xml", (gamelan ? GamelanTemplates.pom(o, bundle, needsConnectors, multimodal, mcp) : pom(o, bundle, needsConnectors, multimodal, mcp)).getBytes(StandardCharsets.UTF_8));
+        f.put("pom.xml", (gamelan ? GamelanTemplates.pom(o, bundle, needsConnectors, multimodal, mcp, knowledge) : pom(o, bundle, needsConnectors, multimodal, mcp, knowledge)).getBytes(StandardCharsets.UTF_8));
         f.put("src/main/resources/wayang/bundle.json", bundleJson.getBytes(StandardCharsets.UTF_8));
         f.put("src/main/resources/wayang/component-lock.json", componentLock.json().getBytes(StandardCharsets.UTF_8));
         f.put("src/main/resources/wayang/artifact-lock.json", artifactLock.json().getBytes(StandardCharsets.UTF_8));
@@ -221,7 +222,7 @@ public final class Publisher {
 
     // ------------------------------------------------------------------ templates
 
-    private static String pom(ReleaseOptions o, ReleaseBundle b, boolean connectors, boolean multimodal, boolean mcp) {
+    private static String pom(ReleaseOptions o, ReleaseBundle b, boolean connectors, boolean multimodal, boolean mcp, boolean knowledge) {
         return """
                 <?xml version="1.0" encoding="UTF-8"?>
                 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -286,7 +287,7 @@ public final class Publisher {
                     </build>
                 </project>
                 """.formatted(xml(o.groupId()), xml(o.artifactId()), xml(o.version()), xml(safe(b.name())), xml(o.wayangVersion()),
-                (connectors ? CONNECTORS_DEP : "") + (multimodal ? MULTIMODAL_DEP : "") + (mcp ? MCP_DEP : ""), o.packageName());
+                (connectors ? CONNECTORS_DEP : "") + (multimodal ? MULTIMODAL_DEP : "") + (mcp ? MCP_DEP : "") + (knowledge ? KNOWLEDGE_DEP : ""), o.packageName());
     }
 
     static final String CONNECTORS_DEP = """
@@ -304,6 +305,15 @@ public final class Publisher {
                                     <version>${wayang.version}</version>
                                 </dependency>
                         """;
+    /** Needed only when {@code rag-ingest} or {@code rag-search} is used; the runtime finds the extension through ServiceLoader. */
+    static final String KNOWLEDGE_DEP = """
+                                <dependency>
+                                    <groupId>tech.kayys.wayang</groupId>
+                                    <artifactId>wayang-knowledge</artifactId>
+                                    <version>${wayang.version}</version>
+                                </dependency>
+                        """;
+    static final Set<String> KNOWLEDGE_CONNECTORS = Set.of("rag-ingest", "rag-search");
     /** Needed only when the {@code openapi} connector is used; the runtime finds the extension through ServiceLoader. */
     static final String MCP_DEP = """
                                 <dependency>

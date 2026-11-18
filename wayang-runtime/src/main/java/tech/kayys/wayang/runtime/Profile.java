@@ -21,7 +21,9 @@ public final class Profile {
     public enum Feature {
         SERVICE("wayang-service"), DMN("wayang-dmn"), EIP("wayang-eip"), AGENT("wayang-agent"), HUMAN("wayang-human"),
         /** Media generation (images today; audio and graph-style nodes later). Served by extensions, so it has no built-in handler. */
-        MEDIA("wayang-media");
+        MEDIA("wayang-media"),
+        /** Document knowledge for retrieval-augmented agents (ingest and search); served by an extension. */
+        KNOWLEDGE("wayang-knowledge");
 
         private final String executorType;
 
@@ -42,7 +44,7 @@ public final class Profile {
     public static final Profile INTEGRATION = new Profile("integration", EnumSet.of(Feature.SERVICE, Feature.EIP));
     /** Personal assistant / agent builder. */
     public static final Profile AGENTIC = new Profile("agentic",
-            EnumSet.of(Feature.SERVICE, Feature.AGENT, Feature.HUMAN, Feature.EIP, Feature.MEDIA));
+            EnumSet.of(Feature.SERVICE, Feature.AGENT, Feature.HUMAN, Feature.EIP, Feature.MEDIA, Feature.KNOWLEDGE));
 
     private final String name;
     private final Set<Feature> features;
