@@ -94,6 +94,7 @@ start_branch "$branch_a" "$a_vol" latest
 a_tli="$(sql "$branch_a" -c "SELECT left(pg_walfile_name(pg_current_wal_lsn()),8)")"
 test "$a_tli" = "00000002"
 sql "$branch_a" -c "INSERT INTO fork_marker VALUES ('branch-a-only')"
+a_end_lsn="$(sql "$branch_a" -c "SELECT pg_current_wal_lsn()")"
 a_wal="$(sql "$branch_a" -c "SELECT pg_walfile_name(pg_current_wal_lsn())")"
 sql "$branch_a" -c "SELECT pg_switch_wal()" >/dev/null
 wait_archive "$branch_a" "$a_wal"
@@ -110,6 +111,7 @@ if [[ "$b_tli" != "00000003" ]]; then
   exit 1
 fi
 sql "$branch_b" -c "INSERT INTO fork_marker VALUES ('branch-b-only')"
+b_end_lsn="$(sql "$branch_b" -c "SELECT pg_current_wal_lsn()")"
 b_wal="$(sql "$branch_b" -c "SELECT pg_walfile_name(pg_current_wal_lsn())")"
 sql "$branch_b" -c "SELECT pg_switch_wal()" >/dev/null
 wait_archive "$branch_b" "$b_wal"
@@ -126,7 +128,7 @@ test "$fork_a" = "$fork_b" || { echo "sibling branches do not share the same for
 
 docker run --rm -v "$backup_vol:/base-backup:ro" --entrypoint cat postgres:17 /base-backup/backup_manifest > /tmp/wayang-sibling-forks/backup_manifest
 segment_size="$(docker exec "$branch_b" pg_controldata /var/lib/postgresql/data | awk -F: '/Bytes per WAL segment/ {gsub(/[[:space:]]/,"",$2);print $2}')"
-python3 - "$segment_size" "$fork_a" <<'PY'
+python3 - "$segment_size" "$fork_a" "$a_end_lsn" "$b_end_lsn" <<'PY'
 import json,sys
 from pathlib import Path
 root=Path("/tmp/wayang-sibling-forks")
@@ -138,6 +140,8 @@ def n(s):
     a,b=s.split("/",1); return (int(a,16)<<32)|int(b,16)
 def fmt(v): return f"{v>>32:X}/{v&0xffffffff:08X}"
 fork=n(sys.argv[2])
+end_a=n(sys.argv[3])
+end_b=n(sys.argv[4])
 if fork==0: raise SystemExit("invalid fork point")
 start=min((r["Start-LSN"] for r in ranges),key=n)
 # The two sibling fork points must be the same parent switchpoint. The
@@ -145,10 +149,10 @@ start=min((r["Start-LSN"] for r in ranges),key=n)
 catalog={"wal_segment_size_bytes":int(sys.argv[1]),"backups":[
  {"backup_id":"branch-a-retained","retained":True,"manifest":"backup_manifest",
   "recovery_wal_ranges":[{"Timeline":1,"Start-LSN":start,"End-LSN":fmt(fork-1)},
-                        {"Timeline":2,"Start-LSN":sys.argv[2],"End-LSN":fmt(fork+0x2000000)}]},
+                        {"Timeline":2,"Start-LSN":sys.argv[2],"End-LSN":fmt(end_a)}]},
  {"backup_id":"branch-b-retained","retained":True,"manifest":"backup_manifest",
   "recovery_wal_ranges":[{"Timeline":1,"Start-LSN":start,"End-LSN":fmt(fork-1)},
-                        {"Timeline":3,"Start-LSN":sys.argv[2],"End-LSN":fmt(fork+0x2000000)}]}
+                        {"Timeline":3,"Start-LSN":sys.argv[2],"End-LSN":fmt(end_b)}]}
 ]}
 (root/"catalog.json").write_text(json.dumps(catalog,indent=2))
 PY
