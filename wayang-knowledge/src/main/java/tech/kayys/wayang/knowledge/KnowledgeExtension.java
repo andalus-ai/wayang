@@ -36,7 +36,8 @@ public final class KnowledgeExtension implements WayangExtension {
                 "file-put", new FileConnectors.Put(files),
                 "file-get", new FileConnectors.Get(files),
                 "file-list", new FileConnectors.ListFiles(files),
-                "file-delete", new FileConnectors.Delete(files));
+                "file-delete", new FileConnectors.Delete(files),
+                "file-purge", new FileConnectors.Purge(files));
     }
 
     @Override
@@ -69,7 +70,8 @@ public final class KnowledgeExtension implements WayangExtension {
                 component("file-put", "Store file", "Store a file in the shared file storage and get its id", "files.put", "storage", Map.of(), List.of()),
                 component("file-get", "Read file", "Read a stored file by id", "files.get", "storage", Map.of(), List.of()),
                 component("file-list", "List files", "List the stored files of the tenant", "files.list", "storage", Map.of(), List.of()),
-                component("file-delete", "Delete file", "Delete a stored file by id", "files.delete", "storage", Map.of(), List.of()));
+                component("file-delete", "Delete file", "Delete a stored file by id", "files.delete", "storage", Map.of(), List.of()),
+                component("file-purge", "Purge expired files", "Remove the tenant's expired files (they are already unreadable); run it on a schedule", "files.purge", "storage", Map.of(), List.of()));
     }
 
     private ComponentDescriptor component(String connector, String title, String description, String capability, String category,

@@ -9,6 +9,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -113,5 +116,84 @@ class FileStorageTest {
         assertNotNull(ingest.configSchema().get("required"));
         assertFalse(ConnectorInput.isMissing("x") || ConnectorInput.isMissing(List.of(1)));
         assertTrue(ConnectorInput.isMissing("  ") && ConnectorInput.isMissing(List.of()) && ConnectorInput.isMissing(null));
+    }
+
+    /** A clock the test can move. */
+    private static final class Tick extends Clock {
+        long now = 1_000_000_000_000L;
+
+        @Override
+        public java.time.ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(java.time.ZoneId z) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return Instant.ofEpochMilli(now);
+        }
+    }
+
+    private static final long DAY = 86_400_000L;
+
+    @Test
+    void aFileExpiresAfterItsTtlAndIsGoneForEveryReader() throws Exception {
+        Tick clock = new Tick();
+        Path dir = Files.createTempDirectory("wayang-files");
+        KnowledgeExtension e = new KnowledgeExtension(new FileStore(dir, clock, 0, 0));
+        Map<String, Object> put = e.connectors().get("file-put").call(cfg("t"), Map.of("fileName", "tmp.txt", "text", "x", "ttlDays", 2));
+        String id = (String) put.get("fileId");
+        assertEquals(Instant.ofEpochMilli(clock.now + 2 * DAY).toString(), put.get("expiresAt"));
+        String keep = (String) e.connectors().get("file-put").call(cfg("t"), Map.of("fileName", "keep.txt", "text", "y")).get("fileId");
+        clock.now += DAY;
+        assertEquals(true, e.connectors().get("file-get").call(cfg("t"), Map.of("fileId", id)).get("found"));
+        clock.now += DAY; // exactly at expiry
+        assertEquals(false, e.connectors().get("file-get").call(cfg("t"), Map.of("fileId", id)).get("found"));
+        assertEquals(1, e.connectors().get("file-list").call(cfg("t"), Map.of()).get("count")); // list purges
+        assertEquals(true, e.connectors().get("file-get").call(cfg("t"), Map.of("fileId", keep)).get("found"));
+        // the bytes are really deleted, not just hidden
+        try (Stream<Path> s = Files.walk(dir)) {
+            assertEquals(2, s.filter(p -> p.toString().endsWith(".bin") || p.toString().endsWith(".meta")).count());
+        }
+    }
+
+    @Test
+    void purgeRemovesExpiredFilesOnDemand() throws Exception {
+        Tick clock = new Tick();
+        Path dir = Files.createTempDirectory("wayang-files");
+        KnowledgeExtension e = new KnowledgeExtension(new FileStore(dir, clock, 0, 0));
+        e.connectors().get("file-put").call(cfg("t"), Map.of("fileName", "a.txt", "text", "x", "ttlDays", 1));
+        e.connectors().get("file-put").call(cfg("t"), Map.of("fileName", "b.txt", "text", "x", "ttlDays", 1));
+        clock.now += 2 * DAY;
+        assertEquals(2, e.connectors().get("file-purge").call(cfg("t"), Map.of()).get("purged"));
+        assertEquals(0, e.connectors().get("file-purge").call(cfg("t"), Map.of()).get("purged"));
+        assertEquals(0, e.connectors().get("file-purge").call(cfg("other"), Map.of()).get("purged"));
+    }
+
+    @Test
+    void theServerDefaultAndCeilingApply() throws Exception {
+        Tick clock = new Tick();
+        KnowledgeExtension e = new KnowledgeExtension(new FileStore(Files.createTempDirectory("wayang-files"), clock, 7, 30));
+        Map<String, Object> noTtl = e.connectors().get("file-put").call(cfg("t"), Map.of("fileName", "a.txt", "text", "x"));
+        assertEquals(Instant.ofEpochMilli(clock.now + 7 * DAY).toString(), noTtl.get("expiresAt"));
+        Map<String, Object> tooLong = e.connectors().get("file-put").call(cfg("t"), Map.of("fileName", "b.txt", "text", "x", "ttlDays", 365));
+        assertEquals(Instant.ofEpochMilli(clock.now + 30 * DAY).toString(), tooLong.get("expiresAt"));
+        // with a ceiling and no default, "forever" is not possible either
+        KnowledgeExtension capped = new KnowledgeExtension(new FileStore(Files.createTempDirectory("wayang-files"), clock, 0, 30));
+        assertEquals(Instant.ofEpochMilli(clock.now + 30 * DAY).toString(),
+                capped.connectors().get("file-put").call(cfg("t"), Map.of("fileName", "c.txt", "text", "x")).get("expiresAt"));
+    }
+
+    @Test
+    void invalidTtlIsRejectedAndNoTtlMeansNoExpiry() throws Exception {
+        KnowledgeExtension e = ext(Files.createTempDirectory("wayang-files"));
+        for (Object bad : List.of(0, -1, 4000, "soon")) {
+            assertThrows(ServiceHandler.ConnectorException.class, () -> e.connectors().get("file-put").call(cfg("t"), Map.of("fileName", "a.txt", "text", "x", "ttlDays", bad)));
+        }
+        assertEquals(null, e.connectors().get("file-put").call(cfg("t"), Map.of("fileName", "a.txt", "text", "x")).get("expiresAt"));
     }
 }

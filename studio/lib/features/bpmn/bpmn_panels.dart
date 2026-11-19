@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
+import '../../data/component_inputs.dart';
 import '../../models/bpmn.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
@@ -390,8 +391,73 @@ class _NodeInspectorState extends ConsumerState<_NodeInspector> {
           SoapSection(props: node.properties, onChanged: (props) => controller.updateNodeProperties(node.id, props)),
         if (node.type == BpmnElementType.serviceTask && node.properties['connector'] == 'openapi')
           OpenApiSection(props: node.properties, onChanged: (props) => controller.updateNodeProperties(node.id, props)),
+        if (node.type == BpmnElementType.serviceTask) _ExpectedInputsSection(key: ValueKey('inputs-${node.id}'), props: node.properties),
         if (node.type == BpmnElementType.serviceTask) NodeTestSection(key: ValueKey('test-${node.id}'), props: node.properties),
       ],
+    );
+  }
+}
+
+/// The inputs the node's component declares, with whether this node supplies them. Mandatory is advisory: a gap is a hint, not an error.
+class _ExpectedInputsSection extends ConsumerWidget {
+  const _ExpectedInputsSection({super.key, required this.props});
+  final Map<String, dynamic> props;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final components = ref.watch(componentCatalogProvider).valueOrNull ?? const <ComponentCatalogEntry>[];
+    final entry = componentForNode(components, props);
+    if (entry == null) return const SizedBox.shrink();
+    final inputs = componentInputs(entry);
+    if (inputs.isEmpty) return const SizedBox.shrink();
+    final gaps = unsuppliedMandatory(inputs, props);
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const PanelSectionLabel('Expected inputs'),
+          for (final i in inputs)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    switch (inputState(i, props)) {
+                      InputState.connected => Icons.check_circle_outline_rounded,
+                      InputState.mapped => Icons.alt_route_rounded,
+                      InputState.empty => i.mandatory ? Icons.error_outline_rounded : Icons.radio_button_unchecked_rounded,
+                    },
+                    size: 15,
+                    color: switch (inputState(i, props)) {
+                      InputState.empty when i.mandatory => AppColors.warning,
+                      InputState.empty => AppColors.textMutedDark,
+                      _ => AppColors.success,
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${i.name} · ${i.type}${i.mandatory ? ' · mandatory' : ''}',
+                            style: const TextStyle(fontFamily: 'monospace', fontSize: 11.5, fontWeight: FontWeight.w600)),
+                        if (i.description.isNotEmpty)
+                          Text(i.description, style: const TextStyle(fontSize: 11, color: AppColors.textMutedDark)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (gaps.isNotEmpty)
+            Text(
+              'Not connected: ${gaps.map((g) => g.name).join(', ')}. The workflow still runs: the node gets nothing for it, returns an empty result and reports a warning.',
+              style: const TextStyle(fontSize: 11, color: AppColors.warning),
+            ),
+        ],
+      ),
     );
   }
 }

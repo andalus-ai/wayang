@@ -11,7 +11,7 @@ import tech.kayys.wayang.runtime.ConnectorInput;
 import tech.kayys.wayang.runtime.ServiceHandler;
 
 /**
- * The reusable file storage steps: {@code file-put}, {@code file-get}, {@code file-list}, {@code file-delete}. Files are separated by tenant
+ * The reusable file storage steps: {@code file-put}, {@code file-get}, {@code file-list}, {@code file-delete}, {@code file-purge} (removes expired files; schedule it). Files are separated by tenant
  * and addressed by an opaque id, so one node can store a file and any later node (a RAG ingest, a mail step) can use it by id.
  * A missing mandatory input never fails a step: the step reports {@code stored:false} / {@code found:false} (and the engine adds a warning).
  */
@@ -20,6 +20,11 @@ final class FileConnectors {
     static final int MAX_INLINE = 8 << 20;
 
     private FileConnectors() {
+    }
+
+    /** ISO-8601 instant, or null when the file never expires. */
+    static String expires(long epochMillis) {
+        return epochMillis <= 0 ? null : java.time.Instant.ofEpochMilli(epochMillis).toString();
     }
 
     private abstract static class Base implements ServiceHandler.Connector {
@@ -64,7 +69,8 @@ final class FileConnectors {
         public List<ConnectorInput> inputs() {
             return List.of(ConnectorInput.required("fileName", "string", "Name of the file, with its extension"),
                     ConnectorInput.optional("contentBase64", "string", "File content, base64 (at most 8 MiB here)"),
-                    ConnectorInput.optional("text", "string", "Text content, instead of contentBase64"));
+                    ConnectorInput.optional("text", "string", "Text content, instead of contentBase64"),
+                    ConnectorInput.optional("ttlDays", "number", "Keep the file this many days (1-3650); default and ceiling come from the server settings"));
         }
 
         @Override
@@ -93,13 +99,22 @@ final class FileConnectors {
                 out.put("reason", "no content");
                 return out;
             }
+            Integer ttl = null;
+            if (in.get("ttlDays") != null && !(in.get("ttlDays") instanceof String s && s.isBlank())) {
+                try {
+                    ttl = in.get("ttlDays") instanceof Number n ? n.intValue() : Integer.valueOf(String.valueOf(in.get("ttlDays")).trim());
+                } catch (NumberFormatException e) {
+                    throw new ServiceHandler.ConnectorException("ttlDays must be a whole number of days", false);
+                }
+            }
             try {
-                FileStore.Info i = st.put(tenant(config), name, bytes);
+                FileStore.Info i = st.put(tenant(config), name, bytes, ttl);
                 out.put("stored", true);
                 out.put("fileId", i.id());
                 out.put("fileName", i.name());
                 out.put("size", i.size());
                 out.put("sha256", i.sha256());
+                out.put("expiresAt", expires(i.expiresAt()));
                 return out;
             } catch (RagException e) {
                 throw bad(e);
@@ -131,6 +146,7 @@ final class FileConnectors {
             out.put("fileName", f.name());
             out.put("size", f.size());
             out.put("sha256", f.sha256());
+            out.put("expiresAt", expires(st.info(tenant(config), f.id()) == null ? 0 : st.info(tenant(config), f.id()).expiresAt()));
             if (f.size() <= MAX_INLINE) {
                 out.put("contentBase64", Base64.getEncoder().encodeToString(f.bytes()));
             } else {
@@ -150,7 +166,9 @@ final class FileConnectors {
             List<Map<String, Object>> files = new ArrayList<>();
             try {
                 for (FileStore.Info i : store().list(tenant(config))) {
-                    files.add(Map.of("fileId", i.id(), "fileName", i.name(), "size", i.size()));
+                    Map<String, Object> f = new LinkedHashMap<>(Map.of("fileId", i.id(), "fileName", i.name(), "size", i.size()));
+                    f.put("expiresAt", expires(i.expiresAt()));
+                    files.add(f);
                 }
             } catch (RagException e) {
                 throw bad(e);
@@ -173,6 +191,21 @@ final class FileConnectors {
         public Map<String, Object> call(Map<String, Object> config, Map<String, Object> in) throws Exception {
             try {
                 return Map.of("deleted", in.get("fileId") instanceof String id && store().delete(tenant(config), id));
+            } catch (RagException e) {
+                throw bad(e);
+            }
+        }
+    }
+
+    static final class Purge extends Base {
+        Purge(FileStore s) {
+            super(s);
+        }
+
+        @Override
+        public Map<String, Object> call(Map<String, Object> config, Map<String, Object> in) throws Exception {
+            try {
+                return Map.of("purged", store().purgeExpired(tenant(config)));
             } catch (RagException e) {
                 throw bad(e);
             }

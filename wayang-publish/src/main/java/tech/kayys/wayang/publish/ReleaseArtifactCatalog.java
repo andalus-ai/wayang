@@ -52,6 +52,7 @@ final class ReleaseArtifactCatalog {
             Map.entry("wayang.knowledge.file-get", List.of("wayang-knowledge")),
             Map.entry("wayang.knowledge.file-list", List.of("wayang-knowledge")),
             Map.entry("wayang.knowledge.file-delete", List.of("wayang-knowledge")),
+            Map.entry("wayang.knowledge.file-purge", List.of("wayang-knowledge")),
             Map.entry("wayang.mcp.openapi", List.of("wayang-mcp"))
     );
 
