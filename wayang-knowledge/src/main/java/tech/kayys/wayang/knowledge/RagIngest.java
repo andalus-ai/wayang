@@ -45,6 +45,11 @@ final class RagIngest implements ServiceHandler.Connector {
     }
 
     @Override
+    public boolean tenantScoped() {
+        return true;
+    }
+
+    @Override
     public Map<String, Object> call(Map<String, Object> inputs) throws Exception {
         throw new ServiceHandler.ConnectorException("rag-ingest needs node configuration", false);
     }

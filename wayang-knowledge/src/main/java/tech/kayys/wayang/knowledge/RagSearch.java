@@ -35,6 +35,11 @@ final class RagSearch implements ServiceHandler.Connector {
     }
 
     @Override
+    public boolean tenantScoped() {
+        return true;
+    }
+
+    @Override
     public Map<String, Object> call(Map<String, Object> inputs) throws Exception {
         throw new ServiceHandler.ConnectorException("rag-search needs node configuration", false);
     }
