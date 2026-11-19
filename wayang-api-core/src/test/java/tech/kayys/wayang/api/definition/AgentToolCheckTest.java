@@ -53,4 +53,16 @@ class AgentToolCheckTest {
         assertEquals(1, check(tool("http", Map.of("url", "${secret:A b}"))).size());
         assertTrue(check(tool("http", Map.of("url", "https://x/${config:HOST}/v1"))).isEmpty());
     }
+
+    @Test
+    void knowledgeToolsNeedAKnowledgeBaseAndSearchNeedsAQueryParameter() {
+        Map<String, Object> q = Map.of("type", "object", "properties", Map.of("query", Map.of("type", "string")));
+        assertTrue(check(tool("rag-search", Map.of("knowledge", "contracts", "parameters", q))).isEmpty());
+        assertTrue(check(tool("rag-ingest", Map.of("knowledge", "contracts"))).isEmpty());
+        assertEquals(1, check(tool("rag-ingest", Map.of())).size());
+        assertEquals(1, check(tool("rag-ingest", Map.of("knowledge", "bad name!"))).size());
+        assertEquals(1, check(tool("rag-search", Map.of("knowledge", "contracts"))).size());
+        assertEquals(1, check(tool("rag-search", Map.of("knowledge", "contracts", "parameters", Map.of("type", "object", "properties", Map.of("q", Map.of()))))).size());
+        assertEquals(2, check(tool("rag-search", Map.of())).size());
+    }
 }

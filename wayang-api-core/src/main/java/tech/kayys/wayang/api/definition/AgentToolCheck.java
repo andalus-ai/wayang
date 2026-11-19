@@ -17,7 +17,8 @@ import tech.kayys.wayang.agent.AgentSpec;
  * <li>{@code config.parameters}, when present, is a JSON object (the schema shown to the model);</li>
  * <li>a string under a credential-looking key (token, secret, password, api key, authorization, cookie) must be made of
  * {@code ${secret:NAME}} / {@code ${config:NAME}} references, optionally with a {@code Bearer} or {@code Basic} prefix, never a literal;</li>
- * <li>every {@code ${...}} must be a well-formed reference.</li>
+ * <li>every {@code ${...}} must be a well-formed reference;</li>
+ * <li>a {@code rag-search} / {@code rag-ingest} tool names its knowledge base, and a {@code rag-search} tool declares a {@code query} parameter.</li>
  * </ul>
  *
  * It cannot know whether a named secret exists or a connector type is wired in the release: both stay run-time answers.
@@ -27,6 +28,8 @@ public final class AgentToolCheck {
     private static final Pattern REF = Pattern.compile("\\$\\{(secret|config):[A-Za-z0-9_.-]{1,100}}");
     private static final Pattern CREDENTIAL_KEY = Pattern.compile("(?i)(.*(secret|password|passwd|apikey|api_key|authorization|credential|cookie).*|.*tokens?)");
     private static final Pattern COUNTER_KEY = Pattern.compile("(?i)(max|min|num).*|.*(count|limit|size)");
+
+    private static final Pattern KNOWLEDGE_NAME = Pattern.compile("[A-Za-z][A-Za-z0-9_-]{0,63}");
 
     private AgentToolCheck() {
     }
@@ -40,6 +43,17 @@ public final class AgentToolCheck {
             Object params = t.config().get("parameters");
             if (params != null && !(params instanceof Map)) {
                 out.add(error(t, "config.parameters must be a JSON object (a schema)"));
+            }
+            if ("rag-search".equals(t.type()) || "rag-ingest".equals(t.type())) {
+                Object k = t.config().get("knowledge");
+                if (!(k instanceof String name) || !KNOWLEDGE_NAME.matcher(name).matches()) {
+                    out.add(error(t, "needs config.knowledge: the name of its knowledge base (letters, digits, - and _, starting with a letter)"));
+                }
+                if ("rag-search".equals(t.type()) && !(params instanceof Map)) {
+                    out.add(error(t, "needs config.parameters with a 'query' property, or the model cannot know what to send"));
+                } else if ("rag-search".equals(t.type()) && !(((Map<?, ?>) params).get("properties") instanceof Map<?, ?> props && props.containsKey("query"))) {
+                    out.add(error(t, "config.parameters must declare a 'query' property"));
+                }
             }
             walk(t, "config", t.config(), null, out);
         }
