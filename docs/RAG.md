@@ -74,6 +74,28 @@ config: {knowledge: contracts, chunking: {type: clause}, embedder: {type: openai
 ```
 - That an agent runtime passes an agent tool of type `rag-search` to the Wayang connector is the existing tool contract; it was exercised here only at the connector level, not through a live agent run.
 
+## Worked example: a research assistant over your documents
+
+One process, run for real by `RagProcessTest`: the first node ingests the documents the run was started with, the second answers a question from them.
+
+```yaml
+# BPMN service tasks (shown as their node configuration)
+learn:   {connector: rag-ingest, knowledge: contracts, chunking: {type: clause, maxChars: 1200}, inputs: {documents: documents}}
+lookup:  {connector: rag-search, knowledge: contracts, retrieval: {method: bm25, topK: 3, mmr: true}, inputs: {query: question}}
+```
+
+Start it with `documents: [{fileName: "msa.docx", contentBase64: "..."}, {fileName: "faq.md", text: "..."}]` and `question: "termination notice period"`. Afterwards `lookup.context` holds the numbered, source-labelled passages and `lookup.hits` the structured list.
+
+To let an *agent* decide when to look things up, give it the tool instead of a fixed `lookup` node (Studio: **Add knowledge search**), and fill the base with a separate ingest process, for example one started by a webhook trigger whenever a document arrives:
+
+```yaml
+tools: [{name: search_contracts, type: rag-search, description: "Search the contract library", config: {knowledge: contracts, parameters: {type: object, properties: {query: {type: string}}, required: [query]}}}]
+persona: {role: "Contracts analyst", rules: ["Answer only from the retrieved passages", "Quote the source file for every claim"]}
+guardrails: {...}
+```
+
+Recipes: legal/policy -> `chunking: clause`, `method: hybrid`, filter by `docName`; research papers and manuals -> `heading` or `parent-child` with `expand: parent`; spreadsheets -> `paragraph` over the row lines with `bm25` for exact codes; FAQs -> `paragraph`, `hybrid` with an embedder.
+
 ## Next slices
 
 1. REST upload endpoints, Studio knowledge UI, and a RAG agent template.
