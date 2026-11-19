@@ -74,6 +74,20 @@ config: {knowledge: contracts, chunking: {type: clause}, embedder: {type: openai
 ```
 - That an agent runtime passes an agent tool of type `rag-search` to the Wayang connector is the existing tool contract; it was exercised here only at the connector level, not through a live agent run.
 
+## File storage steps and mandatory inputs
+
+Files are stored once by a **file storage node** and used by id anywhere after: `file-put` (`fileName` + `text` or `contentBase64` -> `fileId`, `size`, `sha256`), `file-get` (`fileId` -> metadata and `contentBase64` up to 8 MiB), `file-list`, `file-delete`. Files are separated by tenant, addressed only by an opaque id (a name never becomes a path), and bounded to 20 MiB each and 1000 per tenant. Storage is **durable** on disk under `WAYANG_FILES_DIR` (or `WAYANG_STATE_DIR/files`); with neither set the steps fail with a clear message rather than writing somewhere temporary. In a container, mount a volume there.
+
+`rag-ingest` takes those files directly: `documents: [{fileId: "..."}]` (the file's own name tells the extractor the format, so pdf/docx/xlsx/csv/pptx just work). Unknown ids, or ids of another tenant, are skipped with "no such file".
+
+**Mandatory inputs are advisory.** A connector declares its inputs (name, type, mandatory) and the catalogue exposes them under the component's `uiHints.inputs` so Studio can show them as expected connections. A missing mandatory input (null, blank text, empty list or object) **never stops a run or fails a node**: the node gets nothing for it, answers with an empty result (`ingested: 0`, `count: 0`, `found: false`, `stored: false`...) and the engine adds `warnings: ["mandatory input 'documents' was not provided"]` to the node's output, so the gap is visible and the workflow can branch on it. Real configuration errors (unknown knowledge name, bad settings, storage not configured) still fail as before.
+
+```yaml
+put:    {connector: file-put,   inputs: {fileName: fileName, contentBase64: upload}}
+learn:  {connector: rag-ingest, knowledge: contracts, inputMapping: {documents: [{fileId: put.fileId}]}}
+lookup: {connector: rag-search, knowledge: contracts, inputs: {query: question}}
+```
+
 ## Worked example: a research assistant over your documents
 
 One process, run for real by `RagProcessTest`: the first node ingests the documents the run was started with, the second answers a question from them.

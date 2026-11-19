@@ -20,8 +20,8 @@ import tech.kayys.wayang.runtime.WaitRegistry;
 /** The worked example of docs/RAG.md, run for real: a process ingests the uploaded documents, then answers a question from them. */
 class RagProcessTest {
 
-    private static ReferenceEngine engine() {
-        KnowledgeExtension ext = new KnowledgeExtension();
+    private static ReferenceEngine engine() throws Exception {
+        KnowledgeExtension ext = new KnowledgeExtension(new FileStore(java.nio.file.Files.createTempDirectory("wayang-files")));
         return new ReferenceEngine(new NodeRunner(List.of(new ControlHandler(new WaitRegistry.InMemory()), new ServiceHandler(ext.connectors()))),
                 new WaitRegistry.InMemory());
     }
@@ -38,7 +38,7 @@ class RagProcessTest {
     }
 
     @Test
-    void ingestThenAnswerFromTheDocuments() {
+    void ingestThenAnswerFromTheDocuments() throws Exception {
         var run = engine().start(ProcessCompiler.compile(process()), Map.of(
                 SecretResolver.TENANT_VARIABLE, "acme",
                 "question", "termination notice period",
@@ -52,7 +52,7 @@ class RagProcessTest {
     }
 
     @Test
-    void anotherTenantRunningTheSameProcessSeesNothing() {
+    void anotherTenantRunningTheSameProcessSeesNothing() throws Exception {
         ReferenceEngine e = engine();
         e.start(ProcessCompiler.compile(process()), Map.of(SecretResolver.TENANT_VARIABLE, "acme", "question", "x",
                 "documents", List.of(Map.of("fileName", "msa.md", "text", "Termination with 30 days notice."))));
@@ -61,5 +61,34 @@ class RagProcessTest {
                 .end("e").flow("s", "lookup").flow("lookup", "e").build()), Map.of(SecretResolver.TENANT_VARIABLE, "globex", "question", "termination"));
         assertEquals(ReferenceEngine.Status.FAILED, other.status());
         assertTrue(String.valueOf(other.error()).contains("is empty"), String.valueOf(other.error()));
+    }
+
+    @Test
+    void storeAFileOnceThenFeedItToKnowledgeById() throws Exception {
+        ProcessModel m = ProcessModel.builder("filed").start("s")
+                .task("put", ElementType.SERVICE_TASK, Map.of("connector", "file-put", "inputs", Map.of("fileName", "fileName", "text", "body")))
+                .task("learn", ElementType.SERVICE_TASK, Map.of("connector", "rag-ingest", "knowledge", "filed",
+                        "inputMapping", Map.of("documents", List.of(Map.of("fileId", "put.fileId")))))
+                .task("lookup", ElementType.SERVICE_TASK, Map.of("connector", "rag-search", "knowledge", "filed", "inputs", Map.of("query", "question")))
+                .end("e").flow("s", "put").flow("put", "learn").flow("learn", "lookup").flow("lookup", "e").build();
+        var run = engine().start(ProcessCompiler.compile(m), Map.of(SecretResolver.TENANT_VARIABLE, "acme", "fileName", "policy.md",
+                "body", "# Policy\n\nRefunds are issued within five business days.", "question", "refund days"));
+        assertEquals(ReferenceEngine.Status.COMPLETED, run.status(), String.valueOf(run.error()));
+        assertEquals(true, run.variables().get("put.stored"));
+        assertTrue(String.valueOf(run.variables().get("lookup.context")).contains("five business days"), String.valueOf(run.variables().get("lookup.context")));
+    }
+
+    @Test
+    void aMissingMandatoryInputWarnsButTheWorkflowGoesOn() throws Exception {
+        ProcessModel m = ProcessModel.builder("lenient").start("s")
+                .task("learn", ElementType.SERVICE_TASK, Map.of("connector", "rag-ingest", "knowledge", "lenient", "inputs", Map.of("documents", "documents")))
+                .task("lookup", ElementType.SERVICE_TASK, Map.of("connector", "rag-search", "knowledge", "lenient", "inputs", Map.of("query", "question")))
+                .end("e").flow("s", "learn").flow("learn", "lookup").flow("lookup", "e").build();
+        var run = engine().start(ProcessCompiler.compile(m), Map.of(SecretResolver.TENANT_VARIABLE, "acme"));
+        assertEquals(ReferenceEngine.Status.COMPLETED, run.status(), String.valueOf(run.error()));
+        assertEquals(0, run.variables().get("learn.ingested"));
+        assertTrue(String.valueOf(run.variables().get("learn.warnings")).contains("documents"), String.valueOf(run.variables()));
+        assertEquals(0, run.variables().get("lookup.count"));
+        assertTrue(String.valueOf(run.variables().get("lookup.warnings")).contains("query"));
     }
 }

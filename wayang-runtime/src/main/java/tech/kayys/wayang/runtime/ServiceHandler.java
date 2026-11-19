@@ -36,6 +36,14 @@ public final class ServiceHandler implements DomainHandler {
         default boolean tenantScoped() {
             return false;
         }
+
+        /**
+         * The inputs this connector declares. A missing mandatory input never stops a node: see {@link ConnectorInput}. Connectors that
+         * declare inputs must cope with them being absent (return an empty result), also when called outside a workflow (as an agent tool).
+         */
+        default java.util.List<ConnectorInput> inputs() {
+            return java.util.List.of();
+        }
     }
 
     /** Thrown by connectors to say whether trying again can help (e.g. 503 yes, 404 no). */
@@ -99,8 +107,20 @@ public final class ServiceHandler implements DomainHandler {
             if (c.tenantScoped()) {
                 cfg.put(SecretResolver.TENANT_VARIABLE, vars.get(SecretResolver.TENANT_VARIABLE) instanceof String t ? t : "");
             }
+            java.util.List<String> warnings = new java.util.ArrayList<>();
+            for (ConnectorInput spec : c.inputs()) {
+                if (spec.mandatory() && ConnectorInput.isMissing(in.get(spec.name()))) {
+                    in.remove(spec.name());
+                    warnings.add("mandatory input '" + spec.name() + "' was not provided");
+                }
+            }
             Map<String, Object> out = c.call(cfg, in);
             out = out == null ? Map.of() : out;
+            if (!warnings.isEmpty()) {
+                Map<String, Object> withWarnings = new LinkedHashMap<>(out);
+                withWarnings.putIfAbsent("warnings", java.util.List.copyOf(warnings));
+                out = withWarnings;
+            }
             if (node.config().get("outputMapping") != null) {
                 // Evaluated with the process variables plus `result` (the raw connector output).
                 Object mapped = tech.kayys.wayang.eip.Mapper.compile(node.config().get("outputMapping"), omit)

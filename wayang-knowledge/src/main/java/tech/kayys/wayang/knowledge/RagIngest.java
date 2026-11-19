@@ -17,9 +17,10 @@ import tech.kayys.wayang.runtime.ServiceHandler;
  * Connector {@code rag-ingest}: adds documents to a named knowledge base, replacing any document with the same id.
  *
  * <p>Config: {@code knowledge} (name), optional {@code chunking}, {@code embedder}, {@code maxDocuments}, {@code maxChunks} (see docs/RAG.md).
- * Input: {@code documents}, a list of up to 50 objects, or one document given directly. A document has {@code fileName}, and either
- * {@code text} or {@code contentBase64} (at most 8 MiB decoded), optional {@code id} (default: the file name) and {@code metadata}
- * (string values, at most 20). There is no fetching from a URL here. Output: {@code ingested}, {@code chunks}, {@code documents},
+ * Input: {@code documents} (mandatory, advisory: when missing nothing is ingested and the run goes on), a list of up to 50 objects. A
+ * document is {@code fileId} (a file stored by {@code file-put}) or {@code fileName} with {@code text} or {@code contentBase64} (at most 8 MiB
+ * decoded), plus optional {@code id} (default: the file id or name) and {@code metadata} (string values, at most 20). There is no fetching
+ * from a URL here. Output: {@code ingested}, {@code chunks}, {@code documents},
  * {@code skipped} (name and reason, never content).
  */
 final class RagIngest implements ServiceHandler.Connector {
@@ -29,6 +30,7 @@ final class RagIngest implements ServiceHandler.Connector {
     static final Limits LIMITS = new Limits(MAX_DECODED, 5_000_000, 2000, 32 << 20, 200_000);
 
     private final KnowledgeRegistry registry;
+    private final FileStore files;
     private final Extractors extractors = load();
 
     /** Built-in formats plus any extractor module on the classpath (for example wayang-rag-pdf), found through ServiceLoader. */
@@ -40,8 +42,15 @@ final class RagIngest implements ServiceHandler.Connector {
         return e;
     }
 
-    RagIngest(KnowledgeRegistry registry) {
+    RagIngest(KnowledgeRegistry registry, FileStore files) {
         this.registry = registry;
+        this.files = files;
+    }
+
+    @Override
+    public java.util.List<tech.kayys.wayang.runtime.ConnectorInput> inputs() {
+        return java.util.List.of(tech.kayys.wayang.runtime.ConnectorInput.required("documents", "array",
+                "Documents to add: {fileId} from a file-put step, or {fileName, text | contentBase64}; up to " + MAX_DOCS_PER_CALL));
     }
 
     @Override
@@ -56,17 +65,25 @@ final class RagIngest implements ServiceHandler.Connector {
 
     @Override
     public Map<String, Object> call(Map<String, Object> config, Map<String, Object> inputs) throws Exception {
-        KnowledgeBase kb;
-        List<?> docs;
         try {
-            kb = registry.get(config, true);
-            docs = inputs.get("documents") instanceof List<?> l ? l : List.of(inputs);
+            KnowledgeRegistry.name(config); // a wrong configuration is an error even when there is nothing to add
         } catch (RagException e) {
             throw new ServiceHandler.ConnectorException(e.getMessage(), false);
         }
-        if (docs.isEmpty() || docs.size() > MAX_DOCS_PER_CALL) {
-            throw new ServiceHandler.ConnectorException("rag-ingest takes 1.." + MAX_DOCS_PER_CALL + " documents per call", false);
+        if (!(inputs.get("documents") instanceof List<?> docs) || docs.isEmpty()) {
+            // A missing mandatory input is reported, never fatal: nothing to add, nothing changed.
+            return new LinkedHashMap<>(Map.of("ingested", 0, "chunks", 0, "skipped", List.of()));
         }
+        KnowledgeBase kb;
+        try {
+            kb = registry.get(config, true);
+        } catch (RagException e) {
+            throw new ServiceHandler.ConnectorException(e.getMessage(), false);
+        }
+        if (docs.size() > MAX_DOCS_PER_CALL) {
+            throw new ServiceHandler.ConnectorException("rag-ingest takes at most " + MAX_DOCS_PER_CALL + " documents per call", false);
+        }
+        String tenant = config.get("wayang.tenant") instanceof String t ? t : "";
         int ingested = 0;
         int chunks = 0;
         List<Map<String, Object>> skipped = new ArrayList<>();
@@ -77,9 +94,21 @@ final class RagIngest implements ServiceHandler.Connector {
                     throw new RagException("a document must be an object");
                 }
                 String fileName = d.get("fileName") instanceof String s ? s : d.get("name") instanceof String s2 ? s2 : null;
+                byte[] stored = null;
+                if (d.get("fileId") instanceof String fid) {
+                    if (files == null) {
+                        throw new RagException("file storage is not configured");
+                    }
+                    FileStore.Stored f = files.get(tenant, fid);
+                    if (f == null) {
+                        throw new RagException("no such file");
+                    }
+                    stored = f.bytes();
+                    fileName = fileName == null ? f.name() : fileName;
+                }
                 label = fileName == null ? "document" : fileName.length() > 120 ? fileName.substring(0, 120) : fileName;
-                String text = text(d, fileName);
-                String id = d.get("id") instanceof String s && !s.isBlank() ? s : fileName;
+                String text = stored != null ? extractors.extract(fileName, stored, LIMITS) : text(d, fileName);
+                String id = d.get("id") instanceof String s && !s.isBlank() ? s : d.get("fileId") instanceof String fid2 ? fid2 : fileName;
                 if (text.isBlank()) {
                     throw new RagException("no readable text");
                 }
@@ -122,7 +151,7 @@ final class RagIngest implements ServiceHandler.Connector {
             }
             return extractors.extract(fileName, bytes, LIMITS);
         }
-        throw new RagException("a document needs 'text' or 'contentBase64'");
+        throw new RagException("a document needs 'fileId', 'text' or 'contentBase64'");
     }
 
     private static Map<String, String> metadata(Object m) {

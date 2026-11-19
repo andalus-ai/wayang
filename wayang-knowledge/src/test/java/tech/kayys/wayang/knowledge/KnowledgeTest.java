@@ -58,13 +58,13 @@ class KnowledgeTest {
     @Test
     void badInputsAreRejectedWithoutEchoingContent() throws Exception {
         Map<String, Object> cfg = Map.of("knowledge", "k1");
-        assertThrows(ServiceHandler.ConnectorException.class, () -> ingest.call(Map.of("knowledge", "bad name!"), Map.of("text", "x", "fileName", "a.txt")));
+        assertThrows(ServiceHandler.ConnectorException.class, () -> ingest.call(Map.of("knowledge", "bad name!"), Map.of("documents", List.of(Map.of("text", "x", "fileName", "a.txt")))));
         ServiceHandler.ConnectorException e = assertThrows(ServiceHandler.ConnectorException.class,
                 () -> ingest.call(cfg, Map.of("documents", List.of(Map.of("fileName", "a.pdf", "contentBase64", Base64.getEncoder().encodeToString("%PDF-1.4 SECRETBODY".getBytes(StandardCharsets.UTF_8)))))));
         assertTrue(e.getMessage().contains("PDF"));
         assertFalse(e.getMessage().contains("SECRETBODY"));
-        assertThrows(ServiceHandler.ConnectorException.class, () -> ingest.call(cfg, Map.of("documents", List.of())));
-        assertThrows(ServiceHandler.ConnectorException.class, () -> ingest.call(cfg, Map.of("fileName", "a.txt", "contentBase64", "!!!not base64!!!")));
+        assertEquals(0, ingest.call(cfg, Map.of("documents", List.of())).get("ingested")); // missing input is reported, not fatal
+        assertThrows(ServiceHandler.ConnectorException.class, () -> ingest.call(cfg, Map.of("documents", List.of(Map.of("fileName", "a.txt", "contentBase64", "!!!not base64!!!")))));
     }
 
     @Test
@@ -77,31 +77,31 @@ class KnowledgeTest {
 
     @Test
     void settingsMustAgreeBetweenIngestAndSearch() throws Exception {
-        ingest.call(Map.of("knowledge", "agree", "chunking", Map.of("type", "heading")), Map.of("fileName", "a.md", "text", "# A\n\nbody text"));
+        ingest.call(Map.of("knowledge", "agree", "chunking", Map.of("type", "heading")), Map.of("documents", List.of(Map.of("fileName", "a.md", "text", "# A\n\nbody text"))));
         assertThrows(ServiceHandler.ConnectorException.class, () -> search.call(Map.of("knowledge", "agree", "chunking", Map.of("type", "fixed")), Map.of("query", "body")));
         assertEquals(1, ((List<?>) search.call(Map.of("knowledge", "agree", "chunking", Map.of("type", "heading")), Map.of("query", "body")).get("hits")).size());
     }
 
     @Test
     void vectorNeedsAnEmbedderAndHybridWorksWithHashing() throws Exception {
-        assertThrows(ServiceHandler.ConnectorException.class, () -> ingest.call(Map.of("knowledge", "v1", "retrieval", Map.of("method", "vector")), Map.of("fileName", "a.txt", "text", "hello")));
+        assertThrows(ServiceHandler.ConnectorException.class, () -> ingest.call(Map.of("knowledge", "v1", "retrieval", Map.of("method", "vector")), Map.of("documents", List.of(Map.of("fileName", "a.txt", "text", "hello")))));
         Map<String, Object> cfg = Map.of("knowledge", "v2", "embedder", Map.of("type", "hashing"), "retrieval", Map.of("method", "hybrid", "topK", 2));
-        ingest.call(cfg, Map.of("fileName", "a.txt", "text", "refund policy five days"));
+        ingest.call(cfg, Map.of("documents", List.of(Map.of("fileName", "a.txt", "text", "refund policy five days"))));
         assertEquals("hybrid", ((Map<?, ?>) ((List<?>) search.call(cfg, Map.of("query", "refund")).get("hits")).get(0)).get("method"));
     }
 
     @Test
     void theNumberOfKnowledgeBasesIsBounded() throws Exception {
         for (int i = 0; i < KnowledgeRegistry.MAX_BASES; i++) {
-            ingest.call(Map.of("knowledge", "b" + i), Map.of("fileName", "a.txt", "text", "x y z"));
+            ingest.call(Map.of("knowledge", "b" + i), Map.of("documents", List.of(Map.of("fileName", "a.txt", "text", "x y z"))));
         }
-        assertThrows(ServiceHandler.ConnectorException.class, () -> ingest.call(Map.of("knowledge", "overflow"), Map.of("fileName", "a.txt", "text", "x")));
+        assertThrows(ServiceHandler.ConnectorException.class, () -> ingest.call(Map.of("knowledge", "overflow"), Map.of("documents", List.of(Map.of("fileName", "a.txt", "text", "x")))));
     }
 
     @Test
     void extensionNeedsTheKnowledgeFeature() {
         assertEquals(java.util.Set.of(Profile.Feature.KNOWLEDGE), ext.requires());
-        assertEquals(2, ext.components().size());
+        assertEquals(6, ext.components().size());
     }
 
     @Test
@@ -109,10 +109,10 @@ class KnowledgeTest {
         Map<String, Object> a = Map.of("knowledge", "shared-name", "wayang.tenant", "acme");
         Map<String, Object> b = Map.of("knowledge", "shared-name", "wayang.tenant", "globex");
         assertTrue(ingest.tenantScoped() && search.tenantScoped());
-        ingest.call(a, Map.of("fileName", "a.txt", "text", "acme confidential pricing"));
+        ingest.call(a, Map.of("documents", List.of(Map.of("fileName", "a.txt", "text", "acme confidential pricing"))));
         assertEquals(1, ((List<?>) search.call(a, Map.of("query", "pricing")).get("hits")).size());
         assertThrows(ServiceHandler.ConnectorException.class, () -> search.call(b, Map.of("query", "pricing")));
-        ingest.call(b, Map.of("fileName", "b.txt", "text", "globex roadmap"));
+        ingest.call(b, Map.of("documents", List.of(Map.of("fileName", "b.txt", "text", "globex roadmap"))));
         assertEquals(0, ((List<?>) search.call(b, Map.of("query", "pricing")).get("hits")).size());
     }
 }

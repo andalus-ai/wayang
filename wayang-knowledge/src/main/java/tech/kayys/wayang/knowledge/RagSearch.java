@@ -35,6 +35,12 @@ final class RagSearch implements ServiceHandler.Connector {
     }
 
     @Override
+    public java.util.List<tech.kayys.wayang.runtime.ConnectorInput> inputs() {
+        return java.util.List.of(tech.kayys.wayang.runtime.ConnectorInput.required("query", "string", "What to look for (at most 2000 characters)"),
+                tech.kayys.wayang.runtime.ConnectorInput.optional("filter", "object", "Exact match on document metadata, docId or docName"));
+    }
+
+    @Override
     public boolean tenantScoped() {
         return true;
     }
@@ -48,7 +54,12 @@ final class RagSearch implements ServiceHandler.Connector {
     public Map<String, Object> call(Map<String, Object> config, Map<String, Object> inputs) throws Exception {
         try {
             if (!(inputs.get("query") instanceof String q) || q.isBlank()) {
-                throw new RagException("rag-search needs a 'query'");
+                // A missing mandatory input is reported, never fatal.
+                Map<String, Object> none = new LinkedHashMap<>();
+                none.put("hits", List.of());
+                none.put("count", 0);
+                none.put("context", "No query was given.");
+                return none;
             }
             KnowledgeBase kb = registry.get(config, false);
             RetrievalConfig rc = registry.retrieval(config, kb);
