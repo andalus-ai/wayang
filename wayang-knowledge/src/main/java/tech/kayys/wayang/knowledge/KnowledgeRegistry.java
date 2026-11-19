@@ -7,17 +7,19 @@ import java.util.regex.Pattern;
 
 import tech.kayys.wayang.connectors.MediaHttp;
 import tech.kayys.wayang.connectors.UrlGuard;
+import tech.kayys.wayang.rag.Document;
 import tech.kayys.wayang.rag.Embedder;
 import tech.kayys.wayang.rag.HashingEmbedder;
 import tech.kayys.wayang.rag.KnowledgeBase;
 import tech.kayys.wayang.rag.KnowledgeConfig;
 import tech.kayys.wayang.rag.RagException;
 import tech.kayys.wayang.rag.RetrievalConfig;
+import tech.kayys.wayang.runtime.json.Json;
 
 /**
  * Named knowledge bases of this process. The name comes from the node configuration (never from model-controlled input), so an agent can
  * only reach the knowledge its author wired to it. Bounded (at most {@value #MAX_BASES} bases), in memory, not durable, and shared by
- * every run in the process: there is no per-tenant separation, so use distinct names per tenant or purpose.
+ * every run in the process. With a storage directory configured the sources are also kept on disk and the base is rebuilt after a restart.
  */
 final class KnowledgeRegistry {
 
@@ -25,29 +27,47 @@ final class KnowledgeRegistry {
     static final int MAX_TOTAL = 200;
     private static final Pattern NAME = Pattern.compile("[A-Za-z][A-Za-z0-9_-]{0,63}");
 
-    private record Entry(KnowledgeBase kb, KnowledgeConfig cfg, String signature, Embedder embedder) {
+    private record Entry(KnowledgeBase kb, KnowledgeConfig cfg, String signature, Embedder embedder, Map<String, Object> definition,
+            Map<String, Object> embedderSettings, boolean persist) {
     }
 
     private final Map<String, Entry> bases = new LinkedHashMap<>();
     private final MediaHttp http;
+    private final KnowledgePersistence persistence;
 
     KnowledgeRegistry(UrlGuard guard) {
+        this(guard, null);
+    }
+
+    /** @param persistence where knowledge survives restarts, or null for memory only */
+    KnowledgeRegistry(UrlGuard guard, KnowledgePersistence persistence) {
         this.http = new MediaHttp(guard);
+        this.persistence = persistence;
     }
 
     /** The base for {@code config}, created on first use. A later call that states different chunking/limits/embedder settings is an error, not a silent reconfigure; a search that states none simply uses the base as ingested. */
     synchronized KnowledgeBase get(Map<String, Object> config, boolean create) {
         String key = key(config);
         Map<String, Object> def = definition(config);
-        String sig = def + "|" + embedderSignature(config.get("embedder"));
+        String sig = signature(def, config.get("embedder"));
         Entry e = bases.get(key);
+        if (e == null && persistence != null && persistence.exists(tenant(config), name(config))) {
+            e = loadPersisted(config, key);
+        }
         if (e != null) {
             // A search attaches to the base that ingest built; it only has to agree on the settings it actually states.
             boolean statesNothing = !create && def.isEmpty() && config.get("embedder") == null;
             if (!statesNothing && !e.signature.equals(sig)) {
-                throw new RagException("knowledge '" + name(config) + "' already exists with different settings; use another name");
+                if (create && e.kb.documents() == 0 && !(persistence != null && persistence.exists(tenant(config), name(config)))) {
+                    bases.remove(key); // nothing was ever added (for example the first ingest failed): settings can still be corrected
+                    e = null;
+                } else {
+                    throw new RagException("knowledge '" + name(config) + "' already exists with different settings; use another name");
+                }
             }
-            return e.kb;
+            if (e != null) {
+                return e.kb;
+            }
         }
         if (!create) {
             throw new RagException("knowledge '" + name(config) + "' is empty: ingest documents into it first");
@@ -64,8 +84,87 @@ final class KnowledgeRegistry {
         }
         KnowledgeConfig kc = KnowledgeConfig.fromMap(def);
         KnowledgeBase kb = kc.build(emb);
-        bases.put(key, new Entry(kb, kc, sig, emb));
+        bases.put(key, new Entry(kb, kc, sig, emb, def, embedderWithoutKey(config.get("embedder")), persistence != null && persist(config)));
         return kb;
+    }
+
+    /** Stores a document of the base for restarts (when persistence is on and the base was not created with {@code persist: false}). Returns false if not stored. */
+    synchronized boolean persistDocument(Map<String, Object> config, Document doc) {
+        Entry e = bases.get(key(config));
+        if (persistence == null || e == null || !e.persist) {
+            return false;
+        }
+        if (!persistence.exists(tenant(config), name(config))) {
+            // the settings are written with the first document, so a base whose first ingest failed leaves nothing behind
+            persistence.saveDefinition(tenant(config), name(config), e.definition, e.embedderSettings);
+        }
+        persistence.saveDocument(tenant(config), name(config), doc);
+        return true;
+    }
+
+    synchronized void forgetDocument(Map<String, Object> config, String docId) {
+        if (persistence != null && persistence.exists(tenant(config), name(config))) {
+            persistence.deleteDocument(tenant(config), name(config), docId);
+        }
+    }
+
+    private static boolean persist(Map<String, Object> config) {
+        Object p = config.get("persist");
+        if (p != null && !(p instanceof Boolean)) {
+            throw new RagException("persist must be true or false");
+        }
+        return !Boolean.FALSE.equals(p);
+    }
+
+    /** Rebuilds a stored base: its saved settings and embedder, then every saved document is chunked and embedded again. */
+    @SuppressWarnings("unchecked")
+    private Entry loadPersisted(Map<String, Object> config, String key) {
+        KnowledgePersistence.Loaded l = persistence.load(tenant(config), name(config));
+        Map<String, Object> emb = l.embedder() == null ? null : new LinkedHashMap<>(l.embedder());
+        // The key is never stored; whichever node uses the base first after a restart supplies it from its own configuration.
+        if (emb != null && config.get("embedder") instanceof Map<?, ?> given && given.get("apiKey") instanceof String k) {
+            emb.put("apiKey", k);
+        }
+        Embedder embedder = embedder(emb);
+        KnowledgeConfig kc = KnowledgeConfig.fromMap(l.definition());
+        KnowledgeBase kb = kc.build(embedder);
+        for (Document d : l.documents()) {
+            kb.add(d);
+        }
+        Entry e = new Entry(kb, kc, signature(l.definition(), emb), embedder, l.definition(), l.embedder(), true);
+        bases.put(key, e);
+        return e;
+    }
+
+    /** Settings in a fixed order, so a stored base and a live configuration compare equal whatever their map order. */
+    private static String signature(Map<String, Object> def, Object embedder) {
+        return Json.write(canon(def)) + "|" + Json.write(canon(embedderWithoutKey(embedder)));
+    }
+
+    private static Object canon(Object o) {
+        if (o instanceof Map<?, ?> m) {
+            java.util.TreeMap<String, Object> t = new java.util.TreeMap<>();
+            m.forEach((k, v) -> t.put(String.valueOf(k), canon(v)));
+            return t;
+        }
+        if (o instanceof List<?> l) {
+            return l.stream().map(KnowledgeRegistry::canon).toList();
+        }
+        return o instanceof Number n && n.doubleValue() == Math.rint(n.doubleValue()) ? (Object) n.longValue() : o;
+    }
+
+    /** The embedder settings without the API key. */
+    private static Map<String, Object> embedderWithoutKey(Object o) {
+        if (o instanceof Map<?, ?> m) {
+            Map<String, Object> c = new LinkedHashMap<>();
+            m.forEach((k, v) -> {
+                if (!"apiKey".equals(k)) {
+                    c.put(String.valueOf(k), v);
+                }
+            });
+            return c;
+        }
+        return o == null || "none".equals(o) ? null : Map.of("type", String.valueOf(o));
     }
 
     synchronized RetrievalConfig retrieval(Map<String, Object> config, KnowledgeBase kb) {
@@ -106,16 +205,6 @@ final class KnowledgeRegistry {
             }
         }
         return d;
-    }
-
-    /** The embedder settings without the API key, so a credential is never part of anything kept or compared as text. */
-    private static String embedderSignature(Object o) {
-        if (o instanceof Map<?, ?> m) {
-            Map<Object, Object> c = new LinkedHashMap<>(m);
-            c.remove("apiKey");
-            return c.toString();
-        }
-        return String.valueOf(o);
     }
 
     private Embedder embedder(Object o) {

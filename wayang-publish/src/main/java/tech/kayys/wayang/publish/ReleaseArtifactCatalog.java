@@ -48,6 +48,7 @@ final class ReleaseArtifactCatalog {
             Map.entry("wayang.multimodal.describe", List.of("wayang-multimodal")),
             Map.entry("wayang.knowledge.rag-ingest", List.of("wayang-knowledge", "wayang-rag-pdf")),
             Map.entry("wayang.knowledge.rag-search", List.of("wayang-knowledge")),
+            Map.entry("wayang.knowledge.rag-forget", List.of("wayang-knowledge")),
             Map.entry("wayang.knowledge.file-put", List.of("wayang-knowledge")),
             Map.entry("wayang.knowledge.file-get", List.of("wayang-knowledge")),
             Map.entry("wayang.knowledge.file-list", List.of("wayang-knowledge")),
