@@ -133,6 +133,26 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  postgres-wal-sibling-forks:
+    name: PostgreSQL live sibling timeline promotions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Qualify independent sibling promotions from one ancestor
+        run: bash spikes/cel-nessie/scripts/qualify-postgres-sibling-timeline-forks.sh
+      - name: Upload sibling timeline evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-sibling-timeline-forks
+          path: |
+            /tmp/wayang-sibling-forks-plan.json
+            /tmp/wayang-sibling-forks-simulation.json
+            /tmp/wayang-sibling-forks-recovery.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
   postgres-wal-successive-timelines:
     name: PostgreSQL successive timeline promotions and PITR
     runs-on: ubuntu-latest

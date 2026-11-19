@@ -29,7 +29,16 @@ final class RagIngest implements ServiceHandler.Connector {
     static final Limits LIMITS = new Limits(MAX_DECODED, 5_000_000, 2000, 32 << 20, 200_000);
 
     private final KnowledgeRegistry registry;
-    private final Extractors extractors = Extractors.defaults();
+    private final Extractors extractors = load();
+
+    /** Built-in formats plus any extractor module on the classpath (for example wayang-rag-pdf), found through ServiceLoader. */
+    private static Extractors load() {
+        Extractors e = Extractors.defaults();
+        for (tech.kayys.wayang.rag.DocumentExtractor d : java.util.ServiceLoader.load(tech.kayys.wayang.rag.DocumentExtractor.class)) {
+            e = e.with(d);
+        }
+        return e;
+    }
 
     RagIngest(KnowledgeRegistry registry) {
         this.registry = registry;

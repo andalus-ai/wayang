@@ -13,7 +13,8 @@ Slice 2 (`wayang-knowledge`) exposes it as connectors, below. REST upload endpoi
 | docx | headings (Heading N/Title), paragraphs, tables as `a \| b` rows |
 | xlsx | every sheet, shared/inline strings; rows as `header=value; ...` |
 | pptx | `## Slide N` in slide order; speaker notes are not read |
-| **pdf, legacy doc/xls/ppt** | **not supported yet**; a clear error is returned (PDF needs a separate extractor module because it needs a parser library; save legacy files as docx/xlsx/pptx) |
+| pdf | **optional module `wayang-rag-pdf`** (Apache PDFBox 3.0.3): text layer only, `## Page N` per page, at most 500 pages; scanned PDFs (no text layer, needs OCR) and password-protected files are rejected with a clear message. Add the module as a dependency and `rag-ingest` picks it up through ServiceLoader. Without it a PDF returns "PDF needs the PDF extractor, which is not enabled in this build". Generated releases do not add it automatically yet |
+| legacy doc/xls/ppt | **not supported**: save as docx/xlsx/pptx |
 
 Office files are read from a temp-file `ZipFile` with bounds on entry count and size, path-traversal names rejected, XML parsed with DTDs and external entities off. Limits (`Limits.DEFAULT`): 20 MiB file, 5M characters, 2000 zip entries, 32 MiB per entry, 200k rows. Format is chosen by extension and sniffed from content when it is missing.
 
@@ -61,7 +62,9 @@ tools:
   - {name: search_contracts, type: rag-search, description: "Search the contract library", config: {knowledge: contracts, retrieval: {method: bm25, topK: 5}}}
 ```
 
-Ingest first with a `rag-ingest` node (`{knowledge: contracts, chunking: {type: clause}}`). Set `chunking` and `embedder` on the ingest node. A search node needs only `knowledge` (and optionally `retrieval`): it uses the base as ingested. If a search states `chunking`/`embedder` that differ from the ingest, the call fails instead of silently reconfiguring the base.
+In Studio's agent form, **Add knowledge search** inserts this tool with the `query` parameter already declared. Publishing checks that a `rag-search`/`rag-ingest` tool names its knowledge base and that `rag-search` declares a `query` parameter.
+
+Ingest first with a `rag-ingest` node (`{knowledge: contracts, chunking: {type: clause}}`). Ingest and search must repeat the same `chunking` and `embedder` settings, otherwise the call fails instead of silently reconfiguring the base; `retrieval` may differ per node.
 
 - The knowledge **name comes from node configuration, never from model input**, so an agent only reaches knowledge its author wired to it.
 - Bases live in the process and are **kept per tenant**: the engine passes the run's tenant (never the author or the model), so two tenants using the same name get separate bases (at most 20 per tenant, 200 overall). This holds for workflow nodes. Calls that carry no tenant (an agent's tool call, an EIP component) use one shared namespace, which is correct in a single-tenant release but not isolation in a multi-tenant host. Not durable.
@@ -96,4 +99,4 @@ Recipes: legal/policy -> `chunking: clause`, `method: hybrid`, filter by `docNam
 ## Next slices
 
 1. REST upload endpoints, Studio knowledge UI, and a RAG agent template.
-2. PDF extractor module, Andalus `RagEmbedder` adapter, external vector stores, persistence, per-tenant isolation.
+2. Auto-include the PDF module in releases, OCR, Andalus `RagEmbedder` adapter, external vector stores, persistence, per-tenant isolation.
