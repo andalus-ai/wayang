@@ -71,13 +71,13 @@ class EmbedderTest {
 
     private ServiceHandler.Connector connector(String name) {
         KnowledgeRegistry reg = new KnowledgeRegistry(new UrlGuard(true, java.util.Set.of()));
-        return name.equals("ingest") ? new RagIngest(reg) : new RagSearch(reg);
+        return name.equals("ingest") ? new RagIngest(reg, null) : new RagSearch(reg);
     }
 
     @Test
     void vectorSearchFindsMeaningThatSharesNoWords() throws Exception {
         KnowledgeRegistry reg = new KnowledgeRegistry(new UrlGuard(true, java.util.Set.of()));
-        RagIngest ingest = new RagIngest(reg);
+        RagIngest ingest = new RagIngest(reg, null);
         RagSearch search = new RagSearch(reg);
         Map<String, Object> cfg = Map.of("knowledge", "pets", "embedder", Map.of("type", "openai", "model", "fake-embed", "dimensions", 8, "baseUrl", base, "apiKey", "sk-test-123"),
                 "retrieval", Map.of("method", "vector", "topK", 1));
@@ -96,7 +96,7 @@ class EmbedderTest {
         KnowledgeRegistry reg = new KnowledgeRegistry(new UrlGuard(true, java.util.Set.of()));
         Map<String, Object> cfg = Map.of("knowledge", "big", "chunking", Map.of("type", "fixed", "size", 100, "overlap", 0),
                 "embedder", Map.of("type", "openai", "model", "fake-embed", "dimensions", 8, "baseUrl", base));
-        new RagIngest(reg).call(cfg, Map.of("fileName", "long.txt", "text", "word ".repeat(1000)));
+        new RagIngest(reg, null).call(cfg, Map.of("documents", List.of(Map.of("fileName", "long.txt", "text", "word ".repeat(1000)))));
         assertTrue(batchSizes.size() >= 2 && batchSizes.stream().allMatch(n -> n <= OpenAiEmbedder.BATCH), batchSizes.toString());
     }
 
@@ -106,14 +106,14 @@ class EmbedderTest {
         ServiceHandler.Connector ingest = connector("ingest");
         ServiceHandler.ConnectorException e = assertThrows(ServiceHandler.ConnectorException.class, () -> ingest.call(
                 Map.of("knowledge", "bad", "embedder", Map.of("type", "openai", "model", "m", "dimensions", 8, "baseUrl", base, "apiKey", "sk-secret-xyz")),
-                Map.of("fileName", "a.txt", "text", "some text that is long enough")));
+                Map.of("documents", List.of(Map.of("fileName", "a.txt", "text", "some text that is long enough")))));
         assertFalse(e.getMessage().contains("sk-secret-xyz"));
     }
 
     @Test
     void embedderSettingsAreValidated() {
         ServiceHandler.Connector ingest = connector("ingest");
-        Map<String, Object> doc = Map.of("fileName", "a.txt", "text", "x y");
+        Map<String, Object> doc = Map.of("documents", List.of(Map.of("fileName", "a.txt", "text", "x y")));
         assertThrows(ServiceHandler.ConnectorException.class, () -> ingest.call(Map.of("knowledge", "v1", "embedder", Map.of("type", "openai", "dimensions", 8)), doc));
         assertThrows(ServiceHandler.ConnectorException.class, () -> ingest.call(Map.of("knowledge", "v2", "embedder", Map.of("type", "openai", "model", "m")), doc));
         assertThrows(ServiceHandler.ConnectorException.class, () -> ingest.call(Map.of("knowledge", "v3", "embedder", Map.of("type", "openai", "model", "m", "dimensions", 8, "key", "x")), doc));
@@ -123,8 +123,8 @@ class EmbedderTest {
     @Test
     void privateEndpointsAreBlockedByDefault() {
         KnowledgeRegistry reg = new KnowledgeRegistry(new UrlGuard(false, java.util.Set.of()));
-        assertThrows(ServiceHandler.ConnectorException.class, () -> new RagIngest(reg).call(
+        assertThrows(ServiceHandler.ConnectorException.class, () -> new RagIngest(reg, null).call(
                 Map.of("knowledge", "ssrf", "embedder", Map.of("type", "openai", "model", "m", "dimensions", 8, "baseUrl", base)),
-                Map.of("fileName", "a.txt", "text", "some text")));
+                Map.of("documents", List.of(Map.of("fileName", "a.txt", "text", "some text")))));
     }
 }

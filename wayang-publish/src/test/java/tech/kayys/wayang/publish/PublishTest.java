@@ -590,6 +590,19 @@ class PublishTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void aFileStorageToolBringsTheKnowledgeModuleButNotThePdfParser() {
+        Map<String, Object> m = (Map<String, Object>) Json.read(bundle(false, true, "Files"));
+        ((List<Object>) m.get("definitions")).add(Map.of("kind", "AGENT", "id", "filer", "publishedVersion", 1, "document", Map.of("id", "filer", "model", "ollama/x",
+                "tools", List.of(Map.of("name", "save", "type", "file-put", "config", Map.of())))));
+        for (ReleaseOptions o : List.of(OPTS, GAM)) {
+            String pom = text(Publisher.generate(Json.write(m), o), "pom.xml");
+            assertTrue(pom.contains("wayang-knowledge"), o.target().toString());
+            assertFalse(pom.contains("wayang-rag-pdf"), "no ingest, no PDF parser");
+        }
+    }
+
+    @Test
     void anOpenapiNodeBringsTheMcpModuleInBothTargets() {
         // the same bundle as the http one, with the node turned into an openapi call (the spec link, an operation, fixed headers)
         String httpBundle = bundle(true, false, "Pets");

@@ -306,7 +306,7 @@ public final class Publisher {
                                     <version>${wayang.version}</version>
                                 </dependency>
                         """;
-    /** Needed only when {@code rag-ingest} or {@code rag-search} is used; the runtime finds the extension through ServiceLoader. */
+    /** Needed only when a knowledge or file-storage connector ({@code rag-ingest}, {@code rag-search}, {@code file-put}...) is used; the runtime finds the extension through ServiceLoader. */
     static final String KNOWLEDGE_DEP = """
                                 <dependency>
                                     <groupId>tech.kayys.wayang</groupId>
@@ -322,7 +322,7 @@ public final class Publisher {
                                     <version>${wayang.version}</version>
                                 </dependency>
                         """;
-    static final Set<String> KNOWLEDGE_CONNECTORS = Set.of("rag-ingest", "rag-search");
+    static final Set<String> KNOWLEDGE_CONNECTORS = Set.of("rag-ingest", "rag-search", "file-put", "file-get", "file-list", "file-delete");
     /** Needed only when the {@code openapi} connector is used; the runtime finds the extension through ServiceLoader. */
     static final String MCP_DEP = """
                                 <dependency>
