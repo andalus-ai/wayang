@@ -22,6 +22,7 @@ import tech.kayys.wayang.rag.RetrievalConfig;
 final class KnowledgeRegistry {
 
     static final int MAX_BASES = 20;
+    static final int MAX_TOTAL = 200;
     private static final Pattern NAME = Pattern.compile("[A-Za-z][A-Za-z0-9_-]{0,63}");
 
     private record Entry(KnowledgeBase kb, KnowledgeConfig cfg, String signature, Embedder embedder) {
@@ -34,22 +35,25 @@ final class KnowledgeRegistry {
         this.http = new MediaHttp(guard);
     }
 
-    /** The base for {@code config}, created on first use. A later call with different chunking/limits settings is an error, not a silent reconfigure. */
+    /** The base for {@code config}, created on first use. A later call that states different chunking/limits/embedder settings is an error, not a silent reconfigure; a search that states none simply uses the base as ingested. */
     synchronized KnowledgeBase get(Map<String, Object> config, boolean create) {
-        String name = name(config);
+        String key = key(config);
         Map<String, Object> def = definition(config);
         String sig = def + "|" + embedderSignature(config.get("embedder"));
-        Entry e = bases.get(name);
+        Entry e = bases.get(key);
         if (e != null) {
-            if (!e.signature.equals(sig)) {
-                throw new RagException("knowledge '" + name + "' already exists with different settings; use another name");
+            // A search attaches to the base that ingest built; it only has to agree on the settings it actually states.
+            boolean statesNothing = !create && def.isEmpty() && config.get("embedder") == null;
+            if (!statesNothing && !e.signature.equals(sig)) {
+                throw new RagException("knowledge '" + name(config) + "' already exists with different settings; use another name");
             }
             return e.kb;
         }
         if (!create) {
-            throw new RagException("knowledge '" + name + "' is empty: ingest documents into it first");
+            throw new RagException("knowledge '" + name(config) + "' is empty: ingest documents into it first");
         }
-        if (bases.size() >= MAX_BASES) {
+        String prefix = tenant(config) + "|";
+        if (bases.keySet().stream().filter(k -> k.startsWith(prefix)).count() >= MAX_BASES || bases.size() >= MAX_TOTAL) {
             throw new RagException("too many knowledge bases (max " + MAX_BASES + ")");
         }
         Embedder emb = embedder(config.get("embedder"));
@@ -60,12 +64,12 @@ final class KnowledgeRegistry {
         }
         KnowledgeConfig kc = KnowledgeConfig.fromMap(def);
         KnowledgeBase kb = kc.build(emb);
-        bases.put(name, new Entry(kb, kc, sig, emb));
+        bases.put(key, new Entry(kb, kc, sig, emb));
         return kb;
     }
 
     synchronized RetrievalConfig retrieval(Map<String, Object> config, KnowledgeBase kb) {
-        Entry e = bases.get(name(config));
+        Entry e = bases.get(key(config));
         Object r = config.get("retrieval");
         if (r != null && !(r instanceof Map)) {
             throw new RagException("retrieval must be an object");
@@ -73,6 +77,15 @@ final class KnowledgeRegistry {
         @SuppressWarnings("unchecked")
         Map<String, Object> m = r == null ? e.cfg.retrieval() : (Map<String, Object>) r;
         return RetrievalConfig.fromMap(m, kb.hasEmbedder());
+    }
+
+    /** The run's tenant as set by the engine ("" when the caller has none, as in a single-tenant release). */
+    private static String tenant(Map<String, Object> config) {
+        return config.get("wayang.tenant") instanceof String t ? t : "";
+    }
+
+    private static String key(Map<String, Object> config) {
+        return tenant(config) + "|" + name(config);
     }
 
     static String name(Map<String, Object> config) {

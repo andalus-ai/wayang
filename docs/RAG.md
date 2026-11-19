@@ -62,15 +62,39 @@ tools:
   - {name: search_contracts, type: rag-search, description: "Search the contract library", config: {knowledge: contracts, retrieval: {method: bm25, topK: 5}}}
 ```
 
+In Studio's agent form, **Add knowledge search** inserts this tool with the `query` parameter already declared. Publishing checks that a `rag-search`/`rag-ingest` tool names its knowledge base and that `rag-search` declares a `query` parameter.
+
 Ingest first with a `rag-ingest` node (`{knowledge: contracts, chunking: {type: clause}}`). Ingest and search must repeat the same `chunking` and `embedder` settings, otherwise the call fails instead of silently reconfiguring the base; `retrieval` may differ per node.
 
 - The knowledge **name comes from node configuration, never from model input**, so an agent only reaches knowledge its author wired to it.
-- Bases live in the process, at most 20, and are **shared by every run and tenant in that process**: use distinct names. Not durable.
+- Bases live in the process and are **kept per tenant**: the engine passes the run's tenant (never the author or the model), so two tenants using the same name get separate bases (at most 20 per tenant, 200 overall). This holds for workflow nodes. Calls that carry no tenant (an agent's tool call, an EIP component) use one shared namespace, which is correct in a single-tenant release but not isolation in a multi-tenant host. Not durable.
 - `embedder` is `none` (default, keyword search only), `{type: hashing, dimensions}` (lexical, see limits) or `{type: openai, model, dimensions, baseUrl, apiKey}`: **semantic** embeddings from any OpenAI-compatible `/embeddings` endpoint (OpenAI, Ollama, vLLM...). `dimensions` must be the model's vector size; a mismatch fails the call instead of corrupting the index. Requests are batched (32), time- and size-limited and pass the SSRF guard (private hosts need `WAYANG_CONNECTORS_ALLOW_PRIVATE=true` or an allow-list). `apiKey` is `${secret:NAME}`. **Document text is sent to that endpoint**, so pick it like any data processor. Asking for `vector`/`hybrid` without an embedder is an error at ingest time.
 ```yaml
 config: {knowledge: contracts, chunking: {type: clause}, embedder: {type: openai, model: text-embedding-3-small, dimensions: 1536, apiKey: "${secret:OPENAI_API_KEY}"}, retrieval: {method: hybrid, mmr: true}}
 ```
 - That an agent runtime passes an agent tool of type `rag-search` to the Wayang connector is the existing tool contract; it was exercised here only at the connector level, not through a live agent run.
+
+## Worked example: a research assistant over your documents
+
+One process, run for real by `RagProcessTest`: the first node ingests the documents the run was started with, the second answers a question from them.
+
+```yaml
+# BPMN service tasks (shown as their node configuration)
+learn:   {connector: rag-ingest, knowledge: contracts, chunking: {type: clause, maxChars: 1200}, inputs: {documents: documents}}
+lookup:  {connector: rag-search, knowledge: contracts, retrieval: {method: bm25, topK: 3, mmr: true}, inputs: {query: question}}
+```
+
+Start it with `documents: [{fileName: "msa.docx", contentBase64: "..."}, {fileName: "faq.md", text: "..."}]` and `question: "termination notice period"`. Afterwards `lookup.context` holds the numbered, source-labelled passages and `lookup.hits` the structured list.
+
+To let an *agent* decide when to look things up, give it the tool instead of a fixed `lookup` node (Studio: **Add knowledge search**), and fill the base with a separate ingest process, for example one started by a webhook trigger whenever a document arrives:
+
+```yaml
+tools: [{name: search_contracts, type: rag-search, description: "Search the contract library", config: {knowledge: contracts, parameters: {type: object, properties: {query: {type: string}}, required: [query]}}}]
+persona: {role: "Contracts analyst", rules: ["Answer only from the retrieved passages", "Quote the source file for every claim"]}
+guardrails: {...}
+```
+
+Recipes: legal/policy -> `chunking: clause`, `method: hybrid`, filter by `docName`; research papers and manuals -> `heading` or `parent-child` with `expand: parent`; spreadsheets -> `paragraph` over the row lines with `bm25` for exact codes; FAQs -> `paragraph`, `hybrid` with an embedder.
 
 ## Next slices
 

@@ -103,4 +103,16 @@ class KnowledgeTest {
         assertEquals(java.util.Set.of(Profile.Feature.KNOWLEDGE), ext.requires());
         assertEquals(2, ext.components().size());
     }
+
+    @Test
+    void tenantsDoNotSeeEachOthersKnowledge() throws Exception {
+        Map<String, Object> a = Map.of("knowledge", "shared-name", "wayang.tenant", "acme");
+        Map<String, Object> b = Map.of("knowledge", "shared-name", "wayang.tenant", "globex");
+        assertTrue(ingest.tenantScoped() && search.tenantScoped());
+        ingest.call(a, Map.of("fileName", "a.txt", "text", "acme confidential pricing"));
+        assertEquals(1, ((List<?>) search.call(a, Map.of("query", "pricing")).get("hits")).size());
+        assertThrows(ServiceHandler.ConnectorException.class, () -> search.call(b, Map.of("query", "pricing")));
+        ingest.call(b, Map.of("fileName", "b.txt", "text", "globex roadmap"));
+        assertEquals(0, ((List<?>) search.call(b, Map.of("query", "pricing")).get("hits")).size());
+    }
 }

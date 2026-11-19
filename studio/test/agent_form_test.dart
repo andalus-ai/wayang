@@ -78,4 +78,12 @@ void main() {
     expect(bad.any((h) => h.contains('sk-live')), false);
     expect(bad.any((h) => h.contains('config.apiKey')), true);
   });
+
+  test('knowledge search preset is valid and incomplete knowledge tools are flagged', () {
+    final t = knowledgeSearchTool('search_knowledge', 'contracts');
+    expect(t.type, 'rag-search');
+    expect(toolHints(t), isEmpty);
+    expect(toolHints(const AgentToolForm(name: 'a', type: 'rag-ingest')), isNotEmpty);
+    expect(toolHints(const AgentToolForm(name: 'a', type: 'rag-search', config: {'knowledge': 'x'})), isNotEmpty);
+  });
 }
