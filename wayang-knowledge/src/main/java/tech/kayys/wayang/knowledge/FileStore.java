@@ -18,6 +18,8 @@ import tech.kayys.wayang.rag.RagException;
 /**
  * Durable, tenant-separated storage for files that workflows and agents share (documents to ingest, reports, uploads). Each file gets a random
  * id; names are metadata only and never become paths, so a name cannot escape the directory. Bounded: 20 MiB per file, 1000 files per tenant.
+ * Optional retention: a file may expire after {@code ttlDays}; {@code WAYANG_FILES_TTL_DAYS} sets a default and {@code WAYANG_FILES_MAX_TTL_DAYS} a
+ * ceiling no file may exceed. An expired file is gone for every reader at once and is deleted by the next store, list or purge.
  *
  * <p>Directory: {@code WAYANG_FILES_DIR}, else {@code WAYANG_STATE_DIR/files}. With neither set there is no storage and the file steps say so
  * instead of silently writing somewhere temporary. In a container, mount a volume there or the files go when the container does.
@@ -32,26 +34,61 @@ final class FileStore {
     record Stored(String id, String name, long size, String sha256, byte[] bytes) {
     }
 
-    record Info(String id, String name, long size, String sha256) {
+    /** {@code expiresAt} is epoch milliseconds, 0 when the file never expires. */
+    record Info(String id, String name, long size, String sha256, long expiresAt) {
     }
 
+    static final int MAX_TTL_DAYS = 3650;
+
     private final Path root;
+    private final java.time.Clock clock;
+    private final int defaultTtlDays;
+    private final int maxTtlDays;
 
     FileStore(Path root) {
+        this(root, java.time.Clock.systemUTC(), 0, 0);
+    }
+
+    /** @param defaultTtlDays expiry of files stored without one (0 = never); @param maxTtlDays longest life any file may have (0 = no cap) */
+    FileStore(Path root, java.time.Clock clock, int defaultTtlDays, int maxTtlDays) {
         this.root = root;
+        this.clock = clock;
+        this.defaultTtlDays = defaultTtlDays;
+        this.maxTtlDays = maxTtlDays;
     }
 
     static FileStore fromEnvironment() {
         String d = System.getenv("WAYANG_FILES_DIR");
         String s = System.getenv("WAYANG_STATE_DIR");
-        if (d != null && !d.isBlank()) {
-            return new FileStore(Path.of(d));
-        }
-        return s != null && !s.isBlank() ? new FileStore(Path.of(s, "files")) : null;
+        Path root = d != null && !d.isBlank() ? Path.of(d) : s != null && !s.isBlank() ? Path.of(s, "files") : null;
+        return root == null ? null
+                : new FileStore(root, java.time.Clock.systemUTC(), days("WAYANG_FILES_TTL_DAYS"), days("WAYANG_FILES_MAX_TTL_DAYS"));
     }
 
-    Info put(String tenant, String fileName, byte[] bytes) {
+    private static int days(String variable) {
+        String v = System.getenv(variable);
+        try {
+            int n = v == null || v.isBlank() ? 0 : Integer.parseInt(v.trim());
+            return n < 0 || n > MAX_TTL_DAYS ? 0 : n;
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /**
+     * @param ttlDays how long to keep the file (1..3650), or null for the default; the configured maximum always applies
+     */
+    Info put(String tenant, String fileName, byte[] bytes, Integer ttlDays) {
         String name = cleanName(fileName);
+        if (ttlDays != null && (ttlDays < 1 || ttlDays > MAX_TTL_DAYS)) {
+            throw new RagException("ttlDays must be between 1 and " + MAX_TTL_DAYS);
+        }
+        int ttl = ttlDays != null ? ttlDays : defaultTtlDays;
+        if (maxTtlDays > 0 && (ttl == 0 || ttl > maxTtlDays)) {
+            ttl = maxTtlDays;
+        }
+        long expiresAt = ttl == 0 ? 0 : clock.millis() + ttl * 86_400_000L;
+        purgeExpired(tenant);
         if (bytes.length > MAX_BYTES) {
             throw new RagException("file is larger than " + (MAX_BYTES >> 20) + " MiB");
         }
@@ -68,8 +105,8 @@ final class FileStore {
             Path tmp = Files.createTempFile(dir, ".upload", ".tmp");
             Files.write(tmp, bytes);
             Files.move(tmp, dir.resolve(id + ".bin"), StandardCopyOption.ATOMIC_MOVE);
-            Files.writeString(dir.resolve(id + ".meta"), name + "\n" + sha + "\n" + bytes.length + "\n", StandardCharsets.UTF_8);
-            return new Info(id, name, bytes.length, sha);
+            Files.writeString(dir.resolve(id + ".meta"), name + "\n" + sha + "\n" + bytes.length + "\n" + expiresAt + "\n", StandardCharsets.UTF_8);
+            return new Info(id, name, bytes.length, sha, expiresAt);
         } catch (IOException e) {
             throw new RagException("the file could not be stored");
         }
@@ -98,13 +135,50 @@ final class FileStore {
                 return null;
             }
             String[] l = Files.readString(meta, StandardCharsets.UTF_8).split("\n");
-            return new Info(id, l[0], Long.parseLong(l[2]), l[1]);
+            long expiresAt = l.length > 3 ? Long.parseLong(l[3].strip()) : 0;
+            if (expiresAt > 0 && clock.millis() >= expiresAt) {
+                return null; // expired: gone for every reader, removed by the next purge
+            }
+            return new Info(id, l[0], Long.parseLong(l[2]), l[1], expiresAt);
         } catch (IOException | RuntimeException e) {
             return null;
         }
     }
 
+    /** Removes this tenant's expired files; returns how many. Runs on every store and list, and on demand (file-purge). */
+    int purgeExpired(String tenant) {
+        Path dir = dir(tenant);
+        if (!Files.isDirectory(dir)) {
+            return 0;
+        }
+        int n = 0;
+        try (DirectoryStream<Path> ds = Files.newDirectoryStream(dir, "*.meta")) {
+            for (Path p : ds) {
+                String f = p.getFileName().toString();
+                String id = f.substring(0, f.length() - 5);
+                if (ID.matcher(id).matches() && info(tenant, id) == null && isExpired(p)) {
+                    Files.deleteIfExists(dir.resolve(id + ".bin"));
+                    Files.deleteIfExists(p);
+                    n++;
+                }
+            }
+        } catch (IOException e) {
+            throw new RagException("expired files could not be removed");
+        }
+        return n;
+    }
+
+    private boolean isExpired(Path meta) {
+        try {
+            String[] l = Files.readString(meta, StandardCharsets.UTF_8).split("\n");
+            return l.length > 3 && Long.parseLong(l[3].strip()) > 0 && clock.millis() >= Long.parseLong(l[3].strip());
+        } catch (IOException | RuntimeException e) {
+            return false;
+        }
+    }
+
     List<Info> list(String tenant) {
+        purgeExpired(tenant);
         List<Info> out = new ArrayList<>();
         Path dir = dir(tenant);
         if (!Files.isDirectory(dir)) {

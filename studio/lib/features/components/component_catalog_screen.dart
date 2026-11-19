@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
+import '../../data/component_inputs.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
 
@@ -123,9 +124,18 @@ class _ComponentCard extends StatelessWidget {
                   ],
                 ),
               ),
-          if (component.uiHints.isNotEmpty) ...[
+          if (componentInputs(component).isNotEmpty) ...[
             const SizedBox(height: 10),
-            _MetaLine(label: 'UI hints', value: component.uiHints.entries.map((e) => '${e.key}: ${e.value}').join(' · ')),
+            _MetaLine(
+              label: 'Inputs (mandatory ones only warn when missing)',
+              value: componentInputs(component).map((i) => '${i.name}: ${i.type}${i.mandatory ? ' (mandatory)' : ''}').join(' · '),
+            ),
+          ],
+          if (component.uiHints.keys.any((k) => k != 'inputs')) ...[
+            const SizedBox(height: 10),
+            _MetaLine(
+                label: 'UI hints',
+                value: component.uiHints.entries.where((e) => e.key != 'inputs').map((e) => '${e.key}: ${e.value}').join(' · ')),
           ],
         ],
       ),
