@@ -13,7 +13,7 @@ Slice 2 (`wayang-knowledge`) exposes it as connectors, below. REST upload endpoi
 | docx | headings (Heading N/Title), paragraphs, tables as `a \| b` rows |
 | xlsx | every sheet, shared/inline strings; rows as `header=value; ...` |
 | pptx | `## Slide N` in slide order; speaker notes are not read |
-| pdf | **optional module `wayang-rag-pdf`** (Apache PDFBox 3.0.3): text layer only, `## Page N` per page, at most 500 pages; scanned PDFs (no text layer, needs OCR) and password-protected files are rejected with a clear message. Add the module as a dependency and `rag-ingest` picks it up through ServiceLoader. Without it a PDF returns "PDF needs the PDF extractor, which is not enabled in this build". Generated releases do not add it automatically yet |
+| pdf | **optional module `wayang-rag-pdf`** (Apache PDFBox 3.0.3): text layer only, `## Page N` per page, at most 500 pages; scanned PDFs (no text layer, needs OCR) and password-protected files are rejected with a clear message. Add the module as a dependency and `rag-ingest` picks it up through ServiceLoader. Without it a PDF returns "PDF needs the PDF extractor, which is not enabled in this build". Generated releases add it automatically when `rag-ingest` is used (this brings PDFBox into the release); a release that only searches does not get it |
 | legacy doc/xls/ppt | **not supported**: save as docx/xlsx/pptx |
 
 Office files are read from a temp-file `ZipFile` with bounds on entry count and size, path-traversal names rejected, XML parsed with DTDs and external entities off. Limits (`Limits.DEFAULT`): 20 MiB file, 5M characters, 2000 zip entries, 32 MiB per entry, 200k rows. Format is chosen by extension and sniffed from content when it is missing.
@@ -75,4 +75,4 @@ config: {knowledge: contracts, chunking: {type: clause}, embedder: {type: openai
 ## Next slices
 
 1. REST upload endpoints, Studio knowledge UI, and a RAG agent template.
-2. Auto-include the PDF module in releases, OCR, Andalus `RagEmbedder` adapter, external vector stores, persistence, per-tenant isolation.
+2. OCR, Andalus `RagEmbedder` adapter, external vector stores, persistence, per-tenant isolation.

@@ -579,6 +579,12 @@ class PublishTest {
             assertEquals(List.of("rag-search"), p.connectors());
             assertTrue(p.components().contains("wayang.knowledge.rag-search"), p.components().toString());
             assertTrue(text(p, "pom.xml").contains("wayang-knowledge"), o.target().toString());
+            assertFalse(text(p, "pom.xml").contains("wayang-rag-pdf"), "search only: no PDF parser");
+        }
+        ((List<Object>) m.get("definitions")).add(Map.of("kind", "AGENT", "id", "reader", "publishedVersion", 1, "document", Map.of("id", "reader", "model", "ollama/x",
+                "tools", List.of(Map.of("name", "learn", "type", "rag-ingest", "config", Map.of("knowledge", "contracts"))))));
+        for (ReleaseOptions o : List.of(OPTS, GAM)) {
+            assertTrue(text(Publisher.generate(Json.write(m), o), "pom.xml").contains("wayang-rag-pdf"), o.target().toString());
         }
         assertFalse(text(Publisher.generate(bundle(true, false, "Plain"), OPTS), "pom.xml").contains("wayang-knowledge"));
     }
