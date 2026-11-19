@@ -13,7 +13,7 @@ import tech.kayys.wayang.runtime.ServiceHandler;
 import tech.kayys.wayang.runtime.WayangExtension;
 
 /**
- * Adds the knowledge connectors ({@code rag-ingest}, {@code rag-search}) and the reusable file storage steps ({@code file-put},
+ * Adds the knowledge connectors ({@code rag-ingest}, {@code rag-search}, {@code rag-forget}) and the reusable file storage steps ({@code file-put},
  * {@code file-get}, {@code file-list}, {@code file-delete}); loaded only when the profile enables the KNOWLEDGE feature.
  */
 public final class KnowledgeExtension implements WayangExtension {
@@ -27,12 +27,18 @@ public final class KnowledgeExtension implements WayangExtension {
     }
 
     KnowledgeExtension(FileStore files) {
+        this(files, new UrlGuard("true".equalsIgnoreCase(System.getenv("WAYANG_CONNECTORS_ALLOW_PRIVATE")), hosts()));
+    }
+
+    KnowledgeExtension(FileStore files, UrlGuard guard) {
         this.registry = new KnowledgeRegistry(
-                new UrlGuard("true".equalsIgnoreCase(System.getenv("WAYANG_CONNECTORS_ALLOW_PRIVATE")), hosts()));
+                guard,
+                files == null ? null : new KnowledgePersistence(files.root().resolve("knowledge")));
         this.files = files;
         this.connectors = Map.of(
                 "rag-ingest", new RagIngest(registry, files),
                 "rag-search", new RagSearch(registry),
+                "rag-forget", new RagForget(registry),
                 "file-put", new FileConnectors.Put(files),
                 "file-get", new FileConnectors.Get(files),
                 "file-list", new FileConnectors.ListFiles(files),
@@ -67,6 +73,8 @@ public final class KnowledgeExtension implements WayangExtension {
                 component("rag-search", "Search knowledge", "Retrieve passages from a knowledge base (bm25, vector, hybrid)",
                         "knowledge.search", "rag",
                         Map.of("knowledge", knowledge, "retrieval", Map.of("type", "object")), List.of("knowledge")),
+                component("rag-forget", "Remove documents from knowledge", "Remove documents from a knowledge base and its stored copy",
+                        "knowledge.forget", "rag", Map.of("knowledge", knowledge), List.of("knowledge")),
                 component("file-put", "Store file", "Store a file in the shared file storage and get its id", "files.put", "storage", Map.of(), List.of()),
                 component("file-get", "Read file", "Read a stored file by id", "files.get", "storage", Map.of(), List.of()),
                 component("file-list", "List files", "List the stored files of the tenant", "files.list", "storage", Map.of(), List.of()),

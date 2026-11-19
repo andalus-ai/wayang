@@ -213,7 +213,16 @@ final class FileStore {
     }
 
     private Path dir(String tenant) {
-        return root.resolve(sha256((tenant == null ? "" : tenant).getBytes(StandardCharsets.UTF_8)).substring(0, 32));
+        return root.resolve(tenantDirName(tenant));
+    }
+
+    /** The directory name of a tenant: a hash, so a tenant id never becomes part of a path. */
+    static String tenantDirName(String tenant) {
+        return sha256((tenant == null ? "" : tenant).getBytes(StandardCharsets.UTF_8)).substring(0, 32);
+    }
+
+    Path root() {
+        return root;
     }
 
     private static long count(Path dir) throws IOException {

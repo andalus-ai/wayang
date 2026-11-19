@@ -44,7 +44,7 @@ Plus an exact-match metadata filter (also `docId`, `docName`). Unknown settings 
 ## Honest limits
 
 - `HashingEmbedder` is dependency-free and **lexical, not semantic** (feature hashing of words and word pairs). For real semantic search use the `openai`-compatible embedder in `wayang-knowledge`.
-- The knowledge base is **in memory, bounded** (default 1000 documents / 20000 chunks) and **not durable**: a restart empties it.
+- The knowledge base is bounded (default 1000 documents / 20000 chunks). It is held in memory and, **when file storage is configured, its sources are also saved to disk and the base is rebuilt after a restart** (see Persistence). Without a storage directory a restart empties it.
 - **Retrieved text is untrusted.** A document can contain instructions; the agent consuming it must treat it as data (use guardrails, keep tools least-privilege).
 - Verification: compiled and its tests run on a real JVM locally against stand-in JUnit stubs; real confirmation is the CI `java` job.
 
@@ -67,12 +67,23 @@ In Studio's agent form, **Add knowledge search** inserts this tool with the `que
 Ingest first with a `rag-ingest` node (`{knowledge: contracts, chunking: {type: clause}}`). Ingest and search must repeat the same `chunking` and `embedder` settings, otherwise the call fails instead of silently reconfiguring the base; `retrieval` may differ per node.
 
 - The knowledge **name comes from node configuration, never from model input**, so an agent only reaches knowledge its author wired to it.
-- Bases live in the process and are **kept per tenant**: the engine passes the run's tenant (never the author or the model), so two tenants using the same name get separate bases (at most 20 per tenant, 200 overall). This holds for workflow nodes. Calls that carry no tenant (an agent's tool call, an EIP component) use one shared namespace, which is correct in a single-tenant release but not isolation in a multi-tenant host. Not durable.
+- Bases live in the process and are **kept per tenant**: the engine passes the run's tenant (never the author or the model), so two tenants using the same name get separate bases (at most 20 per tenant, 200 overall). This holds for workflow nodes. Calls that carry no tenant (an agent's tool call, an EIP component) use one shared namespace, which is correct in a single-tenant release but not isolation in a multi-tenant host. Durable only with a storage directory (see Persistence).
 - `embedder` is `none` (default, keyword search only), `{type: hashing, dimensions}` (lexical, see limits) or `{type: openai, model, dimensions, baseUrl, apiKey}`: **semantic** embeddings from any OpenAI-compatible `/embeddings` endpoint (OpenAI, Ollama, vLLM...). `dimensions` must be the model's vector size; a mismatch fails the call instead of corrupting the index. Requests are batched (32), time- and size-limited and pass the SSRF guard (private hosts need `WAYANG_CONNECTORS_ALLOW_PRIVATE=true` or an allow-list). `apiKey` is `${secret:NAME}`. **Document text is sent to that endpoint**, so pick it like any data processor. Asking for `vector`/`hybrid` without an embedder is an error at ingest time.
 ```yaml
 config: {knowledge: contracts, chunking: {type: clause}, embedder: {type: openai, model: text-embedding-3-small, dimensions: 1536, apiKey: "${secret:OPENAI_API_KEY}"}, retrieval: {method: hybrid, mmr: true}}
 ```
 - That an agent runtime passes an agent tool of type `rag-search` to the Wayang connector is the existing tool contract; it was exercised here only at the connector level, not through a live agent run.
+
+## Persistence
+
+With `WAYANG_FILES_DIR` (or `WAYANG_STATE_DIR`) set, `rag-ingest` also saves each document's text and metadata, and the base's settings, under `<dir>/knowledge/<tenant>/<name>/`. After a restart the base is rebuilt the first time a node uses it (chunking and, for a model embedder, embedding run again). Replacing a document or removing it with **`rag-forget`** (`documentIds`) updates the stored copy too. Details:
+
+- **Only sources are stored**, not chunks or vectors. Restart cost is chunking plus one embedding pass; with an `openai` embedder that means calls to the embedding service again.
+- **Secrets are never stored.** The embedder's `apiKey` is dropped; after a restart the first node that touches the base supplies it from its own configuration (state `embedder: {type: openai, ..., apiKey: ${secret:NAME}}` on that node). Keyless local endpoints need nothing.
+- Settings are saved with the first successfully ingested document, so a failed first ingest leaves nothing behind and the same name can be retried with corrected settings. After that, a node stating different `chunking`/`embedder` is still refused.
+- `persist: false` on the creating `rag-ingest` keeps a base in memory only (scratch knowledge).
+- Bounded: 200 MiB of stored documents per base; beyond that a document is searchable now but reported in `unsaved` (lost on restart). A damaged stored file makes the base fail to load with a clear error instead of silently dropping documents.
+- Per tenant on disk, same as in memory. Put the directory on a volume that is backed up; it holds the full text of your documents.
 
 ## File storage steps and mandatory inputs
 

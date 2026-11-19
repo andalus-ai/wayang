@@ -87,6 +87,7 @@ final class RagIngest implements ServiceHandler.Connector {
         int ingested = 0;
         int chunks = 0;
         List<Map<String, Object>> skipped = new ArrayList<>();
+        List<String> unsaved = new ArrayList<>();
         for (Object o : docs) {
             String label = "document";
             try {
@@ -112,8 +113,14 @@ final class RagIngest implements ServiceHandler.Connector {
                 if (text.isBlank()) {
                     throw new RagException("no readable text");
                 }
-                chunks += kb.add(new Document(id, fileName, text, metadata(d.get("metadata"))));
+                Document doc = new Document(id, fileName, text, metadata(d.get("metadata")));
+                chunks += kb.add(doc);
                 ingested++;
+                try {
+                    registry.persistDocument(config, doc);
+                } catch (RagException e) {
+                    unsaved.add(label + ": " + e.getMessage());
+                }
             } catch (RagException e) {
                 skipped.add(skip(label, e.getMessage()));
             }
@@ -126,6 +133,9 @@ final class RagIngest implements ServiceHandler.Connector {
         out.put("chunks", chunks);
         out.put("documents", kb.documents());
         out.put("skipped", skipped);
+        if (!unsaved.isEmpty()) {
+            out.put("unsaved", unsaved); // searchable now, but lost on restart
+        }
         return out;
     }
 
