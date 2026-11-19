@@ -35,14 +35,16 @@ final class KnowledgeRegistry {
         this.http = new MediaHttp(guard);
     }
 
-    /** The base for {@code config}, created on first use. A later call with different chunking/limits settings is an error, not a silent reconfigure. */
+    /** The base for {@code config}, created on first use. A later call that states different chunking/limits/embedder settings is an error, not a silent reconfigure; a search that states none simply uses the base as ingested. */
     synchronized KnowledgeBase get(Map<String, Object> config, boolean create) {
         String key = key(config);
         Map<String, Object> def = definition(config);
         String sig = def + "|" + embedderSignature(config.get("embedder"));
         Entry e = bases.get(key);
         if (e != null) {
-            if (!e.signature.equals(sig)) {
+            // A search attaches to the base that ingest built; it only has to agree on the settings it actually states.
+            boolean statesNothing = !create && def.isEmpty() && config.get("embedder") == null;
+            if (!statesNothing && !e.signature.equals(sig)) {
                 throw new RagException("knowledge '" + name(config) + "' already exists with different settings; use another name");
             }
             return e.kb;
