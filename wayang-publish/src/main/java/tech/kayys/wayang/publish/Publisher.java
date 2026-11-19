@@ -105,7 +105,8 @@ public final class Publisher {
             throw new IllegalArgumentException("These trigger types are not available in a release: " + unknownTriggers);
         }
         boolean multimodal = used.stream().anyMatch(MULTIMODAL_CONNECTORS::contains);
-        boolean knowledge = used.stream().anyMatch(KNOWLEDGE_CONNECTORS::contains);
+        String knowledge = used.stream().anyMatch(KNOWLEDGE_CONNECTORS::contains)
+                ? KNOWLEDGE_DEP + (used.contains("rag-ingest") ? PDF_DEP : "") : "";
         boolean mcp = used.stream().anyMatch(MCP_CONNECTORS::contains);
         boolean needsConnectors = !used.isEmpty() || !pollSources.isEmpty() || !providers.isEmpty();
         List<String> notes = new ArrayList<>();
@@ -222,7 +223,7 @@ public final class Publisher {
 
     // ------------------------------------------------------------------ templates
 
-    private static String pom(ReleaseOptions o, ReleaseBundle b, boolean connectors, boolean multimodal, boolean mcp, boolean knowledge) {
+    private static String pom(ReleaseOptions o, ReleaseBundle b, boolean connectors, boolean multimodal, boolean mcp, String knowledge) {
         return """
                 <?xml version="1.0" encoding="UTF-8"?>
                 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -287,7 +288,7 @@ public final class Publisher {
                     </build>
                 </project>
                 """.formatted(xml(o.groupId()), xml(o.artifactId()), xml(o.version()), xml(safe(b.name())), xml(o.wayangVersion()),
-                (connectors ? CONNECTORS_DEP : "") + (multimodal ? MULTIMODAL_DEP : "") + (mcp ? MCP_DEP : "") + (knowledge ? KNOWLEDGE_DEP : ""), o.packageName());
+                (connectors ? CONNECTORS_DEP : "") + (multimodal ? MULTIMODAL_DEP : "") + (mcp ? MCP_DEP : "") + knowledge, o.packageName());
     }
 
     static final String CONNECTORS_DEP = """
@@ -310,6 +311,14 @@ public final class Publisher {
                                 <dependency>
                                     <groupId>tech.kayys.wayang</groupId>
                                     <artifactId>wayang-knowledge</artifactId>
+                                    <version>${wayang.version}</version>
+                                </dependency>
+                        """;
+    /** Added with rag-ingest so PDFs can be ingested; it brings Apache PDFBox into the release. */
+    static final String PDF_DEP = """
+                                <dependency>
+                                    <groupId>tech.kayys.wayang</groupId>
+                                    <artifactId>wayang-rag-pdf</artifactId>
                                     <version>${wayang.version}</version>
                                 </dependency>
                         """;
