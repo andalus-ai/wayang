@@ -13,7 +13,7 @@ Slice 2 (`wayang-knowledge`) exposes it as connectors, below. A release serves a
 | docx | headings (Heading N/Title), paragraphs, tables as `a \| b` rows |
 | xlsx | every sheet, shared/inline strings; rows as `header=value; ...` |
 | pptx | `## Slide N` in slide order; speaker notes are not read |
-| pdf | **optional module `wayang-rag-pdf`** (Apache PDFBox 3.0.3): text layer only, `## Page N` per page, at most 500 pages; scanned PDFs (no text layer, needs OCR) and password-protected files are rejected with a clear message. Add the module as a dependency and `rag-ingest` picks it up through ServiceLoader. Without it a PDF returns "PDF needs the PDF extractor, which is not enabled in this build". Generated releases add it automatically when `rag-ingest` is used (this brings PDFBox into the release); a release that only searches does not get it |
+| pdf | **optional module `wayang-rag-pdf`** (Apache PDFBox 3.0.3): text layer only, `## Page N` per page, at most 500 pages; a page without a text layer (a scan) is skipped, or read with OCR when the operator turned it on (see **OCR for scanned PDFs**); a PDF that is only scans and has no OCR, and password-protected files, are rejected with a clear message. Add the module as a dependency and `rag-ingest` picks it up through ServiceLoader. Without it a PDF returns "PDF needs the PDF extractor, which is not enabled in this build". Generated releases add it automatically when `rag-ingest` is used (this brings PDFBox into the release); a release that only searches does not get it |
 | legacy doc/xls/ppt | **not supported**: save as docx/xlsx/pptx |
 
 Office files are read from a temp-file `ZipFile` with bounds on entry count and size, path-traversal names rejected, XML parsed with DTDs and external entities off. Limits (`Limits.DEFAULT`): 20 MiB file, 5M characters, 2000 zip entries, 32 MiB per entry, 200k rows. Format is chosen by extension and sniffed from content when it is missing.
@@ -73,6 +73,19 @@ Ingest first with a `rag-ingest` node (`{knowledge: contracts, chunking: {type: 
 config: {knowledge: contracts, chunking: {type: clause}, embedder: {type: openai, model: text-embedding-3-small, dimensions: 1536, apiKey: "${secret:OPENAI_API_KEY}"}, retrieval: {method: hybrid, mmr: true}}
 ```
 - That an agent runtime passes an agent tool of type `rag-search` to the Wayang connector is the existing tool contract; it was exercised here only at the connector level, not through a live agent run.
+
+## OCR for scanned PDFs
+
+Off by default. When a PDF page has no text layer, `wayang-rag-pdf` can render that page to an image (200 dpi, lowered for a very large page to stay under 30 million pixels) and read it with a **local `tesseract`**. Nothing is sent over the network, so scanned legal or personal documents stay on the machine.
+
+| Setting (environment of the release or server) | Meaning |
+|---|---|
+| `WAYANG_OCR` | `tesseract` turns it on; unset or `off` leaves scans skipped. Any other value is an error, so a typo is never silent |
+| `WAYANG_OCR_COMMAND` | the executable, default `tesseract` (started directly, no shell) |
+| `WAYANG_OCR_LANGS` | languages joined by `+`, default `eng`, for example `eng+deu` (the language data must be installed) |
+| `WAYANG_OCR_MAX_PAGES` | pages OCR'd per document, default 30, at most 100; further scanned pages are skipped |
+
+Limits: 60 seconds per page and 5 minutes per document; text-layer pages are never sent to OCR, so a mixed PDF is read page by page. Recognised text can contain mistakes (that is true of every OCR), and the extracted pages look the same as text pages (`## Page N`). A run is one core per page. The generated release image does **not** install tesseract: add it yourself, for example `RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-deu` in the Dockerfile's runtime stage, then set `WAYANG_OCR=tesseract`. A scan with OCR on but no tesseract installed fails with a message that says so. Images (png, jpg) are not ingested as documents yet; only pages inside a PDF are read.
 
 ## Persistence
 
@@ -138,3 +151,5 @@ Parameters: `knowledge` (base name, default `docs`), `purpose` (`general` = para
 
 1. A Studio knowledge UI is intentionally not built: ingest belongs in a process inside the release, not in the design-time server.
 2. OCR, a Wayang embedder that reuses an Andalus-configured model (the Andalus `RagEmbedder` adapter itself is merged, andalus#116), external vector stores.
+1. REST upload endpoints, Studio knowledge UI, and a RAG agent template.
+2. OCR for image files (png, jpg) and a vision-model engine as an alternative to tesseract; a Wayang embedder that reuses an Andalus-configured model (the Andalus `RagEmbedder` adapter itself is merged, andalus#116), external vector stores.
