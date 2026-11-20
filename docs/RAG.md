@@ -67,7 +67,7 @@ In Studio's agent form, **Add knowledge search** inserts this tool with the `que
 Ingest first with a `rag-ingest` node (`{knowledge: contracts, chunking: {type: clause}}`). Ingest and search must repeat the same `chunking` and `embedder` settings, otherwise the call fails instead of silently reconfiguring the base; `retrieval` may differ per node.
 
 - The knowledge **name comes from node configuration, never from model input**, so an agent only reaches knowledge its author wired to it.
-- Bases live in the process and are **kept per tenant**: the engine passes the run's tenant (never the author or the model), so two tenants using the same name get separate bases (at most 20 per tenant, 200 overall). This holds for workflow nodes. Calls that carry no tenant (an agent's tool call, an EIP component) use one shared namespace, which is correct in a single-tenant release but not isolation in a multi-tenant host. Durable only with a storage directory (see Persistence).
+- Bases live in the process and are **kept per tenant**: the engine passes the run's tenant (never the author or the model), so two tenants using the same name get separate bases (at most 20 per tenant, 200 overall). This holds for workflow nodes and for an agent's tool calls (the agent node passes the run's tenant to its tools; a tool's `config` can never set it). Only an EIP component, which has no tenant, uses the shared namespace, which is correct in a single-tenant release but not isolation in a multi-tenant host. Durable only with a storage directory (see Persistence).
 - `embedder` is `none` (default, keyword search only), `{type: hashing, dimensions}` (lexical, see limits) or `{type: openai, model, dimensions, baseUrl, apiKey}`: **semantic** embeddings from any OpenAI-compatible `/embeddings` endpoint (OpenAI, Ollama, vLLM...). `dimensions` must be the model's vector size; a mismatch fails the call instead of corrupting the index. Requests are batched (32), time- and size-limited and pass the SSRF guard (private hosts need `WAYANG_CONNECTORS_ALLOW_PRIVATE=true` or an allow-list). `apiKey` is `${secret:NAME}`. **Document text is sent to that endpoint**, so pick it like any data processor. Asking for `vector`/`hybrid` without an embedder is an error at ingest time.
 ```yaml
 config: {knowledge: contracts, chunking: {type: clause}, embedder: {type: openai, model: text-embedding-3-small, dimensions: 1536, apiKey: "${secret:OPENAI_API_KEY}"}, retrieval: {method: hybrid, mmr: true}}
@@ -127,5 +127,5 @@ Recipes: legal/policy -> `chunking: clause`, `method: hybrid`, filter by `docNam
 
 ## Next slices
 
-1. A RAG agent template (a Studio knowledge UI is intentionally not built: ingest belongs in a process inside the release).
-2. OCR, Andalus `RagEmbedder` adapter, external vector stores, persistence, per-tenant isolation.
+1. REST upload endpoints, Studio knowledge UI, and a RAG agent template.
+2. OCR, a Wayang embedder that reuses an Andalus-configured model (the Andalus `RagEmbedder` adapter itself is merged, andalus#116), external vector stores.

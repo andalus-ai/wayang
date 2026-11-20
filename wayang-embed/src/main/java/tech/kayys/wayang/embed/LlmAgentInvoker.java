@@ -198,6 +198,8 @@ public final class LlmAgentInvoker implements AgentInvoker {
         int maxToolCalls = intOption(spec, "maxToolCalls", 25, 1, 100);
         List<Map<String, Object>> pending = new ArrayList<>();
         Set<String> secretValues = new HashSet<>();
+        // set by the engine (AgentHandler) from the run, never by the model or the agent author
+        String tenant = input.get("tenant") instanceof String t ? t : "";
         if (key != null) {
             secretValues.add(key);
         }
@@ -253,7 +255,7 @@ public final class LlmAgentInvoker implements AgentInvoker {
                 if (toolCalls > maxToolCalls) {
                     throw new IllegalStateException("Agent " + spec.id() + " asked for more than " + maxToolCalls + " tool calls in one run");
                 }
-                results.add(runTool(spec, tools, c, secretValues, pending));
+                results.add(runTool(spec, tools, c, secretValues, pending, tenant));
             }
             if (anthropic) {
                 List<Object> blocks = new ArrayList<>();
@@ -379,7 +381,7 @@ public final class LlmAgentInvoker implements AgentInvoker {
     // ------------------------------------------------------------------ tools
 
     /** The text handed back to the model: the result, or the reason the call was not made. */
-    private String runTool(AgentSpec spec, Map<String, AgentSpec.Tool> tools, Call c, Set<String> secretValues, List<Map<String, Object>> pending) {
+    private String runTool(AgentSpec spec, Map<String, AgentSpec.Tool> tools, Call c, Set<String> secretValues, List<Map<String, Object>> pending, String tenant) {
         AgentSpec.Tool t = tools.get(c.name);
         if (t == null) {
             return cut("Error: no such tool '" + c.name + "'");
@@ -410,6 +412,10 @@ public final class LlmAgentInvoker implements AgentInvoker {
             @SuppressWarnings("unchecked")
             Map<String, Object> cfg = (Map<String, Object>) resolve(t.config(), used);
             cfg.remove("parameters");
+            if (connector.tenantScoped()) {
+                // same rule as a service node: the run's tenant replaces anything the author wrote
+                cfg.put(SecretResolver.TENANT_VARIABLE, tenant);
+            }
             Map<String, Object> out = connector.call(cfg, c.args);
             return untrusted(cut(Json.write(out == null ? Map.of() : out), used));
         } catch (Exception e) {
