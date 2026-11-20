@@ -62,6 +62,11 @@ public interface ReleaseEngine {
     /** Names this release needs that nothing provides right now (names only, never values). */
     List<String> missingSecrets();
 
+    /** A connector of this release by name (for the file API); null when the engine does not expose connectors or has none by that name. */
+    default tech.kayys.wayang.runtime.ServiceHandler.Connector connector(String name) {
+        return null;
+    }
+
     /** @throws IllegalArgumentException when there is no such process; @throws IllegalStateException when too many runs are parked; @throws Unavailable when the engine cannot be reached */
     RunInfo start(String processId, Map<String, Object> callerInput);
 

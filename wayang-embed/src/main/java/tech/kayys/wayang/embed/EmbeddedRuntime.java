@@ -67,6 +67,7 @@ public final class EmbeddedRuntime implements ReleaseEngine {
     private final SecretResolver secrets;
     private final tech.kayys.wayang.eip.CollectSweeper sweeper;
     private final Map<String, State> runs = new LinkedHashMap<>();
+    private final Map<String, ServiceHandler.Connector> allConnectors;
 
     /**
      * @param connectors the connectors the release uses (the generated {@code App} builds only those it needs)
@@ -104,6 +105,7 @@ public final class EmbeddedRuntime implements ReleaseEngine {
                 (tenant, process, node) -> TENANT.equals(tenant) ? tech.kayys.wayang.eip.CollectSweeper.find(tenant, processDocs.get(process), node) : null,
                 (tenant, process, input) -> start(process, input), clock, null);
         Map<String, ServiceHandler.Connector> all = AgentActions.with(ext.mergeConnectors(connectors == null ? Map.of() : connectors), secrets, config);
+        this.allConnectors = all;
         AgentInvoker inv = invoker != null ? invoker : (spec, input) -> {
             throw new IllegalStateException("No agent runtime is configured in this release");
         };
@@ -120,6 +122,11 @@ public final class EmbeddedRuntime implements ReleaseEngine {
             runner.withConfig(config);
         }
         this.engine = new ReferenceEngine(runner, waits);
+    }
+
+    @Override
+    public ServiceHandler.Connector connector(String name) {
+        return allConnectors.get(name);
     }
 
     @Override
