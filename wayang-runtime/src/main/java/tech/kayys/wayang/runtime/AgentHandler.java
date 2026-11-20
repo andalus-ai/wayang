@@ -69,6 +69,8 @@ public final class AgentHandler implements DomainHandler {
             input.put("system", persona == null ? system : persona.compose(system));
             input.put("prompt", PromptTemplate.render(spec.inputTemplate(), scope));
             input.put("variables", FlowRuntime.nest(vars));
+            // lets the invoker give tenant-scoped tools (knowledge, files) the run's tenant
+            input.put("tenant", vars.get(SecretResolver.TENANT_VARIABLE) instanceof String tn ? tn : "");
             tech.kayys.wayang.agent.AgentMemory mem = memory == null ? null : tech.kayys.wayang.agent.AgentMemory.of(spec);
             String convKey = null;
             String ns = null;

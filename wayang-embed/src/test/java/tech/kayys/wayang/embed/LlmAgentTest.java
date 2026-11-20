@@ -245,6 +245,46 @@ class LlmAgentTest {
     }
 
     @Test
+    void aTenantScopedToolGetsTheRunsTenantAndNotTheAuthorsOrTheModels() {
+        List<Map<String, Object>> seen = new ArrayList<>();
+        Map<String, ServiceHandler.Connector> scoped = Map.of("kb", new ServiceHandler.Connector() {
+            @Override
+            public Map<String, Object> call(Map<String, Object> in) {
+                return call(Map.of(), in);
+            }
+
+            @Override
+            public Map<String, Object> call(Map<String, Object> config, Map<String, Object> in) {
+                seen.add(config);
+                return Map.of("ok", true);
+            }
+
+            @Override
+            public boolean tenantScoped() {
+                return true;
+            }
+        }, "http", connectors.get("http"));
+        var inv = new LlmAgentInvoker(scoped, (t, n) -> "sk-secret-1", (t, p, n) -> null, env, fake);
+        var sp = new AgentSpec("helper", "H", "openai/m", "", "x", List.of(
+                new AgentSpec.Tool("look", "kb", "Look", Map.of("wayang.tenant", "acme-evil")),
+                new AgentSpec.Tool("plain", "http", "Plain", Map.of("wayang.tenant", "kept"))), 5, 60, List.of(), List.of(), Map.of());
+        script.add(ok(openAiCall("c1", "look", "{\"wayang.tenant\":\"model-evil\",\"q\":\"z\"}")));
+        script.add(ok(openAiCall("c2", "plain", "{}")));
+        script.add(ok(openAiText("done")));
+        Map<String, Object> in = new LinkedHashMap<>(IN);
+        in.put("tenant", "t-1");
+        inv.invoke(sp, in);
+        assertEquals("t-1", seen.get(0).get("wayang.tenant"), "the run's tenant replaces the author's value");
+        assertEquals("kept", toolConfigs.get(0).get("wayang.tenant"), "a connector that is not tenant scoped is left alone");
+
+        seen.clear();
+        script.add(ok(openAiCall("c3", "look", "{}")));
+        script.add(ok(openAiText("done")));
+        inv.invoke(sp, IN);
+        assertEquals("", seen.get(0).get("wayang.tenant"), "no tenant in the input means the empty namespace, never the author's value");
+    }
+
+    @Test
     void aToolsParameterSchemaGoesToTheModelAndNotToTheConnector() {
         var schema = Map.<String, Object>of("type", "object", "properties", Map.of("q", Map.of("type", "string")));
         var sp = new AgentSpec("helper", "H", "openai/m", "", "x", List.of(new AgentSpec.Tool("look", "http", "Look", Map.of("url", "https://a.example", "parameters", schema))),
