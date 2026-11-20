@@ -103,6 +103,81 @@ class TemplateServiceTest {
     }
 
     @Test
+    void theKnowledgeAssistantIsTwoProcessesAndOneAgentWithASearchToolOverTheSameBase() {
+        assertTrue(templates.list().stream().anyMatch(i -> i.id().equals("knowledge-assistant")));
+        var r = templates.instantiate(acme, "knowledge-assistant", Map.of("knowledge", "contracts", "purpose", "legal"), false);
+        assertTrue(r.ok(), r.problems().toString());
+        assertEquals(List.of("ask", "ingest"), api.list(acme, DefinitionKind.PROCESS).stream().map(DefinitionSummary::id).sorted().toList());
+        assertTrue(triggers.list(acme).isEmpty(), "no channel and nothing to switch on: it is called over the release API");
+        var agent = api.getDraft(acme, DefinitionKind.AGENT, "researcher").document();
+        assertTrue(String.valueOf(agent.get("systemPrompt")).contains("never instructions"), "retrieved text is data");
+        assertTrue(String.valueOf(agent.get("systemPrompt")).contains("clause"), "the legal purpose changes how it answers");
+        var tool = (Map<?, ?>) ((List<?>) agent.get("tools")).get(0);
+        assertEquals("rag-search", tool.get("type"));
+        var cfg = (Map<?, ?>) tool.get("config");
+        assertEquals("contracts", cfg.get("knowledge"));
+        assertEquals("clause", ((Map<?, ?>) cfg.get("chunking")).get("type"));
+        assertEquals("none", cfg.get("embedder"));
+        assertEquals("bm25", ((Map<?, ?>) cfg.get("retrieval")).get("method"));
+        var ingest = api.getDraft(acme, DefinitionKind.PROCESS, "ingest").document().toString();
+        assertTrue(ingest.contains("rag-ingest") && ingest.contains("contracts") && ingest.contains("clause"), "ingest states the same base and chunking");
+        assertNotNull(tech.kayys.wayang.agent.AgentSpecLoader.fromMap(agent));
+    }
+
+    @Test
+    void anEmbeddingModelTurnsOnHybridSearchAndNamesTheSecretWithoutHoldingIt() throws Exception {
+        var r = templates.instantiate(acme, "knowledge-assistant", Map.of("embeddingModel", "text-embedding-3-small", "purpose", "research", "topK", "3"), false);
+        assertTrue(r.ok(), r.problems().toString());
+        var cfg = (Map<?, ?>) ((Map<?, ?>) ((List<?>) api.getDraft(acme, DefinitionKind.AGENT, "researcher").document().get("tools")).get(0)).get("config");
+        assertEquals("hybrid", ((Map<?, ?>) cfg.get("retrieval")).get("method"));
+        assertEquals(3, ((Number) ((Map<?, ?>) cfg.get("retrieval")).get("topK")).intValue());
+        var emb = (Map<?, ?>) cfg.get("embedder");
+        assertEquals(1536, ((Number) emb.get("dimensions")).intValue());
+        assertEquals("${secret:OPENAI_API_KEY}", emb.get("apiKey"), "a reference, never a value");
+        assertEquals("heading", ((Map<?, ?>) cfg.get("chunking")).get("type"));
+        var plan = new ReleaseService(ws, api, "0.0.1").release(acme, r.project(), Map.of("target", "GAMELAN")).plan();
+        assertEquals(List.of("ask", "ingest"), plan.processes().stream().sorted().toList());
+        assertTrue(plan.usesAgents());
+        assertTrue(plan.connectors().contains("rag-ingest"), plan.connectors().toString());
+    }
+
+    @Test
+    void theKnowledgeAssistantParametersAreValidated() {
+        for (Map<String, Object> bad : List.<Map<String, Object>>of(Map.of("knowledge", "../x"), Map.of("knowledge", "a b"), Map.of("knowledge", "1docs"), Map.of("knowledge", "k".repeat(41)),
+                Map.of("purpose", "medical"), Map.of("model", "gpt4"), Map.of("retrieval", "hybrid"), Map.of("retrieval", "vector"),
+                Map.of("retrieval", "magic", "embeddingModel", "m"), Map.of("embeddingModel", "bad model!"),
+                Map.of("embeddingModel", "m", "embeddingDimensions", "0"), Map.of("embeddingModel", "m", "embeddingDimensions", "x"),
+                Map.of("topK", "0"), Map.of("topK", "11"), Map.of("persona", "x".repeat(1001)), Map.of("name", "n".repeat(81)))) {
+            assertThrows(ApiException.class, () -> templates.instantiate(acme, "knowledge-assistant", bad, false), bad.toString());
+        }
+        assertTrue(api.list(acme, DefinitionKind.PROCESS).isEmpty(), "nothing was created by a refused request");
+        var none = new TemplateService(ws).withProfile(tech.kayys.wayang.runtime.Profile.INTEGRATION);
+        assertFalse(none.list().stream().anyMatch(i -> i.id().equals("knowledge-assistant")));
+        assertThrows(ApiException.class, () -> none.instantiate(acme, "knowledge-assistant", Map.of(), true));
+    }
+
+    @Test
+    void theIngestProcessHandsItsDocumentsToTheIngestStepAndTheAskProcessPutsTheQuestionToTheAgent() {
+        var r = templates.instantiate(acme, "knowledge-assistant", Map.of(), false);
+        assertTrue(r.ok(), r.problems().toString());
+        var got = new java.util.ArrayList<Map<String, Object>>();
+        var prompts = new java.util.ArrayList<Object>();
+        var live = new ReferenceRunEngine(store, waits, Map.of("rag-ingest", (tech.kayys.wayang.runtime.ServiceHandler.Connector) in -> {
+            got.add(in);
+            return Map.of("ingested", 1);
+        }), (spec, in) -> {
+            prompts.add(in.get("prompt"));
+            return Map.of("output", "answer");
+        }, bus, clock);
+        var liveApi = new WayangApi(store, projects, live, waits, bus, clock);
+        var docs = List.of(Map.of("fileId", "0123456789abcdef01234567"));
+        assertEquals(RunStatus.COMPLETED, liveApi.startRun(acme, "ingest", null, Map.of("documents", docs)).status());
+        assertEquals(docs, got.get(0).get("documents"));
+        assertEquals(RunStatus.COMPLETED, liveApi.startRun(acme, "ask", null, Map.of("question", "What is the notice period?")).status());
+        assertEquals("What is the notice period?", prompts.get(0));
+    }
+
+    @Test
     void parametersAreValidatedAndOnlyKnownTemplatesExist() {
         for (Map<String, Object> bad : List.<Map<String, Object>>of(Map.of(), Map.of("chatId", "abc"), Map.of("chatId", "1; drop"), Map.of("chatId", "1", "model", "gpt4"),
                 Map.of("chatId", "1", "model", "openai/x y"), Map.of("chatId", "1", "persona", "x".repeat(1001)), Map.of("chatId", "1", "name", "n".repeat(81)),
@@ -133,7 +208,7 @@ class TemplateServiceTest {
 
     @Test
     void theSlackAssistantUsesASignedWebhookRestrictedToOneChannel() {
-        assertEquals(6, templates.list().size());
+        assertEquals(7, templates.list().size());
         var r = templates.instantiate(acme, "assistant-slack", Map.of("channelId", "D0123ABCD", "model", "ollama/llama3.1"), false);
         assertTrue(r.ok(), r.problems().toString());
         var t = triggers.list(acme).get(0);
@@ -529,7 +604,7 @@ class TemplateServiceTest {
                 "an integration-only profile still offers the agent-free alerts");
         assertThrows(ApiException.class, () -> none.instantiate(new Principal("acme", "ann", java.util.Set.of(Role.ADMIN)), "assistant-telegram",
                 Map.of("chatId", "123"), true));
-        assertEquals(6, new TemplateService(ws).withProfile(tech.kayys.wayang.runtime.Profile.AGENTIC).list().size());
+        assertEquals(7, new TemplateService(ws).withProfile(tech.kayys.wayang.runtime.Profile.AGENTIC).list().size());
     }
 
     @Test
