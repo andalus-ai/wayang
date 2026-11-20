@@ -1,7 +1,7 @@
 # RAG foundation (`wayang-rag`)
 
 Slice 1 of retrieval-augmented agents: turn files into searchable knowledge, with several selectable methods. JDK only, no new dependencies.
-Slice 2 (`wayang-knowledge`) exposes it as connectors, below. REST upload endpoints and Studio are not built yet.
+Slice 2 (`wayang-knowledge`) exposes it as connectors, below. A release serves a file upload API (see "From outside the release"); Studio ingest UI is not built, by design.
 
 ## Formats (text extraction)
 
@@ -127,5 +127,5 @@ Recipes: legal/policy -> `chunking: clause`, `method: hybrid`, filter by `docNam
 
 ## Next slices
 
-1. REST upload endpoints, Studio knowledge UI, and a RAG agent template.
+1. A RAG agent template (a Studio knowledge UI is intentionally not built: ingest belongs in a process inside the release).
 2. OCR, Andalus `RagEmbedder` adapter, external vector stores, persistence, per-tenant isolation.
