@@ -35,7 +35,7 @@ All transports are thin shells over `WayangApi` (`wayang-api-core`). They authen
 | `GET /secrets/keys`, `POST /secrets/keys/reload`, `POST /secrets/archive/export|import` | key rotation status; reload a rotated keyring without a restart (admin); encrypted secrets archive (off unless `wayang.secrets.archive-enabled`, admin). See `docs/WORKSPACE.md` |
 | `GET /config`, `PUT|DELETE /config/{key}` (`?project=`) | plain settings for `${config:NAME}` |
 | `GET /projects/{id}/export`, `POST /workspace/import` `{bundle, options}` | workspace bundle, dry run by default |
-| `GET /templates`, `POST /templates/{id}/instantiate` `{params, dryRun}` | starter projects (`assistant-telegram`); a dry run unless `dryRun` is false; triggers are created disabled |
+| `GET /templates`, `POST /templates/{id}/instantiate` `{params, dryRun}` | starter projects (`assistant-telegram`, `knowledge-assistant` and others, see `GET /templates`); a dry run unless `dryRun` is false; triggers are created disabled |
 | `POST /projects/{id}/release/plan`, `POST /projects/{id}/release` `{target, groupId, artifactId, version, package, port, profile}` | release preview includes resolved component IDs; generated archive includes `wayang/component-lock.json` and its digest in `wayang/release.json` (`docs/RELEASE.md`) |
 | `POST /admin/timers/fire` | ADMIN; a ticker also does it every 5s |
 

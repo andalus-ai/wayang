@@ -138,7 +138,18 @@ guardrails: {...}
 
 Recipes: legal/policy -> `chunking: clause`, `method: hybrid`, filter by `docName`; research papers and manuals -> `heading` or `parent-child` with `expand: parent`; spreadsheets -> `paragraph` over the row lines with `bm25` for exact codes; FAQs -> `paragraph`, `hybrid` with an embedder.
 
+## Starter project: knowledge assistant
+
+Studio's template gallery (and `POST /templates/knowledge-assistant/instantiate`) creates a ready project, published and with **no trigger** (nothing to switch on): one agent `researcher` and two processes over one knowledge base.
+
+- `ingest`: takes `documents` (`[{fileId}]` from `POST /v1/files`, or `{fileName, text}`) and runs `rag-ingest`.
+- `ask`: takes `question`; the agent searches with its one tool `search_documents` and answers only from the passages, citing sources.
+
+Parameters: `knowledge` (base name, default `docs`), `purpose` (`general` = paragraph chunks, `legal` = clause chunks and quote-the-text answers without legal advice, `research` = heading chunks and per-source summaries), `model`, `embeddingModel` + `embeddingDimensions` (an OpenAI-compatible model for meaning-based search; empty keeps keyword search; the key is the secret `OPENAI_API_KEY`), `retrieval` (`bm25`, `vector`, `hybrid`; default hybrid with an embedding model, else bm25), `topK` (1-10), `persona`, `name`. Ingest and the search tool state the same chunking and embedder, so they cannot drift apart. After releasing it: upload with `POST /v1/files`, start `ingest` with the returned `fileId`s, then start `ask` with a `question`. The agent's tool calls run in the release's tenant, the same one `ingest` writes to.
+
 ## Next slices
 
+1. A Studio knowledge UI is intentionally not built: ingest belongs in a process inside the release, not in the design-time server.
+2. OCR, a Wayang embedder that reuses an Andalus-configured model (the Andalus `RagEmbedder` adapter itself is merged, andalus#116), external vector stores.
 1. REST upload endpoints, Studio knowledge UI, and a RAG agent template.
 2. OCR for image files (png, jpg) and a vision-model engine as an alternative to tesseract; a Wayang embedder that reuses an Andalus-configured model (the Andalus `RagEmbedder` adapter itself is merged, andalus#116), external vector stores.
