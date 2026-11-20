@@ -131,7 +131,7 @@ class PdfExtractorTest {
         assertTrue(e.getMessage().contains("WAYANG_OCR"), e.getMessage());
         // on with a program that is not there: the failure names the setting, never the page content
         RagException m = assertThrows(RagException.class, () -> new PdfExtractor(null,
-                Map.of("WAYANG_OCR", "tesseract", "WAYANG_OCR_COMMAND", "/no/such/binary")::get).extract(mixed(null), Limits.DEFAULT));
+                Map.of("WAYANG_OCR", "tesseract", "WAYANG_OCR_COMMAND", "/no/such/binary")::get).extract(mixed((String) null), Limits.DEFAULT));
         assertTrue(m.getMessage().contains("could not be run"), m.getMessage());
     }
 
@@ -152,9 +152,9 @@ class PdfExtractorTest {
         Ocr failing = (png, timeout) -> {
             throw new RagException("OCR failed (the tesseract command exited with 1)");
         };
-        assertThrows(RagException.class, () -> new PdfExtractor(failing, Map.<String, String>of()::get).extract(mixed(null), Limits.DEFAULT));
+        assertThrows(RagException.class, () -> new PdfExtractor(failing, Map.<String, String>of()::get).extract(mixed((String) null), Limits.DEFAULT));
         Ocr blank = (png, timeout) -> "";
-        RagException e = assertThrows(RagException.class, () -> new PdfExtractor(blank, Map.<String, String>of()::get).extract(mixed(null), Limits.DEFAULT));
+        RagException e = assertThrows(RagException.class, () -> new PdfExtractor(blank, Map.<String, String>of()::get).extract(mixed((String) null), Limits.DEFAULT));
         assertTrue(e.getMessage().contains("no text could be recognised"), e.getMessage());
     }
 
