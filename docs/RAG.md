@@ -1,7 +1,7 @@
 # RAG foundation (`wayang-rag`)
 
 Slice 1 of retrieval-augmented agents: turn files into searchable knowledge, with several selectable methods. JDK only, no new dependencies.
-Slice 2 (`wayang-knowledge`) exposes it as connectors, below. REST upload endpoints and Studio are not built yet.
+Slice 2 (`wayang-knowledge`) exposes it as connectors, below. A release serves a file upload API (see "From outside the release"); Studio ingest UI is not built, by design.
 
 ## Formats (text extraction)
 
@@ -90,6 +90,8 @@ With `WAYANG_FILES_DIR` (or `WAYANG_STATE_DIR`) set, `rag-ingest` also saves eac
 Files are stored once by a **file storage node** and used by id anywhere after: `file-put` (`fileName` + `text` or `contentBase64` -> `fileId`, `size`, `sha256`), `file-get` (`fileId` -> metadata and `contentBase64` up to 8 MiB), `file-list`, `file-delete`. Files are separated by tenant, addressed only by an opaque id (a name never becomes a path), and bounded to 20 MiB each and 1000 per tenant. Storage is **durable** on disk under `WAYANG_FILES_DIR` (or `WAYANG_STATE_DIR/files`); with neither set the steps fail with a clear message rather than writing somewhere temporary. In a container, mount a volume there.
 
 `rag-ingest` takes those files directly: `documents: [{fileId: "..."}]` (the file's own name tells the extractor the format, so pdf/docx/xlsx/csv/pptx just work). Unknown ids, or ids of another tenant, are skipped with "no such file".
+
+**From outside the release (HTTP).** A release that uses file steps also serves a small file API on its own HTTP service, behind the same API key as `/v1`: `POST /v1/files?name=contract.pdf[&ttlDays=30]` with the raw bytes as the body returns the `fileId`; `GET /v1/files` lists; `GET /v1/files/{id}` downloads the bytes as an attachment; `DELETE /v1/files/{id}` removes. It uses the release's own file steps (same storage, limits and retention) for the release's one tenant, and is limited to **8 MiB** per upload or download (larger files can still be stored by a process step, up to 20 MiB). Without file steps in the release, or without a storage directory, it answers with a clear error. Only the embedded runtime serves it today; the Gamelan worker does not. Pass the returned `fileId` to a process as input, then to `rag-ingest`.
 
 **Retention.** `file-put` takes an optional `ttlDays` (1-3650). `WAYANG_FILES_TTL_DAYS` sets the default for files stored without one, and `WAYANG_FILES_MAX_TTL_DAYS` is a ceiling no file may exceed (with a ceiling and no default, "keep forever" is not possible either). An expired file is unreadable for everyone at once (`found: false`; ingest says "no such file") and its bytes are deleted by the next `file-put`/`file-list` of that tenant, or by a `file-purge` step, which is what to put on a scheduled process for idle tenants. `expiresAt` is returned by put, get and list (`null` = never). With neither setting and no `ttlDays`, files are kept until deleted.
 

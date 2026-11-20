@@ -33,6 +33,10 @@ import tech.kayys.wayang.runtime.json.Json;
  * GET  /v1/triggers                  what each trigger is doing (no configuration)
  * GET  /v1/ratings                   thumbs up and down on chat replies, counted per trigger (no chat ids, no text)
  * GET|POST /hooks/{id}               a webhook trigger; no API key: authenticated by its shared secret or provider signature
+ * POST /v1/files?name=..[&ttlDays=..]  the raw bytes (at most 8 MiB) -> {fileId, ...}; only when the release has file storage
+ * GET  /v1/files                     the files of this release
+ * GET  /v1/files/{id}                the bytes (at most 8 MiB), as an attachment
+ * DELETE /v1/files/{id}
  * POST /v1/runs/{id}/cancel          a parked run only
  * POST /v1/tasks/{token}/complete    {"outputs": {...}}
  * </pre>
@@ -198,6 +202,8 @@ public final class HttpService implements AutoCloseable {
             out.put("processes", procs);
             out.put("missingSecrets", rt.missingSecrets());
             send(ex, 200, out);
+        } else if (p.length >= 1 && p[0].equals("files") && p.length <= 2) {
+            files(ex, m, p);
         } else if (p.length == 1 && p[0].equals("triggers")) {
             only(ex, m, "GET");
             send(ex, 200, Map.of("triggers", triggers == null ? java.util.List.of() : triggers.status()));
@@ -269,6 +275,88 @@ public final class HttpService implements AutoCloseable {
     }
 
     // ------------------------------------------------------------------ plumbing
+
+    private static final int MAX_FILE = 8 << 20;
+
+    /** Uploads and downloads go through the release's own file-* connectors, for this release's one tenant. */
+    private Map<String, Object> fileCall(String connector, Map<String, Object> in) {
+        tech.kayys.wayang.runtime.ServiceHandler.Connector c = rt.connector(connector);
+        if (c == null) {
+            throw new Http(404, "This release has no file storage");
+        }
+        try {
+            Map<String, Object> out = c.call(Map.of(tech.kayys.wayang.runtime.SecretResolver.TENANT_VARIABLE, ReleaseEngine.TENANT), in);
+            return out == null ? Map.of() : out;
+        } catch (tech.kayys.wayang.runtime.ServiceHandler.ConnectorException e) {
+            throw new Http(e.retryable() ? 503 : 400, e.getMessage());
+        } catch (Exception e) {
+            throw new Http(500, "Internal error");
+        }
+    }
+
+    private void files(HttpExchange ex, String m, String[] p) throws IOException {
+        if (p.length == 1) {
+            if (m.equals("POST")) {
+                Map<String, String> q = query(ex);
+                String name = q.get("name");
+                if (name == null || name.isBlank() || name.length() > 255) {
+                    throw new Http(400, "Give the file name as ?name=");
+                }
+                byte[] raw = ex.getRequestBody().readNBytes(MAX_FILE + 1);
+                if (raw.length > MAX_FILE) {
+                    throw new Http(413, "File is larger than " + (MAX_FILE >> 20) + " MiB");
+                }
+                if (raw.length == 0) {
+                    throw new Http(400, "The body is empty");
+                }
+                Map<String, Object> in = new LinkedHashMap<>();
+                in.put("fileName", name);
+                in.put("contentBase64", java.util.Base64.getEncoder().encodeToString(raw));
+                if (q.get("ttlDays") != null) {
+                    in.put("ttlDays", q.get("ttlDays"));
+                }
+                send(ex, 201, fileCall("file-put", in));
+            } else if (m.equals("GET")) {
+                send(ex, 200, fileCall("file-list", Map.of()));
+            } else {
+                ex.getResponseHeaders().set("Allow", "GET, POST");
+                throw new Http(405, "Method not allowed");
+            }
+            return;
+        }
+        String id = p[1];
+        if (!id.matches("[0-9a-f]{24}")) {
+            throw new Http(404, "No such file");
+        }
+        if (m.equals("DELETE")) {
+            if (!Boolean.TRUE.equals(fileCall("file-delete", Map.of("fileId", id)).get("deleted"))) {
+                throw new Http(404, "No such file");
+            }
+            send(ex, 200, Map.of("deleted", true));
+        } else if (m.equals("GET")) {
+            Map<String, Object> f = fileCall("file-get", Map.of("fileId", id));
+            if (!Boolean.TRUE.equals(f.get("found"))) {
+                throw new Http(404, "No such file");
+            }
+            if (!(f.get("contentBase64") instanceof String b64)) {
+                throw new Http(413, "This file is larger than " + (MAX_FILE >> 20) + " MiB and cannot be downloaded here");
+            }
+            byte[] bytes = java.util.Base64.getDecoder().decode(b64);
+            // the name is only a label: keep it to safe characters so it cannot break the header
+            String safe = String.valueOf(f.get("fileName")).replaceAll("[^A-Za-z0-9._-]", "_");
+            ex.getResponseHeaders().set("Content-Type", "application/octet-stream");
+            ex.getResponseHeaders().set("Content-Disposition", "attachment; filename=\"" + safe + "\"");
+            ex.getResponseHeaders().set("Cache-Control", "no-store");
+            ex.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
+            ex.sendResponseHeaders(200, bytes.length);
+            try (OutputStream o = ex.getResponseBody()) {
+                o.write(bytes);
+            }
+        } else {
+            ex.getResponseHeaders().set("Allow", "GET, DELETE");
+            throw new Http(405, "Method not allowed");
+        }
+    }
 
     private static final class Http extends RuntimeException {
         private static final long serialVersionUID = 1L;
