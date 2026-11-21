@@ -162,6 +162,12 @@ final class KnowledgeRegistry {
         return n;
     }
 
+    /** Expiry (epoch milliseconds) per document id of a base that is in memory; documents without a lifetime are absent. */
+    synchronized Map<String, Long> expiries(Map<String, Object> config) {
+        Entry e = bases.get(key(config));
+        return e == null ? Map.of() : new LinkedHashMap<>(e.expiry);
+    }
+
     synchronized void forgetDocument(Map<String, Object> config, String docId) {
         if (persistence != null && persistence.exists(tenant(config), name(config))) {
             persistence.deleteDocument(tenant(config), name(config), docId);

@@ -20,6 +20,10 @@
         +--> wayang-adapter-andalus: AgentInvoker + node catalog       (agent execution)
 ```
 
+## Deployment modes
+
+The layers above are assembled in two ways (`docs/EDITIONS.md`): all-in-one for Community and development (Studio, design server and execution in one runtime), or separated for Pro and Enterprise (a design-time Studio, generated standalone runtimes for agents and workflows, and the separate Wayang Console for fleet management). Only the assembly differs; plans, handlers and the release pipeline are shared. The mode switch and the all-in-one distribution are proposed, not built.
+
 ## Process semantics
 
 - One Wayang element = one Gamelan node of type `TASK`; `executorType` picks the Wayang executor:

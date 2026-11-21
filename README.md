@@ -6,6 +6,8 @@ Low-code **agentic factory, BPMN, EIP and DMN** platform, built on top of
 Wayang owns *definitions* and the user-facing model; it never implements a second
 persistent workflow engine.
 
+**Two ways to run it** (details and status in [`docs/EDITIONS.md`](docs/EDITIONS.md)): *Community/development*, one all-in-one runtime that is Studio, design server and execution together; and *Pro/Enterprise*, a production Studio kept separate from **generated runtimes** (an agent service, or a BPMN/DMN/workflow service) and managed by **Wayang Console** (separate repository). Definitions are the same in both.
+
 | Concern | Owned by |
 |---|---|
 | Process / decision / integration / agent *definitions*, validation, compilation | **Wayang** (this repo) |
@@ -19,7 +21,7 @@ persistent workflow engine.
 | `wayang-expression` | Bounded FEEL-style expression language shared by everything below | none |
 | `wayang-cel` | Additive, engine-neutral CEL contracts and deterministic typed test primitives; does not replace FEEL (see `docs/CEL.md`) | JDK only |
 | `wayang-rag` | Knowledge foundation for RAG agents: text extraction from txt/md/html/json/csv/docx/xlsx/pptx, selectable chunkers (fixed, paragraph, heading, clause, parent-child) and retrieval (BM25, vector, hybrid RRF, optional MMR and parent expansion) over a bounded knowledge base (see `docs/RAG.md`) | JDK only |
-| `wayang-knowledge` | Optional extension (KNOWLEDGE feature): `rag-ingest`, `rag-search`, `rag-forget` and file storage steps (`file-put/get/list/delete/purge`, retention) over `wayang-rag`, usable as workflow nodes or agent tools; per-tenant named knowledge bases, persisted when a storage directory is set (see `docs/RAG.md`) | JDK only |
+| `wayang-knowledge` | Optional extension (KNOWLEDGE feature): `rag-ingest`, `rag-search`, `rag-forget`, `rag-list` and file storage steps (`file-put/fetch/get/list/delete/purge`, retention) over `wayang-rag`, usable as workflow nodes or agent tools; per-tenant named knowledge bases, persisted when a storage directory is set (see `docs/RAG.md`) | JDK only |
 | `wayang-dmn` | Decision tables (UNIQUE/FIRST/ANY/COLLECT/RULE ORDER, aggregators), decision graphs with inferred dependencies, Map loader | none |
 | `wayang-business-process` | BPMN subset (events, XOR/AND/OR gateways, service/rule/agent/EIP/user tasks, timers, message waits): model, validation, compiler to an acyclic plan, dead-path-elimination runtime, BPMN 2.0 XML import/export (supported subset; unsupported elements are rejected, not ignored) | none |
 | `wayang-integration` | EIP + mapper: declarative mapper, JSON/CSV/XML conversion, filter, splitter, router/choice, recipient list, multicast/scatter-gather, dead-letter guard, call (enrich/wire tap), aggregator, resequencer, idempotent receiver, validator, claim check, loop, routing slip, switch/normalizer, load balancer, retry, circuit breaker, throttler, delayer, batch, lookup, durable aggregator, delivery guarantees, parallel multicast, Studio step builder (see `docs/INTEGRATION.md` and `docs/EIP.md`) | none |
@@ -39,7 +41,7 @@ persistent workflow engine.
 | Release (design phase to production) | Publish a project's *published* versions as a generated Maven project that runs without the server: standalone CLI, HTTP service, or a Quarkus service with durable runs on Gamelan, only the dependencies the workflows use, Dockerfile and Kubernetes manifest: `docs/RELEASE.md` | `wayang-embed`, `wayang-publish` |
 | Profiles and extensions | `WAYANG_PROFILE` (full, automation, integration, agentic, custom) limits what a runtime serves; `WayangExtension` (ServiceLoader) adds connectors, pollers, webhook providers and custom executor handlers: `docs/PROFILES.md` | `wayang-runtime` |
 | `wayang-adapter-numu` | Identity/tenancy/authz through Numu `AuthCheckService`: PAT/JWT resolution, tenant scoping, permission mapping (`docs/IDENTITY.md`) | Numu |
-| `studio` | One Flutter app (Riverpod): process/decision designers, agents & pipelines editor, runs, task inbox, projects, secrets. Consolidates the former Studio and Console | Wayang API |
+| `studio` | One Flutter app (Riverpod): process/decision designers, agents & pipelines editor, runs, task inbox, projects, secrets. Consolidates the former Studio and the single-instance operations screens (runs, task inbox, secrets); the fleet-management Console is a separate repository | Wayang API |
 | `wayang-examples` | Loan approval: DMN + XOR + human review + agent + EIP splitter | - |
 
 Try it without any infrastructure: run `tech.kayys.wayang.examples.LoanApproval`.

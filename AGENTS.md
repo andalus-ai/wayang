@@ -10,6 +10,15 @@ These instructions apply to the entire `andalus-ai/wayang` repository. Follow th
 - Wayang Console is a separate product/repository: `andalus-ai/wayang-console`. Do not fold its central control-plane server or fleet-management UI into this repository.
 - Numou (`andalus-ai/numu`) remains an independent platform. Use optional, versioned adapters only for capabilities with verified contracts. Wayang must remain usable without Numou.
 
+## Editions and deployment modes
+
+Wayang runs in two modes from one codebase (`docs/EDITIONS.md` is the reference):
+
+- **Community / development (all-in-one):** Studio, design server and execution in one runtime, with no required external service.
+- **Pro / Enterprise (separated):** a design-time Studio for production that never serves production traffic; **generated runtimes** as standalone services (agent runtime, or workflow runtime from BPMN, DMN, EIP or common workflows; targets in `docs/RELEASE.md`); and **Wayang Console** (separate repository) to manage all services.
+
+Rules for contributors: a definition means the same in both modes; a generated runtime never depends on Studio or the Console to execute and carries only what its workflows use; the all-in-one mode stays usable with no external service; the design service is never a production execution path in the separated mode; do not put workflow semantics in the Console or fleet management in this repository. Mark anything not yet built (a mode switch, the all-in-one distribution, an agent-runtime generator, edition entitlements) as proposed, as `docs/EDITIONS.md` does.
+
 ## Architecture principles
 
 - Preserve engine-neutral workflow and component contracts. Do not leak Gamelan/Andalus implementation types into core definition modules.

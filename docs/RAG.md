@@ -88,6 +88,8 @@ Off by default. When a PDF page has no text layer, `wayang-rag-pdf` can render t
 
 Limits: 60 seconds per page and 5 minutes per document; text-layer pages are never sent to OCR, so a mixed PDF is read page by page. Recognised text can contain mistakes (that is true of every OCR), and the extracted pages look the same as text pages (`## Page N`). A run is one core per page. The generated release image does **not** install tesseract: add it yourself, for example `RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-deu` in the Dockerfile's runtime stage, then set `WAYANG_OCR=tesseract`. A scan with OCR on but no tesseract installed fails with a message that says so. The same engine reads picture files (png, jpg, gif, tiff) as documents.
 
+`rag-list` shows what a base holds: `documents` (`id`, and `expiresAt` when it has a lifetime; never the text) and `count`. A base that does not exist yet is an empty list.
+
 ## Retention (`ttlDays`)
 
 A document can have a lifetime. Set `ttlDays` (whole days, 1-3650) on a document of `rag-ingest`, or on the node as a default for documents without their own; the document's value wins. After that time the document is not searchable and its stored copy is deleted from disk (also if the process was down meanwhile: it is dropped when the base loads). Re-ingesting a document with the same id restarts its lifetime, or clears it when none is given. The output lists `expiring: [{name, expiresAt}]`.
@@ -110,6 +112,8 @@ With `WAYANG_FILES_DIR` (or `WAYANG_STATE_DIR`) set, `rag-ingest` also saves eac
 - Per tenant on disk, same as in memory. Put the directory on a volume that is backed up; it holds the full text of your documents.
 
 ## File storage steps and mandatory inputs
+
+`file-fetch` downloads a public document from a URL into file storage (same 20 MiB limit, returns the same `fileId` fields as `file-put`, optional `fileName` and `ttlDays`). It goes through the connector SSRF guard (private addresses refused unless the operator allows them), does not follow redirects and sends no credentials by default. For a private document, state `headers` (values as `${secret:NAME}`) and `urlPrefix` on the node: the headers are sent only when the URL stays under that prefix (same scheme, host, port, path start; `..` is normalized), so a URL supplied by a caller or a model can never carry the secret to another host. Header values are never echoed in errors; a missing `url` gives `stored:false`. This is the way to feed files to a release whose runtime has no file API (for example the Gamelan worker): pass a URL as the process input.
 
 Files are stored once by a **file storage node** and used by id anywhere after: `file-put` (`fileName` + `text` or `contentBase64` -> `fileId`, `size`, `sha256`), `file-get` (`fileId` -> metadata and `contentBase64` up to 8 MiB), `file-list`, `file-delete`. Files are separated by tenant, addressed only by an opaque id (a name never becomes a path), and bounded to 20 MiB each and 1000 per tenant. Storage is **durable** on disk under `WAYANG_FILES_DIR` (or `WAYANG_STATE_DIR/files`); with neither set the steps fail with a clear message rather than writing somewhere temporary. In a container, mount a volume there.
 
