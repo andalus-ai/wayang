@@ -6,6 +6,8 @@ Low-code **agentic factory, BPMN, EIP and DMN** platform, built on top of
 Wayang owns *definitions* and the user-facing model; it never implements a second
 persistent workflow engine.
 
+**Two ways to run it** (details and status in [`docs/EDITIONS.md`](docs/EDITIONS.md)): *Community/development*, one all-in-one runtime that is Studio, design server and execution together; and *Pro/Enterprise*, a production Studio kept separate from **generated runtimes** (an agent service, or a BPMN/DMN/workflow service) and managed by **Wayang Console** (separate repository). Definitions are the same in both.
+
 | Concern | Owned by |
 |---|---|
 | Process / decision / integration / agent *definitions*, validation, compilation | **Wayang** (this repo) |
@@ -39,7 +41,7 @@ persistent workflow engine.
 | Release (design phase to production) | Publish a project's *published* versions as a generated Maven project that runs without the server: standalone CLI, HTTP service, or a Quarkus service with durable runs on Gamelan, only the dependencies the workflows use, Dockerfile and Kubernetes manifest: `docs/RELEASE.md` | `wayang-embed`, `wayang-publish` |
 | Profiles and extensions | `WAYANG_PROFILE` (full, automation, integration, agentic, custom) limits what a runtime serves; `WayangExtension` (ServiceLoader) adds connectors, pollers, webhook providers and custom executor handlers: `docs/PROFILES.md` | `wayang-runtime` |
 | `wayang-adapter-numu` | Identity/tenancy/authz through Numu `AuthCheckService`: PAT/JWT resolution, tenant scoping, permission mapping (`docs/IDENTITY.md`) | Numu |
-| `studio` | One Flutter app (Riverpod): process/decision designers, agents & pipelines editor, runs, task inbox, projects, secrets. Consolidates the former Studio and Console | Wayang API |
+| `studio` | One Flutter app (Riverpod): process/decision designers, agents & pipelines editor, runs, task inbox, projects, secrets. Consolidates the former Studio and the single-instance operations screens (runs, task inbox, secrets); the fleet-management Console is a separate repository | Wayang API |
 | `wayang-examples` | Loan approval: DMN + XOR + human review + agent + EIP splitter | - |
 
 Try it without any infrastructure: run `tech.kayys.wayang.examples.LoanApproval`.

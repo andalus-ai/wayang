@@ -20,6 +20,8 @@ The platform has three planes and three corresponding product experiences:
 | Execution plane | Wayang Runtime | Execute published definitions using a selected engine and selected components |
 | Management plane | Wayang Console (separate repository) | Register, discover, deploy, observe, govern, and manage runtime fleets |
 
+These planes are assembled in two editions (`docs/EDITIONS.md`): **Community/development** runs design and execution all-in-one in a single runtime; **Pro/Enterprise** separates a production Studio, generated runtimes (agent or workflow services) and the Console. Edition mapping and next steps (mode switch, all-in-one packaging, design-only server, agent-runtime generator) are tracked there as proposed.
+
 These experiences may be deployed independently. A local installation may combine them, but no runtime may require the central Console to continue executing.
 
 ## 2. Core architectural principles
@@ -397,6 +399,7 @@ The following are proposed architecture decisions, not claims of completed imple
 - Numou integration remains optional and adapter-based.
 - Management Agent can be embedded or separately deployed.
 - Console outage must not stop an already-running runtime.
+- Two editions from one codebase: Community/development all-in-one; Pro/Enterprise separated into a production Studio, generated agent and workflow runtimes (standalone services) and the Console (`docs/EDITIONS.md`). Entitlements per edition are undecided.
 
 Immediate next work should be Phase 0 followed by Phase 1. Do not create all proposed modules at once. First inspect the actual code and Maven graph, establish tests/CI, then implement the smallest contract-first vertical slice.
 
