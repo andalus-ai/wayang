@@ -88,6 +88,8 @@ Off by default. When a PDF page has no text layer, `wayang-rag-pdf` can render t
 
 Limits: 60 seconds per page and 5 minutes per document; text-layer pages are never sent to OCR, so a mixed PDF is read page by page. Recognised text can contain mistakes (that is true of every OCR), and the extracted pages look the same as text pages (`## Page N`). A run is one core per page. The generated release image does **not** install tesseract: add it yourself, for example `RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-deu` in the Dockerfile's runtime stage, then set `WAYANG_OCR=tesseract`. A scan with OCR on but no tesseract installed fails with a message that says so. The same engine reads picture files (png, jpg, gif, tiff) as documents.
 
+`rag-list` shows what a base holds: `documents` (`id`, and `expiresAt` when it has a lifetime; never the text) and `count`. A base that does not exist yet is an empty list.
+
 ## Retention (`ttlDays`)
 
 A document can have a lifetime. Set `ttlDays` (whole days, 1-3650) on a document of `rag-ingest`, or on the node as a default for documents without their own; the document's value wins. After that time the document is not searchable and its stored copy is deleted from disk (also if the process was down meanwhile: it is dropped when the base loads). Re-ingesting a document with the same id restarts its lifetime, or clears it when none is given. The output lists `expiring: [{name, expiresAt}]`.

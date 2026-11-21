@@ -136,6 +136,16 @@ public final class KnowledgeBase {
         return true;
     }
 
+    /** The ids of the documents in the base, in the order they were added. */
+    public java.util.List<String> documentIds() {
+        lock.readLock().lock();
+        try {
+            return java.util.List.copyOf(byDoc.keySet());
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
     public int documents() {
         lock.readLock().lock();
         try {
