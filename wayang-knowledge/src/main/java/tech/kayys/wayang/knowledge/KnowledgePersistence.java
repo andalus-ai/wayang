@@ -29,7 +29,8 @@ final class KnowledgePersistence {
 
     static final long DEFAULT_MAX_BYTES = 200L << 20;
 
-    record Loaded(Map<String, Object> definition, Map<String, Object> embedder, List<Document> documents) {
+    /** {@code expiry} maps a document id to its expiry (epoch milliseconds) for the documents that have one; expired ones are already deleted. */
+    record Loaded(Map<String, Object> definition, Map<String, Object> embedder, List<Document> documents, Map<String, Long> expiry, int expired) {
     }
 
     private final Path root;
@@ -71,13 +72,17 @@ final class KnowledgePersistence {
         }
     }
 
-    void saveDocument(String tenant, String name, Document doc) {
+    /** @param expiresAt epoch milliseconds, 0 when the document never expires */
+    void saveDocument(String tenant, String name, Document doc, long expiresAt) {
         Path docs = dir(tenant, name).resolve("docs");
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", doc.id());
         m.put("name", doc.name());
         m.put("text", doc.text());
         m.put("metadata", doc.metadata());
+        if (expiresAt > 0) {
+            m.put("expiresAt", expiresAt);
+        }
         byte[] bytes = Json.write(m).getBytes(StandardCharsets.UTF_8);
         try {
             Files.createDirectories(docs);
@@ -102,7 +107,7 @@ final class KnowledgePersistence {
 
     /** The stored base, or null when there is none. A damaged file is an error, never silently skipped. */
     @SuppressWarnings("unchecked")
-    Loaded load(String tenant, String name) {
+    Loaded load(String tenant, String name, long now) {
         Path d = dir(tenant, name);
         if (!exists(tenant, name)) {
             return null;
@@ -110,6 +115,8 @@ final class KnowledgePersistence {
         try {
             Map<String, Object> def = (Map<String, Object>) Json.read(Files.readString(d.resolve("definition.json"), StandardCharsets.UTF_8));
             List<Document> docs = new ArrayList<>();
+            Map<String, Long> expiry = new LinkedHashMap<>();
+            int gone = 0;
             Path dd = d.resolve("docs");
             if (Files.isDirectory(dd)) {
                 List<Path> files = new ArrayList<>();
@@ -119,12 +126,21 @@ final class KnowledgePersistence {
                 files.sort(java.util.Comparator.comparing(Path::toString));
                 for (Path f : files) {
                     Map<String, Object> m = (Map<String, Object>) Json.read(Files.readString(f, StandardCharsets.UTF_8));
+                    long exp = m.get("expiresAt") instanceof Number n ? n.longValue() : 0;
+                    if (exp > 0 && now >= exp) {
+                        Files.deleteIfExists(f); // expired while the process was down: gone, on disk too
+                        gone++;
+                        continue;
+                    }
                     Map<String, String> md = new LinkedHashMap<>();
                     ((Map<String, Object>) m.get("metadata")).forEach((k, v) -> md.put(k, String.valueOf(v)));
                     docs.add(new Document((String) m.get("id"), (String) m.get("name"), (String) m.get("text"), md));
+                    if (exp > 0) {
+                        expiry.put((String) m.get("id"), exp);
+                    }
                 }
             }
-            return new Loaded((Map<String, Object>) def.get("definition"), (Map<String, Object>) def.get("embedder"), docs);
+            return new Loaded((Map<String, Object>) def.get("definition"), (Map<String, Object>) def.get("embedder"), docs, expiry, gone);
         } catch (IOException | RuntimeException e) {
             throw new RagException("the stored knowledge '" + name + "' is damaged and could not be loaded");
         }

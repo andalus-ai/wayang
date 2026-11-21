@@ -19,7 +19,9 @@ import tech.kayys.wayang.runtime.ServiceHandler;
  * <p>Config: {@code knowledge} (name), optional {@code chunking}, {@code embedder}, {@code maxDocuments}, {@code maxChunks} (see docs/RAG.md).
  * Input: {@code documents} (mandatory, advisory: when missing nothing is ingested and the run goes on), a list of up to 50 objects. A
  * document is {@code fileId} (a file stored by {@code file-put}) or {@code fileName} with {@code text} or {@code contentBase64} (at most 8 MiB
- * decoded), plus optional {@code id} (default: the file id or name) and {@code metadata} (string values, at most 20). There is no fetching
+ * decoded), plus optional {@code id} (default: the file id or name), {@code metadata} (string values, at most 20) and {@code ttlDays} (1-3650: the
+ * document is removed that many days after it is added, from memory and from disk; the node's {@code ttlDays} is the default and
+ * {@code WAYANG_KNOWLEDGE_MAX_TTL_DAYS} a ceiling; re-adding a document restarts or clears its lifetime). There is no fetching
  * from a URL here. Output: {@code ingested}, {@code chunks}, {@code documents},
  * {@code skipped} (name and reason, never content).
  */
@@ -31,6 +33,7 @@ final class RagIngest implements ServiceHandler.Connector {
 
     private final KnowledgeRegistry registry;
     private final FileStore files;
+    private final int maxTtlDays;
     private final Extractors extractors = load();
 
     /** Built-in formats plus any extractor module on the classpath (for example wayang-rag-pdf), found through ServiceLoader. */
@@ -43,8 +46,45 @@ final class RagIngest implements ServiceHandler.Connector {
     }
 
     RagIngest(KnowledgeRegistry registry, FileStore files) {
+        this(registry, files, envDays("WAYANG_KNOWLEDGE_MAX_TTL_DAYS"));
+    }
+
+    /** @param maxTtlDays the longest life any document may have (0 = no ceiling); documents without a lifetime then get this one */
+    RagIngest(KnowledgeRegistry registry, FileStore files, int maxTtlDays) {
         this.registry = registry;
         this.files = files;
+        this.maxTtlDays = maxTtlDays;
+    }
+
+    private static int envDays(String name) {
+        try {
+            int n = Integer.parseInt(String.valueOf(System.getenv(name)).strip());
+            return n < 1 || n > MAX_TTL_DAYS ? 0 : n;
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    static final int MAX_TTL_DAYS = 3650;
+
+    /** Days a document lives: its own {@code ttlDays}, else the node's, else none; the configured ceiling always applies. Returns 0 for "never". */
+    private int ttl(Map<?, ?> doc, Map<String, Object> config) {
+        Object v = doc.get("ttlDays") != null ? doc.get("ttlDays") : config.get("ttlDays");
+        int days = 0;
+        if (v != null && !(v instanceof String s0 && s0.isBlank())) {
+            try {
+                days = v instanceof Number n && n.doubleValue() == Math.rint(n.doubleValue()) ? n.intValue() : Integer.parseInt(String.valueOf(v).strip());
+            } catch (NumberFormatException e) {
+                days = -1;
+            }
+            if (days < 1 || days > MAX_TTL_DAYS) {
+                throw new RagException("ttlDays must be a whole number of days from 1 to " + MAX_TTL_DAYS);
+            }
+        }
+        if (maxTtlDays > 0 && (days == 0 || days > maxTtlDays)) {
+            days = maxTtlDays;
+        }
+        return days;
     }
 
     @Override
@@ -88,6 +128,7 @@ final class RagIngest implements ServiceHandler.Connector {
         int chunks = 0;
         List<Map<String, Object>> skipped = new ArrayList<>();
         List<String> unsaved = new ArrayList<>();
+        List<Map<String, Object>> expiring = new ArrayList<>();
         for (Object o : docs) {
             String label = "document";
             try {
@@ -114,10 +155,19 @@ final class RagIngest implements ServiceHandler.Connector {
                     throw new RagException("no readable text");
                 }
                 Document doc = new Document(id, fileName, text, metadata(d.get("metadata")));
+                int days = ttl(d, config);
+                long expiresAt = days == 0 ? 0 : registry.now() + days * 86_400_000L;
                 chunks += kb.add(doc);
+                registry.setExpiry(config, id, expiresAt);
                 ingested++;
+                if (expiresAt > 0) {
+                    Map<String, Object> x = new LinkedHashMap<>();
+                    x.put("name", label);
+                    x.put("expiresAt", java.time.Instant.ofEpochMilli(expiresAt).toString());
+                    expiring.add(x);
+                }
                 try {
-                    registry.persistDocument(config, doc);
+                    registry.persistDocument(config, doc, expiresAt);
                 } catch (RagException e) {
                     unsaved.add(label + ": " + e.getMessage());
                 }
@@ -133,6 +183,9 @@ final class RagIngest implements ServiceHandler.Connector {
         out.put("chunks", chunks);
         out.put("documents", kb.documents());
         out.put("skipped", skipped);
+        if (!expiring.isEmpty()) {
+            out.put("expiring", expiring); // documents that remove themselves, and when
+        }
         if (!unsaved.isEmpty()) {
             out.put("unsaved", unsaved); // searchable now, but lost on restart
         }
