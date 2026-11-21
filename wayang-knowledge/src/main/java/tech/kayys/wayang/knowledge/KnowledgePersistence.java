@@ -27,6 +27,9 @@ import tech.kayys.wayang.runtime.json.Json;
  */
 final class KnowledgePersistence {
 
+    /** Stored layout version. Files without one are version 1; a newer one is refused rather than misread. */
+    static final int FORMAT = 1;
+
     static final long DEFAULT_MAX_BYTES = 200L << 20;
 
     /** {@code expiry} maps a document id to its expiry (epoch milliseconds) for the documents that have one; expired ones are already deleted. */
@@ -62,6 +65,7 @@ final class KnowledgePersistence {
     void saveDefinition(String tenant, String name, Map<String, Object> definition, Map<String, Object> embedderWithoutKey) {
         Path d = dir(tenant, name);
         Map<String, Object> m = new LinkedHashMap<>();
+        m.put("format", FORMAT);
         m.put("definition", definition);
         m.put("embedder", embedderWithoutKey);
         try {
@@ -114,6 +118,9 @@ final class KnowledgePersistence {
         }
         try {
             Map<String, Object> def = (Map<String, Object>) Json.read(Files.readString(d.resolve("definition.json"), StandardCharsets.UTF_8));
+            if (def.get("format") instanceof Number f && f.intValue() > FORMAT) {
+                throw new RagException("the stored knowledge '" + name + "' was written by a newer version and cannot be loaded");
+            }
             List<Document> docs = new ArrayList<>();
             Map<String, Long> expiry = new LinkedHashMap<>();
             int gone = 0;
@@ -141,6 +148,8 @@ final class KnowledgePersistence {
                 }
             }
             return new Loaded((Map<String, Object>) def.get("definition"), (Map<String, Object>) def.get("embedder"), docs, expiry, gone);
+        } catch (RagException e) {
+            throw e;
         } catch (IOException | RuntimeException e) {
             throw new RagException("the stored knowledge '" + name + "' is damaged and could not be loaded");
         }
