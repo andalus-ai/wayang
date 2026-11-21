@@ -98,6 +98,8 @@ A document can have a lifetime. Set `ttlDays` (whole days, 1-3650) on a document
 
 ## Persistence
 
+The stored layout carries a format version (`format` in `definition.json`, currently 1; files without one count as 1). A base written by a newer version is refused with a clear error rather than misread.
+
 With `WAYANG_FILES_DIR` (or `WAYANG_STATE_DIR`) set, `rag-ingest` also saves each document's text and metadata, and the base's settings, under `<dir>/knowledge/<tenant>/<name>/`. After a restart the base is rebuilt the first time a node uses it (chunking runs again; a model embedder's vectors come back from a disk cache, so nothing is embedded or paid for again). Replacing a document or removing it with **`rag-forget`** (`documentIds`) updates the stored copy too. Details:
 
 - **Sources are stored, chunks are rebuilt** (chunking is deterministic and free). With an `openai` embedder the vectors are kept in `vectors.bin` next to the documents, keyed by the SHA-256 of each chunk's text and scoped to the embedder's settings without the key (another model, size or endpoint never reuses them). So a restart makes no embedding calls for stored documents (the first question still embeds the question), and editing a document embeds only its changed chunks. It is only a cache: a missing, damaged, torn or foreign file is ignored and rebuilt (costing a re-embed, never an error), the oldest vectors are dropped past the base's chunk limit when the file is next opened, and no new vectors are appended once the file would pass twice that. Questions are never stored. `hashing` embedders are free and are not cached. The file is numbers derived from your text: as sensitive as the stored documents beside it.
