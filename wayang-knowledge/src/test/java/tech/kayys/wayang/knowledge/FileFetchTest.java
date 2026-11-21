@@ -33,6 +33,13 @@ class FileFetchTest {
             x.getResponseBody().write(b);
             x.close();
         });
+        server.createContext("/private/", x -> {
+            boolean ok = "Bearer s3cret".equals(x.getRequestHeaders().getFirst("Authorization"));
+            byte[] b = (ok ? "private body" : "denied").getBytes(StandardCharsets.UTF_8);
+            x.sendResponseHeaders(ok ? 200 : 401, b.length);
+            x.getResponseBody().write(b);
+            x.close();
+        });
         server.createContext("/empty", x -> {
             x.sendResponseHeaders(200, -1);
             x.close();
@@ -102,5 +109,29 @@ class FileFetchTest {
         assertTrue(b.getMessage().contains("larger"), b.getMessage());
         assertThrows(ServiceHandler.ConnectorException.class, () -> e.connectors().get("file-fetch").call(CFG, Map.of("url", "file:///etc/passwd")));
         assertFalse(((List<?>) e.connectors().get("file-list").call(CFG, Map.of()).get("files")).size() > 0);
+    }
+
+    @Test
+    void headersAreSentOnlyUnderTheUrlPrefixAndNeverEchoed() throws Exception {
+        KnowledgeExtension e = ext(true);
+        Map<String, Object> cfg = Map.of("wayang.tenant", "t", "urlPrefix", base + "/private", "headers", Map.of("Authorization", "Bearer s3cret"));
+        assertEquals(true, e.connectors().get("file-fetch").call(cfg, Map.of("url", base + "/private/a.txt")).get("stored"));
+        // outside the prefix (other path, traversal, other host): refused before any request, and the secret is not in the message
+        for (String u : new String[] {base + "/docs/contract.txt", base + "/private/../docs/contract.txt", base + "/privateX/a.txt",
+                "http://localhost:" + server.getAddress().getPort() + "/private/a.txt"}) {
+            ServiceHandler.ConnectorException x = assertThrows(ServiceHandler.ConnectorException.class,
+                    () -> e.connectors().get("file-fetch").call(cfg, Map.of("url", u)), u);
+            assertTrue(x.getMessage().contains("outside urlPrefix"), x.getMessage());
+            assertFalse(x.getMessage().contains("s3cret"));
+        }
+        // headers without a prefix, and an invalid header, are configuration errors
+        ServiceHandler.ConnectorException n = assertThrows(ServiceHandler.ConnectorException.class,
+                () -> e.connectors().get("file-fetch").call(Map.of("wayang.tenant", "t", "headers", Map.of("Authorization", "x")), Map.of("url", base + "/private/a.txt")));
+        assertTrue(n.getMessage().contains("urlPrefix"));
+        ServiceHandler.ConnectorException bad = assertThrows(ServiceHandler.ConnectorException.class, () -> e.connectors().get("file-fetch").call(
+                Map.of("wayang.tenant", "t", "urlPrefix", base, "headers", Map.of("X-A", "v\r\nInjected: 1")), Map.of("url", base + "/private/a.txt")));
+        assertFalse(bad.getMessage().contains("Injected"));
+        // without headers the private path answers 401
+        assertThrows(ServiceHandler.ConnectorException.class, () -> e.connectors().get("file-fetch").call(CFG, Map.of("url", base + "/private/a.txt")));
     }
 }
