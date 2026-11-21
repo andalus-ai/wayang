@@ -125,7 +125,10 @@ final class FileConnectors {
     /**
      * {@code file-fetch}: downloads a public URL into file storage (up to the 20 MiB storage limit) and returns the same fields as {@code file-put}.
      * The URL goes through the same SSRF guard as every connector (private and internal addresses are refused unless the operator allowed them);
-     * redirects are not followed and no credentials are sent, so it is for public documents. A missing URL gives {@code stored:false}.
+     * redirects are not followed. By default no credentials are sent. For a private document the node config can state {@code headers} (values as
+     * {@code ${secret:NAME}}) together with {@code urlPrefix}: the headers are sent only when the URL stays under that prefix (same scheme, host,
+     * port and path start), so a model- or caller-supplied URL can never carry the secret to another host. Header values are never echoed.
+     * A missing URL gives {@code stored:false}.
      */
     static final class Fetch extends Base {
         private final tech.kayys.wayang.connectors.MediaHttp http;
