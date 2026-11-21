@@ -72,7 +72,7 @@ class FileFetchTest {
         Map<String, Object> out = e.connectors().get("file-fetch").call(CFG, Map.of("url", base + "/docs/contract.txt", "ttlDays", 5));
         assertEquals(true, out.get("stored"));
         assertEquals("contract.txt", out.get("fileName"), "named from the URL");
-        assertEquals(18, out.get("size"));
+        assertEquals(18L, out.get("size"));
         assertTrue(out.get("expiresAt") != null);
         Map<String, Object> ing = e.connectors().get("rag-ingest").call(Map.of("knowledge", "k", "wayang.tenant", "t"),
                 Map.of("documents", List.of(Map.of("fileId", out.get("fileId")))));
