@@ -122,6 +122,72 @@ final class FileConnectors {
         }
     }
 
+    /**
+     * {@code file-fetch}: downloads a public URL into file storage (up to the 20 MiB storage limit) and returns the same fields as {@code file-put}.
+     * The URL goes through the same SSRF guard as every connector (private and internal addresses are refused unless the operator allowed them);
+     * redirects are not followed and no credentials are sent, so it is for public documents. A missing URL gives {@code stored:false}.
+     */
+    static final class Fetch extends Base {
+        private final tech.kayys.wayang.connectors.MediaHttp http;
+
+        Fetch(FileStore s, tech.kayys.wayang.connectors.UrlGuard guard) {
+            super(s);
+            this.http = new tech.kayys.wayang.connectors.MediaHttp(guard);
+        }
+
+        @Override
+        public List<ConnectorInput> inputs() {
+            return List.of(ConnectorInput.required("url", "string", "Public http(s) address of the document"),
+                    ConnectorInput.optional("fileName", "string", "Name to store it under; default is the last part of the URL"),
+                    ConnectorInput.optional("ttlDays", "number", "Keep the file this many days (1-3650)"));
+        }
+
+        @Override
+        public Map<String, Object> call(Map<String, Object> config, Map<String, Object> in) throws Exception {
+            FileStore st = store();
+            Map<String, Object> out = new LinkedHashMap<>();
+            if (!(in.get("url") instanceof String url) || url.isBlank()) {
+                out.put("stored", false);
+                out.put("reason", "no url");
+                return out;
+            }
+            java.net.URI uri = http.check(url.trim());
+            String name = in.get("fileName") instanceof String n && !n.isBlank() ? n : nameOf(uri);
+            Integer ttl = null;
+            if (in.get("ttlDays") != null && !(in.get("ttlDays") instanceof String t && t.isBlank())) {
+                try {
+                    ttl = in.get("ttlDays") instanceof Number n ? n.intValue() : Integer.valueOf(String.valueOf(in.get("ttlDays")).trim());
+                } catch (NumberFormatException e) {
+                    throw new ServiceHandler.ConnectorException("ttlDays must be a whole number of days", false);
+                }
+            }
+            byte[] bytes = http.getBytes(uri, Map.of(), 60_000, FileStore.MAX_BYTES);
+            if (bytes.length == 0) {
+                out.put("stored", false);
+                out.put("reason", "the address returned no content");
+                return out;
+            }
+            try {
+                FileStore.Info i = st.put(tenant(config), name, bytes, ttl);
+                out.put("stored", true);
+                out.put("fileId", i.id());
+                out.put("fileName", i.name());
+                out.put("size", i.size());
+                out.put("sha256", i.sha256());
+                out.put("expiresAt", expires(i.expiresAt()));
+                return out;
+            } catch (RagException e) {
+                throw bad(e);
+            }
+        }
+
+        private static String nameOf(java.net.URI uri) {
+            String p = uri.getPath() == null ? "" : uri.getPath();
+            String last = p.substring(p.lastIndexOf('/') + 1);
+            return last.isBlank() ? "download" : last;
+        }
+    }
+
     static final class Get extends Base {
         Get(FileStore s) {
             super(s);
