@@ -17,7 +17,7 @@ public final class Extractors {
     }
 
     public static Extractors defaults() {
-        return new Extractors(List.of(new PlainTextExtractor(), new HtmlExtractor(), new CsvExtractor(), new DocxExtractor(), new XlsxExtractor(), new PptxExtractor()));
+        return new Extractors(List.of(new PlainTextExtractor(), new HtmlExtractor(), new CsvExtractor(), new DocxExtractor(), new XlsxExtractor(), new PptxExtractor(), new ImageExtractor()));
     }
 
     /** A copy with one more extractor; an extension it declares replaces the built-in one for that extension. */
@@ -92,6 +92,18 @@ public final class Extractors {
         }
         if (c.length >= 5 && c[0] == '%' && c[1] == 'P' && c[2] == 'D' && c[3] == 'F') {
             return "pdf";
+        }
+        if (c.length >= 8 && (c[0] & 0xFF) == 0x89 && c[1] == 'P' && c[2] == 'N' && c[3] == 'G') {
+            return "png";
+        }
+        if (c.length >= 4 && (c[0] & 0xFF) == 0xFF && (c[1] & 0xFF) == 0xD8 && (c[2] & 0xFF) == 0xFF) {
+            return "jpg";
+        }
+        if (c.length >= 6 && c[0] == 'G' && c[1] == 'I' && c[2] == 'F' && c[3] == '8') {
+            return "gif";
+        }
+        if (c.length >= 4 && ((c[0] == 'I' && c[1] == 'I' && c[2] == 42 && c[3] == 0) || (c[0] == 'M' && c[1] == 'M' && c[2] == 0 && c[3] == 42))) {
+            return "tiff";
         }
         if (c.length >= 8 && (c[0] & 0xFF) == 0xD0 && (c[1] & 0xFF) == 0xCF && (c[2] & 0xFF) == 0x11 && (c[3] & 0xFF) == 0xE0) {
             return "ole";
