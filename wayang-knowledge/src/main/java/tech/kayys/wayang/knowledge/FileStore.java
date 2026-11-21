@@ -34,6 +34,10 @@ final class FileStore {
     record Stored(String id, String name, long size, String sha256, byte[] bytes) {
     }
 
+    java.time.Clock clock() {
+        return clock;
+    }
+
     /** {@code expiresAt} is epoch milliseconds, 0 when the file never expires. */
     record Info(String id, String name, long size, String sha256, long expiresAt) {
     }

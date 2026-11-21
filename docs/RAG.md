@@ -88,6 +88,14 @@ Off by default. When a PDF page has no text layer, `wayang-rag-pdf` can render t
 
 Limits: 60 seconds per page and 5 minutes per document; text-layer pages are never sent to OCR, so a mixed PDF is read page by page. Recognised text can contain mistakes (that is true of every OCR), and the extracted pages look the same as text pages (`## Page N`). A run is one core per page. The generated release image does **not** install tesseract: add it yourself, for example `RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-deu` in the Dockerfile's runtime stage, then set `WAYANG_OCR=tesseract`. A scan with OCR on but no tesseract installed fails with a message that says so. The same engine reads picture files (png, jpg, gif, tiff) as documents.
 
+## Retention (`ttlDays`)
+
+A document can have a lifetime. Set `ttlDays` (whole days, 1-3650) on a document of `rag-ingest`, or on the node as a default for documents without their own; the document's value wins. After that time the document is not searchable and its stored copy is deleted from disk (also if the process was down meanwhile: it is dropped when the base loads). Re-ingesting a document with the same id restarts its lifetime, or clears it when none is given. The output lists `expiring: [{name, expiresAt}]`.
+
+- `WAYANG_KNOWLEDGE_MAX_TTL_DAYS` is an operator ceiling: it caps every `ttlDays` and gives documents without one that lifetime.
+- Expired documents are removed whenever the base is used. To clear a base nobody searches, run `rag-forget` with no ids on a schedule: it removes nothing else and reports `expired`.
+- An invalid `ttlDays` skips only that document, with a reason.
+
 ## Persistence
 
 With `WAYANG_FILES_DIR` (or `WAYANG_STATE_DIR`) set, `rag-ingest` also saves each document's text and metadata, and the base's settings, under `<dir>/knowledge/<tenant>/<name>/`. After a restart the base is rebuilt the first time a node uses it (chunking runs again; a model embedder's vectors come back from a disk cache, so nothing is embedded or paid for again). Replacing a document or removing it with **`rag-forget`** (`documentIds`) updates the stored copy too. Details:

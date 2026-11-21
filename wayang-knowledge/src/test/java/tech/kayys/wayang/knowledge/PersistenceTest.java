@@ -168,8 +168,8 @@ class PersistenceTest {
     void storedDocumentsPerBaseAreBounded() throws Exception {
         KnowledgePersistence p = new KnowledgePersistence(Files.createTempDirectory("wayang-kb"), 2000);
         p.saveDefinition("t", "small", Map.of(), null);
-        p.saveDocument("t", "small", new Document("a", "a", "x".repeat(1200), Map.of()));
-        assertThrows(RagException.class, () -> p.saveDocument("t", "small", new Document("b", "b", "x".repeat(1200), Map.of())));
-        p.saveDocument("t", "small", new Document("a", "a", "y".repeat(1200), Map.of())); // replacing the same document is allowed
+        p.saveDocument("t", "small", new Document("a", "a", "x".repeat(1200), Map.of()), 0);
+        assertThrows(RagException.class, () -> p.saveDocument("t", "small", new Document("b", "b", "x".repeat(1200), Map.of()), 0));
+        p.saveDocument("t", "small", new Document("a", "a", "y".repeat(1200), Map.of()), 0); // replacing the same document is allowed
     }
 }

@@ -11,7 +11,9 @@ import tech.kayys.wayang.runtime.ServiceHandler;
 
 /**
  * Connector {@code rag-forget}: removes documents from a knowledge base (and from its stored copy). Config: {@code knowledge}. Input:
- * {@code documentIds} (mandatory, advisory: when missing nothing is removed). Output: {@code removed}, {@code documents} left.
+ * {@code documentIds} (mandatory, advisory: when missing nothing is removed). Output: {@code removed}, {@code expired} (documents whose
+ * {@code ttlDays} had passed and were removed by this call; every use of a base does that, so calling this with no ids on a schedule clears
+ * bases nobody searches), {@code documents} left.
  */
 final class RagForget implements ServiceHandler.Connector {
 
@@ -43,11 +45,13 @@ final class RagForget implements ServiceHandler.Connector {
             Map<String, Object> out = new LinkedHashMap<>();
             if (!(inputs.get("documentIds") instanceof List<?> ids) || ids.isEmpty()) {
                 out.put("removed", 0);
+                out.put("expired", registry.purgeExpired(config));
                 return out;
             }
             if (ids.size() > 200) {
                 throw new RagException("rag-forget takes at most 200 documents per call");
             }
+            int expired = registry.purgeExpired(config);
             KnowledgeBase kb = registry.get(config, false);
             int removed = 0;
             for (Object id : ids) {
@@ -57,6 +61,7 @@ final class RagForget implements ServiceHandler.Connector {
                 }
             }
             out.put("removed", removed);
+            out.put("expired", expired);
             out.put("documents", kb.documents());
             return out;
         } catch (RagException e) {

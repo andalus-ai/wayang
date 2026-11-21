@@ -28,21 +28,33 @@ final class KnowledgeRegistry {
     private static final Pattern NAME = Pattern.compile("[A-Za-z][A-Za-z0-9_-]{0,63}");
 
     private record Entry(KnowledgeBase kb, KnowledgeConfig cfg, String signature, Embedder embedder, Map<String, Object> definition,
-            Map<String, Object> embedderSettings, boolean persist) {
+            Map<String, Object> embedderSettings, boolean persist, Map<String, Long> expiry) {
     }
 
     private final Map<String, Entry> bases = new LinkedHashMap<>();
+    /** Documents that expired while the process was down, dropped when their base loaded: reported by the next purge. */
+    private final Map<String, Integer> expiredOnLoad = new LinkedHashMap<>();
     private final MediaHttp http;
     private final KnowledgePersistence persistence;
+    private final java.time.Clock clock;
 
     KnowledgeRegistry(UrlGuard guard) {
-        this(guard, null);
+        this(guard, null, java.time.Clock.systemUTC());
     }
 
-    /** @param persistence where knowledge survives restarts, or null for memory only */
     KnowledgeRegistry(UrlGuard guard, KnowledgePersistence persistence) {
+        this(guard, persistence, java.time.Clock.systemUTC());
+    }
+
+    /** @param persistence where knowledge survives restarts, or null for memory only; @param clock decides when a document has expired */
+    KnowledgeRegistry(UrlGuard guard, KnowledgePersistence persistence, java.time.Clock clock) {
         this.http = new MediaHttp(guard);
         this.persistence = persistence;
+        this.clock = clock;
+    }
+
+    long now() {
+        return clock.millis();
     }
 
     /** The base for {@code config}, created on first use. A later call that states different chunking/limits/embedder settings is an error, not a silent reconfigure; a search that states none simply uses the base as ingested. */
@@ -66,6 +78,7 @@ final class KnowledgeRegistry {
                 }
             }
             if (e != null) {
+                purge(e, config);
                 return e.kb;
             }
         }
@@ -84,12 +97,12 @@ final class KnowledgeRegistry {
         }
         KnowledgeConfig kc = KnowledgeConfig.fromMap(def);
         KnowledgeBase kb = kc.build(emb);
-        bases.put(key, new Entry(kb, kc, sig, emb, def, embedderWithoutKey(config.get("embedder")), persistence != null && persist(config)));
+        bases.put(key, new Entry(kb, kc, sig, emb, def, embedderWithoutKey(config.get("embedder")), persistence != null && persist(config), new LinkedHashMap<>()));
         return kb;
     }
 
     /** Stores a document of the base for restarts (when persistence is on and the base was not created with {@code persist: false}). Returns false if not stored. */
-    synchronized boolean persistDocument(Map<String, Object> config, Document doc) {
+    synchronized boolean persistDocument(Map<String, Object> config, Document doc, long expiresAt) {
         Entry e = bases.get(key(config));
         if (persistence == null || e == null || !e.persist) {
             return false;
@@ -98,8 +111,55 @@ final class KnowledgeRegistry {
             // the settings are written with the first document, so a base whose first ingest failed leaves nothing behind
             persistence.saveDefinition(tenant(config), name(config), e.definition, e.embedderSettings);
         }
-        persistence.saveDocument(tenant(config), name(config), doc);
+        persistence.saveDocument(tenant(config), name(config), doc, expiresAt);
         return true;
+    }
+
+    /** Records when a document expires (0 = never); a re-ingested document replaces the earlier expiry, or clears it. */
+    synchronized void setExpiry(Map<String, Object> config, String docId, long expiresAt) {
+        Entry e = bases.get(key(config));
+        if (e == null) {
+            return;
+        }
+        if (expiresAt > 0) {
+            e.expiry.put(docId, expiresAt);
+        } else {
+            e.expiry.remove(docId);
+        }
+    }
+
+    /**
+     * Removes the base's expired documents, in memory and on disk; returns how many. Does nothing (0) when the base does not exist. Every use of a
+     * base does this first, so an expired document is never searchable; calling it on a schedule also clears bases nobody searches.
+     */
+    synchronized int purgeExpired(Map<String, Object> config) {
+        String key = key(config);
+        Entry e = bases.get(key);
+        if (e == null && persistence != null && persistence.exists(tenant(config), name(config))) {
+            e = loadPersisted(config, key);
+        }
+        if (e == null) {
+            return 0;
+        }
+        Integer early = expiredOnLoad.remove(key);
+        return purge(e, config) + (early == null ? 0 : early);
+    }
+
+    private int purge(Entry e, Map<String, Object> config) {
+        long now = clock.millis();
+        int n = 0;
+        for (java.util.Iterator<Map.Entry<String, Long>> it = e.expiry.entrySet().iterator(); it.hasNext();) {
+            Map.Entry<String, Long> x = it.next();
+            if (now >= x.getValue()) {
+                e.kb.remove(x.getKey());
+                if (persistence != null && persistence.exists(tenant(config), name(config))) {
+                    persistence.deleteDocument(tenant(config), name(config), x.getKey());
+                }
+                it.remove();
+                n++;
+            }
+        }
+        return n;
     }
 
     synchronized void forgetDocument(Map<String, Object> config, String docId) {
@@ -119,7 +179,7 @@ final class KnowledgeRegistry {
     /** Rebuilds a stored base: its saved settings and embedder, then every saved document is chunked and embedded again. */
     @SuppressWarnings("unchecked")
     private Entry loadPersisted(Map<String, Object> config, String key) {
-        KnowledgePersistence.Loaded l = persistence.load(tenant(config), name(config));
+        KnowledgePersistence.Loaded l = persistence.load(tenant(config), name(config), clock.millis());
         Map<String, Object> emb = l.embedder() == null ? null : new LinkedHashMap<>(l.embedder());
         // The key is never stored; whichever node uses the base first after a restart supplies it from its own configuration.
         if (emb != null && config.get("embedder") instanceof Map<?, ?> given && given.get("apiKey") instanceof String k) {
@@ -131,8 +191,11 @@ final class KnowledgeRegistry {
         for (Document d : l.documents()) {
             kb.add(d);
         }
-        Entry e = new Entry(kb, kc, signature(l.definition(), emb), embedder, l.definition(), l.embedder(), true);
+        Entry e = new Entry(kb, kc, signature(l.definition(), emb), embedder, l.definition(), l.embedder(), true, new LinkedHashMap<>(l.expiry()));
         bases.put(key, e);
+        if (l.expired() > 0) {
+            expiredOnLoad.merge(key, l.expired(), Integer::sum);
+        }
         return e;
     }
 

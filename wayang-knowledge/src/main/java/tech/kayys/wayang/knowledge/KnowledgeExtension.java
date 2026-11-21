@@ -33,7 +33,8 @@ public final class KnowledgeExtension implements WayangExtension {
     KnowledgeExtension(FileStore files, UrlGuard guard) {
         this.registry = new KnowledgeRegistry(
                 guard,
-                files == null ? null : new KnowledgePersistence(files.root().resolve("knowledge")));
+                files == null ? null : new KnowledgePersistence(files.root().resolve("knowledge")),
+                files == null ? java.time.Clock.systemUTC() : files.clock());
         this.files = files;
         this.connectors = Map.of(
                 "rag-ingest", new RagIngest(registry, files),
@@ -68,12 +69,13 @@ public final class KnowledgeExtension implements WayangExtension {
                 component("rag-ingest", "Add documents to knowledge", "Add documents (files from storage, text, txt, md, html, csv, docx, xlsx, pptx, pdf) to a knowledge base",
                         "knowledge.ingest", "rag",
                         Map.of("knowledge", knowledge, "chunking", Map.of("type", "object"), "embedder", Map.of("type", "object"),
-                                "maxDocuments", Map.of("type", "number"), "maxChunks", Map.of("type", "number")),
+                                "maxDocuments", Map.of("type", "number"), "maxChunks", Map.of("type", "number"),
+                                "ttlDays", Map.of("type", "number", "description", "Default life of ingested documents in days (1-3650); a document's own ttlDays wins")),
                         List.of("knowledge")),
                 component("rag-search", "Search knowledge", "Retrieve passages from a knowledge base (bm25, vector, hybrid)",
                         "knowledge.search", "rag",
                         Map.of("knowledge", knowledge, "retrieval", Map.of("type", "object")), List.of("knowledge")),
-                component("rag-forget", "Remove documents from knowledge", "Remove documents from a knowledge base and its stored copy",
+                component("rag-forget", "Remove documents from knowledge", "Remove documents from a knowledge base and its stored copy; with no ids it clears expired documents (schedule it)",
                         "knowledge.forget", "rag", Map.of("knowledge", knowledge), List.of("knowledge")),
                 component("file-put", "Store file", "Store a file in the shared file storage and get its id", "files.put", "storage", Map.of(), List.of()),
                 component("file-get", "Read file", "Read a stored file by id", "files.get", "storage", Map.of(), List.of()),

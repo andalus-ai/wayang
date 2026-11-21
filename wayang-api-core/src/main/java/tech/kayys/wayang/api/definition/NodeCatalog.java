@@ -174,6 +174,7 @@ public final class NodeCatalog {
                         "retrieval", Map.of("type", "object", "description", "rag-search: method (bm25, vector, hybrid), topK, mmr, filters"),
                         "maxDocuments", Map.of("type", "integer", "minimum", 1, "description", "rag-ingest: documents allowed in the base"),
                         "maxChunks", Map.of("type", "integer", "minimum", 1, "description", "rag-ingest: chunks allowed in the base"),
+                        "ttlDays", Map.of("type", List.of("integer", "string"), "description", "rag-ingest: default life in days (1-3650) of the documents it adds; a document's own ttlDays wins"),
                         "persist", Map.of("type", "boolean", "description", "rag-ingest: false keeps the base in memory only (default: saved when file storage is configured)"),
                         "inputMapping", Map.of("type", "object", "description", "Mapper spec producing the connector inputs (overrides 'inputs')"),
                         "outputMapping", Map.of("type", "object", "description", "Mapper spec over {process variables, result} producing the node outputs"),
