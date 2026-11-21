@@ -76,7 +76,7 @@ final class KnowledgeRegistry {
         if (bases.keySet().stream().filter(k -> k.startsWith(prefix)).count() >= MAX_BASES || bases.size() >= MAX_TOTAL) {
             throw new RagException("too many knowledge bases (max " + MAX_BASES + ")");
         }
-        Embedder emb = embedder(config.get("embedder"));
+        Embedder emb = cached(tenant(config), name(config), embedder(config.get("embedder")), config.get("embedder"), def, persistence != null && persist(config));
         if (config.get("retrieval") instanceof Map<?, ?>) {
             @SuppressWarnings("unchecked")
             Map<String, Object> r = (Map<String, Object>) config.get("retrieval");
@@ -125,7 +125,7 @@ final class KnowledgeRegistry {
         if (emb != null && config.get("embedder") instanceof Map<?, ?> given && given.get("apiKey") instanceof String k) {
             emb.put("apiKey", k);
         }
-        Embedder embedder = embedder(emb);
+        Embedder embedder = cached(tenant(config), name(config), embedder(emb), emb, l.definition(), true);
         KnowledgeConfig kc = KnowledgeConfig.fromMap(l.definition());
         KnowledgeBase kb = kc.build(embedder);
         for (Document d : l.documents()) {
@@ -134,6 +134,19 @@ final class KnowledgeRegistry {
         Entry e = new Entry(kb, kc, signature(l.definition(), emb), embedder, l.definition(), l.embedder(), true);
         bases.put(key, e);
         return e;
+    }
+
+    /**
+     * A model-backed embedder of a persisted base gets a disk cache of its vectors, scoped to its settings without the key (so a changed model,
+     * size or endpoint never reuses old vectors). Free local embedders are not cached; neither are bases that opted out of persistence.
+     */
+    private Embedder cached(String tenant, String name, Embedder e, Object embedderSettings, Map<String, Object> def, boolean persisted) {
+        if (!persisted || !(e instanceof OpenAiEmbedder)) {
+            return e;
+        }
+        int max = def.get("maxChunks") instanceof Number n && n.intValue() > 0 ? n.intValue() : KnowledgeBase.DEFAULT_MAX_CHUNKS;
+        String scope = Json.write(canon(embedderWithoutKey(embedderSettings)));
+        return new CachingEmbedder(e, new VectorCache(persistence.vectorFile(tenant, name), scope, e.dimensions(), max));
     }
 
     /** Settings in a fixed order, so a stored base and a live configuration compare equal whatever their map order. */

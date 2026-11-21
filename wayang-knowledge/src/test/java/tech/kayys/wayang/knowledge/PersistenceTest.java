@@ -111,7 +111,7 @@ class PersistenceTest {
                     Map.of("documents", List.of(Map.of("fileName", "a.txt", "text", "hello vectors"))));
             try (Stream<Path> s = Files.walk(dir)) {
                 for (Path p : s.filter(Files::isRegularFile).collect(Collectors.toList())) {
-                    assertFalse(Files.readString(p).contains("sk-never-on-disk"), p.toString());
+                    assertFalse(new String(Files.readAllBytes(p), java.nio.charset.StandardCharsets.ISO_8859_1).contains("sk-never-on-disk"), p.toString());
                 }
             }
             // after a restart the base is rebuilt using the key the searching node supplies

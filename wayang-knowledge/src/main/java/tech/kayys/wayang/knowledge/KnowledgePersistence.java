@@ -18,8 +18,8 @@ import tech.kayys.wayang.rag.RagException;
 import tech.kayys.wayang.runtime.json.Json;
 
 /**
- * Keeps a knowledge base's source documents and settings on disk so it survives a restart. Only the sources are stored; chunks and vectors are
- * rebuilt when the base is first used again (so a model-backed embedder is called again after a restart). Secrets are never written: an embedder's
+ * Keeps a knowledge base's source documents and settings on disk so it survives a restart. Only the sources are stored; chunks are rebuilt when the
+ * base is first used again, and a model-backed embedder's vectors come back from a {@link VectorCache} (so a restart does not pay for them again). Secrets are never written: an embedder's
  * {@code apiKey} is dropped, and the first node that uses the base after a restart supplies it from its own configuration.
  *
  * <p>Layout: {@code <root>/<tenant hash>/<name>/definition.json} and {@code docs/<hash of document id>.json}. Writes are atomic. Bounded to
@@ -46,6 +46,11 @@ final class KnowledgePersistence {
 
     private Path dir(String tenant, String name) {
         return root.resolve(FileStore.tenantDirName(tenant)).resolve(name);
+    }
+
+    /** Where the vector cache of a base lives (the file may not exist yet). */
+    Path vectorFile(String tenant, String name) {
+        return dir(tenant, name).resolve("vectors.bin");
     }
 
     boolean exists(String tenant, String name) {
