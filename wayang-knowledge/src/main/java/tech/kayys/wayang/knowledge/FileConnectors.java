@@ -155,7 +155,6 @@ final class FileConnectors {
                 return out;
             }
             java.net.URI uri = http.check(url.trim());
-            Map<String, String> headers = headers(config, uri);
             String name = in.get("fileName") instanceof String n && !n.isBlank() ? n : nameOf(uri);
             Integer ttl = null;
             if (in.get("ttlDays") != null && !(in.get("ttlDays") instanceof String t && t.isBlank())) {
@@ -165,7 +164,7 @@ final class FileConnectors {
                     throw new ServiceHandler.ConnectorException("ttlDays must be a whole number of days", false);
                 }
             }
-            byte[] bytes = http.getBytes(uri, headers, 60_000, FileStore.MAX_BYTES);
+            byte[] bytes = http.getBytes(uri, Map.of(), 60_000, FileStore.MAX_BYTES);
             if (bytes.length == 0) {
                 out.put("stored", false);
                 out.put("reason", "the address returned no content");
@@ -183,40 +182,6 @@ final class FileConnectors {
             } catch (RagException e) {
                 throw bad(e);
             }
-        }
-
-        private static final java.util.regex.Pattern HEADER = java.util.regex.Pattern.compile("[A-Za-z0-9-]{1,64}");
-
-        /** Config headers, only for a URL under {@code urlPrefix}; anything else is a clear configuration error. */
-        private Map<String, String> headers(Map<String, Object> config, java.net.URI uri) throws ServiceHandler.ConnectorException {
-            if (!(config.get("headers") instanceof Map<?, ?> m) || m.isEmpty()) {
-                return Map.of();
-            }
-            if (m.size() > 10) {
-                throw new ServiceHandler.ConnectorException("file-fetch takes at most 10 headers", false);
-            }
-            if (!(config.get("urlPrefix") instanceof String prefix) || prefix.isBlank()) {
-                throw new ServiceHandler.ConnectorException("file-fetch headers need urlPrefix: the address they may be sent to", false);
-            }
-            java.net.URI base = http.check(prefix.trim());
-            java.net.URI target = uri.normalize();
-            String bp = base.getPath() == null || base.getPath().isEmpty() ? "/" : base.normalize().getPath();
-            String tp = target.getPath() == null || target.getPath().isEmpty() ? "/" : target.getPath();
-            boolean under = base.getScheme().equalsIgnoreCase(target.getScheme()) && base.getHost().equalsIgnoreCase(target.getHost())
-                    && base.getPort() == target.getPort() && (tp.equals(bp) || tp.startsWith(bp.endsWith("/") ? bp : bp + "/"));
-            if (!under) {
-                throw new ServiceHandler.ConnectorException("the url is outside urlPrefix, so the configured headers are not sent", false);
-            }
-            Map<String, String> h = new LinkedHashMap<>();
-            for (Map.Entry<?, ?> e : m.entrySet()) {
-                String k = String.valueOf(e.getKey());
-                String v = String.valueOf(e.getValue());
-                if (!HEADER.matcher(k).matches() || v.length() > 2000 || v.chars().anyMatch(c -> c < 0x20 || c == 0x7f)) {
-                    throw new ServiceHandler.ConnectorException("header '" + (k.length() > 64 ? "..." : k) + "' is not valid", false);
-                }
-                h.put(k, v);
-            }
-            return h;
         }
 
         private static String nameOf(java.net.URI uri) {

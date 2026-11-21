@@ -33,13 +33,6 @@ class FileFetchTest {
             x.getResponseBody().write(b);
             x.close();
         });
-        server.createContext("/private/", x -> {
-            boolean ok = "Bearer s3cret".equals(x.getRequestHeaders().getFirst("Authorization"));
-            byte[] b = (ok ? "private body" : "denied").getBytes(StandardCharsets.UTF_8);
-            x.sendResponseHeaders(ok ? 200 : 401, b.length);
-            x.getResponseBody().write(b);
-            x.close();
-        });
         server.createContext("/empty", x -> {
             x.sendResponseHeaders(200, -1);
             x.close();
