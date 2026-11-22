@@ -465,6 +465,9 @@ class PublishTest {
                     runs = ((List<?>) ((Map<?, ?>) Json.read(l.body())).get("runs")).size();
                 }
                 assertEquals(3, runs, "one run from the webhook and two from the feed");
+                for (int i = 0; i < 40 && !Files.isRegularFile(state.resolve("cursor-feed")); i++) {
+                    Thread.sleep(100); // the cursor is saved just after the runs start
+                }
                 assertTrue(Files.isRegularFile(state.resolve("cursor-feed")), "the cursor was written to the state directory");
                 var trig = c.send(HttpRequest.newBuilder(URI.create(base + "/v1/triggers")).header("Authorization", "Bearer k-2").build(), HttpResponse.BodyHandlers.ofString());
                 assertTrue(trig.body().contains("\"feed\"") && !trig.body().contains("hook-s3cret"));
