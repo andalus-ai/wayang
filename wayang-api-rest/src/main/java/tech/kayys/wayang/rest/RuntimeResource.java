@@ -44,6 +44,13 @@ public class RuntimeResource {
     @Inject
     Principals principals;
 
+    /** Whether this server executes (community) or only designs (design); Studio hides run, task and timer actions when it only designs. */
+    @GET
+    @Path("mode")
+    public Map<String, Object> mode() {
+        return Map.of("mode", api.mode().name().toLowerCase(java.util.Locale.ROOT), "executes", api.mode().executes());
+    }
+
     @POST
     @Path("runs")
     public Response start(StartRun body) {
