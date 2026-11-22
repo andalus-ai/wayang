@@ -236,5 +236,5 @@ restore_sibling "$restore_b" "${volumes[6]}" 3 "$b_target_time"
  echo "independent_promotions=success"
  echo "planner_union_of_sibling_branches=success"
  echo "independent_restore_from_simulated_archive=success"
-} | tee /tmp/wayang-sibling-forks-recovery.txt
+} | tee -a /tmp/wayang-sibling-forks-recovery.txt
 echo "POSTGRES_SIBLING_FORK_QUALIFICATION_SUCCESS"
