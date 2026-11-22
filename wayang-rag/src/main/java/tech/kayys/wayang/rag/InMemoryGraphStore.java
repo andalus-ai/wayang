@@ -108,6 +108,14 @@ public final class InMemoryGraphStore implements GraphStore {
                     .toList();
 
             for (KnowledgeRelationship edge : adjacent) {
+                String next = nextEntity(edge, current.entityId(), query.direction());
+                if (next == null) continue;
+                KnowledgeEntity nextEntity = entities.get(new EntityKey(scope, next));
+                if (nextEntity == null) continue;
+                if (!visited.contains(next) && foundEntities.size() >= query.maxNodes()) {
+                    truncated = true;
+                    break;
+                }
                 if (!foundRelationships.containsKey(edge.id())) {
                     if (foundRelationships.size() >= query.maxEdges()) {
                         truncated = true;
@@ -115,18 +123,10 @@ public final class InMemoryGraphStore implements GraphStore {
                     }
                     foundRelationships.put(edge.id(), edge);
                 }
-                String next = nextEntity(edge, current.entityId(), query.direction());
-                if (next == null || visited.contains(next)) continue;
-                EntityKey nextKey = new EntityKey(scope, next);
-                KnowledgeEntity entity = entities.get(nextKey);
-                if (entity == null) continue;
-                if (foundEntities.size() >= query.maxNodes()) {
-                    truncated = true;
-                    break;
+                if (visited.add(next)) {
+                    foundEntities.put(next, nextEntity);
+                    queue.addLast(new Visit(next, current.depth() + 1));
                 }
-                visited.add(next);
-                foundEntities.put(next, entity);
-                queue.addLast(new Visit(next, current.depth() + 1));
             }
             if (truncated) break;
         }
