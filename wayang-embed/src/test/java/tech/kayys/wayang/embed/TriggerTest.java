@@ -113,8 +113,11 @@ class TriggerTest {
     private final List<Map<String, Object>> toEmit = new ArrayList<>();
     private RuntimeException failWith;
 
+    private final List<Object> tenantsSeen = new ArrayList<>();
+
     private final Poller poller = (config, cursor) -> {
         cursorsSeen.add(cursor);
+        tenantsSeen.add(config.get("wayang.tenant"));
         if (failWith != null) {
             throw failWith;
         }
@@ -233,6 +236,7 @@ class TriggerTest {
         toEmit.add(Map.of("n", 2));
         assertEquals(2, t.tick());
         assertEquals(java.util.Arrays.asList((String) null), cursorsSeen, "the first poll has no cursor");
+        assertEquals(List.of("release"), tenantsSeen, "tenant-scoped extension pollers get the release tenant");
         assertEquals(0, t.tick(), "not due yet");
         c.now = c.now.plusSeconds(10);
         assertEquals(0, t.tick());

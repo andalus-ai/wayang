@@ -390,6 +390,18 @@ class PublishTest {
                 List.of(trigger("t", "WEBHOOK", Map.of("auth", "nosuch"))), List.of())), "an unknown provider is refused at generation");
     }
 
+    @Test
+    void anFsOrJdbcPollTriggerBringsTheEndpointsModuleAndIsAcceptedAsASource() {
+        for (String src : List.of("fs", "jdbc")) {
+            var b = withTriggers(bundle(false, false, "x"),
+                    List.of(trigger("t", "POLL", Map.of("source", src))), List.of());
+            var p = Publisher.generate(b, OPTS);
+            assertTrue(text(p, "pom.xml").contains("wayang-endpoints"), src + " needs the endpoints module");
+            assertTrue(text(p, "src/main/java/com/acme/release/Processes.java").contains("\"" + src + "\""), src);
+            assertTrue(text(p, "src/main/java/com/acme/release/Wiring.java").contains("Extensions.load"), "extension pollers are wired");
+        }
+    }
+
     private static Publisher.Project build0(String bundle) {
         return Publisher.generate(bundle, OPTS);
     }
@@ -453,6 +465,9 @@ class PublishTest {
                     runs = ((List<?>) ((Map<?, ?>) Json.read(l.body())).get("runs")).size();
                 }
                 assertEquals(3, runs, "one run from the webhook and two from the feed");
+                for (int i = 0; i < 40 && !Files.isRegularFile(state.resolve("cursor-feed")); i++) {
+                    Thread.sleep(100); // the cursor is saved just after the runs start
+                }
                 assertTrue(Files.isRegularFile(state.resolve("cursor-feed")), "the cursor was written to the state directory");
                 var trig = c.send(HttpRequest.newBuilder(URI.create(base + "/v1/triggers")).header("Authorization", "Bearer k-2").build(), HttpResponse.BodyHandlers.ofString());
                 assertTrue(trig.body().contains("\"feed\"") && !trig.body().contains("hook-s3cret"));
