@@ -22,6 +22,10 @@ independent data directories, and one common timeline-1 fork point.
    branches to identify the same timeline-1 fork point.
 6. Build a catalog with two retained recovery paths, run the WAL dependency
    planner, and simulate retention into a separate destination.
+7. Restore the original physical backup twice, using only the simulated archive:
+   once pinned to timeline 2 and once pinned to timeline 3.
+8. Verify each restore contains the common ancestor and its own branch marker,
+   excludes the sibling branch marker, and stops before its after-target marker.
 
 ## Assertions
 
@@ -32,13 +36,19 @@ independent data directories, and one common timeline-1 fork point.
 - The planner preserves parent WAL and the WAL/history dependencies for both
   sibling paths.
 - The simulation writes to a separate directory; source archive is untouched.
+- Both sibling timelines restore successfully from the simulated retained archive.
+- Each restore follows only its selected sibling timeline and has the correct
+  parent timeline recorded by PostgreSQL.
+- Branch-specific markers never leak into the sibling restore, and each
+  after-target marker is absent.
 
 ## Limitations
 
-This qualifies live sibling promotion and dependency union, not failover
-between physical hosts, streaming replication slots, archive object-store
-consistency, or restore of each sibling backup. The retention planner remains
-dry-run only; no production deletion is introduced.
+This qualifies live sibling promotion, dependency union, and independent PITR
+from one common physical ancestor. It does not qualify failover between
+physical hosts, streaming replication slots, or archive object-store
+consistency. The retention planner remains dry-run only; no production
+deletion is introduced.
 
 ## Local run
 
