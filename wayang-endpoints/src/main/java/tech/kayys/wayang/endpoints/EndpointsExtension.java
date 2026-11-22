@@ -14,8 +14,8 @@ import tech.kayys.wayang.runtime.ServiceHandler;
 import tech.kayys.wayang.runtime.WayangExtension;
 
 /**
- * ESB-style endpoints that need no third-party library: today the file system ({@code fs-read}, {@code fs-write}, {@code fs-list}, {@code fs-move},
- * {@code fs-delete} and the {@code fs} trigger source), confined to {@code WAYANG_ENDPOINTS_FS_ROOT}. Loaded only when the profile enables ENDPOINTS.
+ * ESB-style endpoints that need no third-party library: the file system, and SQL over JDBC (driver supplied by the deployment) ({@code fs-read}, {@code fs-write}, {@code fs-list}, {@code fs-move},
+ * {@code fs-delete}, the {@code fs} trigger source, the {@code sql} connector and the {@code jdbc} trigger source), confined to {@code WAYANG_ENDPOINTS_FS_ROOT}. Loaded only when the profile enables ENDPOINTS.
  */
 public final class EndpointsExtension implements WayangExtension {
 
@@ -27,13 +27,18 @@ public final class EndpointsExtension implements WayangExtension {
     }
 
     EndpointsExtension(FsRoot root, Clock clock) {
+        this(root, clock, Jdbc.fromEnvironment());
+    }
+
+    EndpointsExtension(FsRoot root, Clock clock, Jdbc jdbc) {
         this.connectors = Map.of(
+                "sql", new SqlConnector(jdbc),
                 "fs-read", new FsConnectors.Read(root),
                 "fs-write", new FsConnectors.Write(root),
                 "fs-list", new FsConnectors.ListFiles(root),
                 "fs-move", new FsConnectors.Move(root),
                 "fs-delete", new FsConnectors.Delete(root));
-        this.pollers = Map.of("fs", new FsPoller(root, clock));
+        this.pollers = Map.of("fs", new FsPoller(root, clock), "jdbc", new JdbcPoller(jdbc));
     }
 
     @Override
@@ -70,6 +75,12 @@ public final class EndpointsExtension implements WayangExtension {
                         Map.of("path", path, "glob", Map.of("type", "string")), List.of()),
                 component("fs-move", "Move file", "Move or rename a file inside the endpoint directory (for example to an archive folder)", "files.move",
                         Map.of("overwrite", Map.of("type", "boolean")), List.of()),
+                component("sql", "SQL query", "Run a configured SQL query with parameters (read-only by default); the database must be permitted by the operator", "sql.query",
+                        Map.of("url", Map.of("type", "string", "description", "jdbc: URL (no credentials in it)"),
+                                "user", Map.of("type", "string"), "password", Map.of("type", "string", "description", "use ${secret:NAME}"),
+                                "query", Map.of("type", "string", "description", "SQL with ? placeholders"),
+                                "mode", Map.of("type", "string", "enum", List.of("read", "write")),
+                                "maxRows", Map.of("type", "integer", "minimum", 1, "maximum", Jdbc.MAX_ROWS)), List.of("url", "query")),
                 component("fs-delete", "Delete file", "Delete one file (never a directory)", "files.delete", Map.of(), List.of()));
     }
 

@@ -136,10 +136,10 @@ class FsEndpointsTest {
     void theExtensionDeclaresItsComponentsAndNeedsTheEndpointsFeature() {
         EndpointsExtension e = ext(null);
         assertEquals(java.util.Set.of(tech.kayys.wayang.runtime.Profile.Feature.ENDPOINTS), e.requires());
-        assertEquals(5, e.components().size());
-        assertEquals(5, e.connectors().size());
-        assertTrue(e.pollers().containsKey("fs"));
-        assertTrue(e.connectors().values().stream().allMatch(c -> c.tenantScoped()));
+        assertEquals(6, e.components().size());
+        assertEquals(6, e.connectors().size());
+        assertTrue(e.pollers().containsKey("fs") && e.pollers().containsKey("jdbc"));
+        assertTrue(e.connectors().entrySet().stream().filter(c -> c.getKey().startsWith("fs-")).allMatch(c -> c.getValue().tenantScoped()));
         assertFalse(tech.kayys.wayang.runtime.Profile.AGENTIC.has(tech.kayys.wayang.runtime.Profile.Feature.ENDPOINTS), "agents do not get the file system by default");
         assertTrue(tech.kayys.wayang.runtime.Profile.INTEGRATION.has(tech.kayys.wayang.runtime.Profile.Feature.ENDPOINTS));
         assertEquals("x".getBytes(StandardCharsets.UTF_8).length, 1);
