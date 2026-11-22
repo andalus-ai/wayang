@@ -53,7 +53,7 @@ flowchart TB
   end
 ```
 
-Details and status (what exists, what is proposed): [EDITIONS.md](../EDITIONS.md).
+The design server's mode is `WAYANG_MODE` (`community` executes, `design` refuses to execute). Details and status (what exists, what is proposed): [EDITIONS.md](../EDITIONS.md).
 
 ## Layers and modules
 
