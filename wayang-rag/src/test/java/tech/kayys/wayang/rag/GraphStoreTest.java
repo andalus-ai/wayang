@@ -31,6 +31,7 @@ class GraphStoreTest {
         InMemoryGraphStore store = new InMemoryGraphStore();
         store.upsertEntity(entity("tenant-a", "sales", "Sales"));
         store.upsertEntity(entity("tenant-a", "policy", "Policy 2025"));
+        store.upsertEntity(entity("tenant-b", "sales", "Other tenant sales"));
         store.upsertEntity(entity("tenant-b", "policy", "Other tenant policy"));
         store.upsertRelationship(relation("tenant-a", "r1", "sales", "policy", "GOVERNED_BY"));
         store.upsertRelationship(relation("tenant-b", "r1", "sales", "policy", "GOVERNED_BY"));
