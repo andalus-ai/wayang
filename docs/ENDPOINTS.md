@@ -27,7 +27,7 @@ flowchart LR
 | 2 | `sql` connector and `jdbc` trigger source over JDBC (driver supplied by the deployment, parameterized queries only) | implemented (below) |
 | 3 | SFTP/FTP, Kafka and AMQP/JMS as separate optional modules (each needs a client library) | **proposed** |
 | 4 | Optional `camel` bridge: call a Camel route or endpoint URI from a step, for teams that already have Camel components (DSL routes, Kamelets) | **proposed**; heavy dependency, never in the core |
-| 5 | Releases that serve poll sources from extensions (today a release can run `fs` connectors, but not an `fs` trigger) | **proposed** |
+| 5 | Releases that serve poll sources from extensions: an `fs` or `jdbc` POLL trigger now generates a release with `wayang-endpoints` and wires `Extensions.load` (tenant `release`) | **implemented** (CI-verified only; not run in a deployed release) |
 
 ## File endpoints (`wayang-endpoints`)
 

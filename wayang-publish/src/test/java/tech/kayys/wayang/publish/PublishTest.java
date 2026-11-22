@@ -390,6 +390,18 @@ class PublishTest {
                 List.of(trigger("t", "WEBHOOK", Map.of("auth", "nosuch"))), List.of())), "an unknown provider is refused at generation");
     }
 
+    @Test
+    void anFsOrJdbcPollTriggerBringsTheEndpointsModuleAndIsAcceptedAsASource() {
+        for (String src : List.of("fs", "jdbc")) {
+            var b = withTriggers(bundle(false, false, "x"),
+                    List.of(trigger("t", "POLL", Map.of("source", src))), List.of());
+            var p = Publisher.generate(b, OPTS);
+            assertTrue(text(p, "pom.xml").contains("wayang-endpoints"), src + " needs the endpoints module");
+            assertTrue(text(p, "src/main/java/com/acme/release/Processes.java").contains("\"" + src + "\""), src);
+            assertTrue(text(p, "src/main/java/com/acme/release/Wiring.java").contains("Extensions.load"), "extension pollers are wired");
+        }
+    }
+
     private static Publisher.Project build0(String bundle) {
         return Publisher.generate(bundle, OPTS);
     }
