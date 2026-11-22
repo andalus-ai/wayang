@@ -8,7 +8,9 @@ prefix="wayang-sibling-forks-${GITHUB_RUN_ID:-local}"
 source="${prefix}-source"
 branch_a="${prefix}-branch-a"
 branch_b="${prefix}-branch-b"
-volumes=("${prefix}-source-data" "${prefix}-archive" "${prefix}-base-backup" "${prefix}-branch-a-data" "${prefix}-branch-b-data")
+restore_a="${prefix}-restore-a"
+restore_b="${prefix}-restore-b"
+volumes=("${prefix}-source-data" "${prefix}-archive" "${prefix}-base-backup" "${prefix}-branch-a-data" "${prefix}-branch-b-data" "${prefix}-restore-a-data" "${prefix}-restore-b-data")
 source_vol="${volumes[0]}"
 archive_vol="${volumes[1]}"
 backup_vol="${volumes[2]}"
@@ -16,7 +18,7 @@ a_vol="${volumes[3]}"
 b_vol="${volumes[4]}"
 
 cleanup() {
-  docker rm -f "$branch_b" "$branch_a" "$source" >/dev/null 2>&1 || true
+  docker rm -f "$restore_b" "$restore_a" "$branch_b" "$branch_a" "$source" >/dev/null 2>&1 || true
   docker volume rm "${volumes[@]}" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -94,6 +96,8 @@ start_branch "$branch_a" "$a_vol" latest
 a_tli="$(sql "$branch_a" -c "SELECT left(pg_walfile_name(pg_current_wal_lsn()),8)")"
 test "$a_tli" = "00000002"
 sql "$branch_a" -c "INSERT INTO fork_marker VALUES ('branch-a-only')"
+a_target_time="$(sql "$branch_a" -c "SELECT to_char(clock_timestamp(), 'YYYY-MM-DD HH24:MI:SS.USOF')")"
+sql "$branch_a" -c "INSERT INTO fork_marker VALUES ('branch-a-after-target')"
 a_end_lsn="$(sql "$branch_a" -c "SELECT pg_current_wal_lsn()")"
 a_wal="$(sql "$branch_a" -c "SELECT pg_walfile_name(pg_current_wal_lsn())")"
 sql "$branch_a" -c "SELECT pg_switch_wal()" >/dev/null
@@ -111,6 +115,8 @@ if [[ "$b_tli" != "00000003" ]]; then
   exit 1
 fi
 sql "$branch_b" -c "INSERT INTO fork_marker VALUES ('branch-b-only')"
+b_target_time="$(sql "$branch_b" -c "SELECT to_char(clock_timestamp(), 'YYYY-MM-DD HH24:MI:SS.USOF')")"
+sql "$branch_b" -c "INSERT INTO fork_marker VALUES ('branch-b-after-target')"
 b_end_lsn="$(sql "$branch_b" -c "SELECT pg_current_wal_lsn()")"
 b_wal="$(sql "$branch_b" -c "SELECT pg_walfile_name(pg_current_wal_lsn())")"
 sql "$branch_b" -c "SELECT pg_switch_wal()" >/dev/null
@@ -166,6 +172,61 @@ python3 spikes/cel-nessie/scripts/simulate-postgres-wal-retention.py \
   --archive-dir /tmp/wayang-sibling-forks/archive --plan-json /tmp/wayang-sibling-forks-plan.json \
   --destination /tmp/wayang-sibling-forks-simulated > /tmp/wayang-sibling-forks-simulation.json
 
+# Restore both siblings independently from the same timeline-1 physical
+# backup, using only the simulated retained archive. Each recovery is pinned
+# to its own timeline and stops before its after-target marker.
+restore_sibling() {
+  local container="$1" restore_volume="$2" timeline="$3" target_time="$4"
+  docker run --rm --user root -v "$backup_vol:/from:ro" -v "$restore_volume:/to" --entrypoint sh postgres:17 \
+    -c "cp -a /from/. /to/ && touch /to/recovery.signal && chown -R postgres:postgres /to"
+  docker run -d --name "$container" \
+    -v "$restore_volume:/var/lib/postgresql/data" \
+    -v /tmp/wayang-sibling-forks-simulated:/simulated-wal:ro \
+    postgres:17 \
+    -c "restore_command=cp /simulated-wal/%f %p" \
+    -c "recovery_target_timeline=$timeline" \
+    -c "recovery_target_time=$target_time" \
+    -c recovery_target_inclusive=off -c recovery_target_action=promote
+  local in_recovery="t"
+  for attempt in $(seq 1 120); do
+    if docker exec "$container" pg_isready -U postgres -d wayang_forks >/dev/null 2>&1; then
+      in_recovery="$(sql "$container" -c "SELECT pg_is_in_recovery()" 2>/dev/null || echo t)"
+      [[ "$in_recovery" == "f" ]] && break
+    fi
+    sleep 2
+  done
+  if [[ "$in_recovery" != "f" ]]; then
+    docker logs "$container" >&2 || true
+    echo "PITR did not complete on requested sibling timeline $timeline" >&2
+    return 1
+  fi
+  local parent_timeline
+  parent_timeline="$(sql "$container" -c "SELECT prev_timeline_id FROM pg_control_checkpoint()")"
+  test "$parent_timeline" = "$timeline" || { echo "unexpected parent timeline: $parent_timeline (expected $timeline)" >&2; docker logs "$container" >&2 || true; return 1; }
+  assert_marker() {
+    local marker="$1" expected="$2" actual
+    actual="$(sql "$container" -c "SELECT count(*) FROM fork_marker WHERE marker='$marker'")"
+    test "$actual" = "$expected" || { echo "timeline=$timeline marker=$marker expected=$expected actual=$actual" >&2; docker logs "$container" >&2 || true; return 1; }
+  }
+  assert_marker common-ancestor 1
+  assert_marker parent-before-forks 1
+  if [[ "$timeline" == "2" ]]; then
+    assert_marker branch-a-only 1
+    assert_marker branch-b-only 0
+    assert_marker branch-a-after-target 0
+    echo "timeline2_restore=success" | tee -a /tmp/wayang-sibling-forks-recovery.txt
+  else
+    assert_marker branch-b-only 1
+    assert_marker branch-a-only 0
+    assert_marker branch-b-after-target 0
+    echo "timeline3_restore=success" | tee -a /tmp/wayang-sibling-forks-recovery.txt
+  fi
+}
+
+: > /tmp/wayang-sibling-forks-recovery.txt
+restore_sibling "$restore_a" "${volumes[5]}" 2 "$a_target_time"
+restore_sibling "$restore_b" "${volumes[6]}" 3 "$b_target_time"
+
 {
  echo "timeline2=$a_tli"
  echo "timeline3=$b_tli"
@@ -174,5 +235,6 @@ python3 spikes/cel-nessie/scripts/simulate-postgres-wal-retention.py \
  echo "same_timeline1_ancestor=yes"
  echo "independent_promotions=success"
  echo "planner_union_of_sibling_branches=success"
-} | tee /tmp/wayang-sibling-forks-recovery.txt
+ echo "independent_restore_from_simulated_archive=success"
+} | tee -a /tmp/wayang-sibling-forks-recovery.txt
 echo "POSTGRES_SIBLING_FORK_QUALIFICATION_SUCCESS"
