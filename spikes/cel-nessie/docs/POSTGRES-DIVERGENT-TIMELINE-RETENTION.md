@@ -26,6 +26,9 @@ files protected.
   across every retained backup.
 - Each retained branch validates its own parent/child fork boundary.
 - A missing history file for either retained branch fails closed.
+- A malformed history file fails closed rather than being treated as a valid ancestry.
+- A history file that names a sibling instead of the expected parent fails closed.
+- Missing WAL on either branch fails closed; the other branch's available WAL cannot mask the gap.
 - A fork-boundary gap in one branch fails even if the other branch is valid.
 - A sibling branch not referenced by any retained backup is not required to
   validate another branch's ancestry; its unreferenced WAL can be reported as
@@ -34,12 +37,12 @@ files protected.
 
 ## Scope and limitations
 
-This phase is a deterministic planner/conformance qualification using
-PostgreSQL-format timeline history fixtures. It does not yet create two
-independent live PostgreSQL promotions from a common ancestor, validate
-cross-cluster archive replication, or execute production retention. The
-planner remains dry-run only. A live fork integration harness is a separate
-qualification step.
+This phase is a deterministic planner failure-injection qualification using
+PostgreSQL-format timeline history fixtures and deliberately incomplete WAL
+archives. It does not execute a physical restore for each injected failure,
+validate cross-cluster archive replication, or execute production retention.
+The live sibling promotion and restore paths are covered by separate PostgreSQL
+17 integration qualification jobs. The planner remains dry-run only.
 
 ## Run
 
