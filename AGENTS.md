@@ -73,6 +73,7 @@ Rules for contributors: a definition means the same in both modes; a generated r
 - Mark planned behavior as proposed/planned and implemented behavior as implemented, with verification status.
 - Keep examples consistent with actual supported schemas and APIs. Label illustrative manifests and pseudocode as examples.
 - When changing a public contract, update its documentation and compatibility/conformance fixtures.
+- Keep `docs/guide/` (architecture, sequences, features, developer guide; Mermaid diagrams) in step with the code: a change to node types, execution flow, extension points or release behavior updates the matching guide page.
 - Keep root README concise and link to focused documents such as `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, and `docs/PROFILES.md`.
 
 

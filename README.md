@@ -6,6 +6,8 @@ Low-code **agentic factory, BPMN, EIP and DMN** platform, built on top of
 Wayang owns *definitions* and the user-facing model; it never implements a second
 persistent workflow engine.
 
+**Architecture and developer guide with diagrams:** [`docs/guide/`](docs/guide/README.md).
+
 **Two ways to run it** (details and status in [`docs/EDITIONS.md`](docs/EDITIONS.md)): *Community/development*, one all-in-one runtime that is Studio, design server and execution together; and *Pro/Enterprise*, a production Studio kept separate from **generated runtimes** (an agent service, or a BPMN/DMN/workflow service) and managed by **Wayang Console** (separate repository). Definitions are the same in both.
 
 | Concern | Owned by |
