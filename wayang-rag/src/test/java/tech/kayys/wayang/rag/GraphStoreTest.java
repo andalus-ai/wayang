@@ -67,6 +67,7 @@ class GraphStoreTest {
                 Set.of("a"), GraphQuery.Direction.OUTGOING, Set.of(), 1, 2, 10));
 
         assertEquals(2, result.entities().size());
+        assertEquals(1, result.relationships().size());
         assertTrue(result.truncated());
     }
 
