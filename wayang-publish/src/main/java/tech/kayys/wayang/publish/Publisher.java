@@ -107,6 +107,9 @@ public final class Publisher {
         boolean multimodal = used.stream().anyMatch(MULTIMODAL_CONNECTORS::contains);
         String knowledge = used.stream().anyMatch(KNOWLEDGE_CONNECTORS::contains)
                 ? KNOWLEDGE_DEP + (used.contains("rag-ingest") ? PDF_DEP : "") : "";
+        if (used.stream().anyMatch(ENDPOINTS_CONNECTORS::contains)) {
+            knowledge += ENDPOINTS_DEP; // same mechanism: an extension found through ServiceLoader
+        }
         boolean mcp = used.stream().anyMatch(MCP_CONNECTORS::contains);
         boolean needsConnectors = !used.isEmpty() || !pollSources.isEmpty() || !providers.isEmpty();
         List<String> notes = new ArrayList<>();
@@ -322,6 +325,15 @@ public final class Publisher {
                                     <version>${wayang.version}</version>
                                 </dependency>
                         """;
+    /** Needed only when a file endpoint connector ({@code fs-read}, {@code fs-write}...) is used; the operator sets {@code WAYANG_ENDPOINTS_FS_ROOT}. */
+    static final String ENDPOINTS_DEP = """
+                                <dependency>
+                                    <groupId>tech.kayys.wayang</groupId>
+                                    <artifactId>wayang-endpoints</artifactId>
+                                    <version>${wayang.version}</version>
+                                </dependency>
+                        """;
+    static final Set<String> ENDPOINTS_CONNECTORS = Set.of("fs-read", "fs-write", "fs-list", "fs-move", "fs-delete");
     static final Set<String> KNOWLEDGE_CONNECTORS = Set.of("rag-ingest", "rag-search", "rag-forget", "rag-list", "file-put", "file-fetch", "file-get", "file-list", "file-delete", "file-purge");
     /** Needed only when the {@code openapi} connector is used; the runtime finds the extension through ServiceLoader. */
     static final String MCP_DEP = """

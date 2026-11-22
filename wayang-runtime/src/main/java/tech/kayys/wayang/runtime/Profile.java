@@ -23,7 +23,9 @@ public final class Profile {
         /** Media generation (images today; audio and graph-style nodes later). Served by extensions, so it has no built-in handler. */
         MEDIA("wayang-media"),
         /** Document knowledge for retrieval-augmented agents (ingest and search); served by an extension. */
-        KNOWLEDGE("wayang-knowledge");
+        KNOWLEDGE("wayang-knowledge"),
+        /** ESB-style endpoints (file system today; more later); served by an extension. */
+        ENDPOINTS("wayang-endpoints");
 
         private final String executorType;
 
@@ -41,7 +43,7 @@ public final class Profile {
     public static final Profile AUTOMATION = new Profile("automation",
             EnumSet.of(Feature.SERVICE, Feature.DMN, Feature.HUMAN));
     /** Integration platform: EIP pipelines and connectors. */
-    public static final Profile INTEGRATION = new Profile("integration", EnumSet.of(Feature.SERVICE, Feature.EIP));
+    public static final Profile INTEGRATION = new Profile("integration", EnumSet.of(Feature.SERVICE, Feature.EIP, Feature.ENDPOINTS));
     /** Personal assistant / agent builder. */
     public static final Profile AGENTIC = new Profile("agentic",
             EnumSet.of(Feature.SERVICE, Feature.AGENT, Feature.HUMAN, Feature.EIP, Feature.MEDIA, Feature.KNOWLEDGE));

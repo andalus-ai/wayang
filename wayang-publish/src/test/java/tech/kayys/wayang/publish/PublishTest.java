@@ -570,6 +570,21 @@ class PublishTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void aFileToolBringsTheEndpointsModuleOnlyWhenUsed() {
+        Map<String, Object> m = (Map<String, Object>) Json.read(bundle(false, true, "Inbox"));
+        ((List<Object>) m.get("definitions")).add(Map.of("kind", "AGENT", "id", "clerk", "publishedVersion", 1, "document", Map.of("id", "clerk", "model", "ollama/x",
+                "tools", List.of(Map.of("name", "read", "type", "fs-read", "config", Map.of("path", "in"))))));
+        for (ReleaseOptions o : List.of(OPTS, GAM)) {
+            var p = Publisher.generate(Json.write(m), o);
+            assertTrue(p.components().contains("wayang.endpoints.fs-read"), p.components().toString());
+            assertTrue(text(p, "pom.xml").contains("wayang-endpoints"), o.target().toString());
+            assertFalse(text(p, "pom.xml").contains("wayang-knowledge"));
+        }
+        assertFalse(text(Publisher.generate(bundle(true, false, "Plain"), OPTS), "pom.xml").contains("wayang-endpoints"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void aRagToolBringsTheKnowledgeModuleOnlyWhenUsed() {
         Map<String, Object> m = (Map<String, Object>) Json.read(bundle(false, true, "Library"));
         ((List<Object>) m.get("definitions")).add(Map.of("kind", "AGENT", "id", "researcher", "publishedVersion", 1, "document", Map.of("id", "researcher", "model", "ollama/x",
