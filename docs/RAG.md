@@ -1,5 +1,7 @@
 # RAG foundation (`wayang-rag`)
 
+For the optional graph knowledge model, provenance contracts and hybrid retrieval roadmap, see [Knowledge graph and hybrid retrieval](KNOWLEDGE_GRAPH.md). The graph foundation is additive; existing RAG retrieval works without it.
+
 Slice 1 of retrieval-augmented agents: turn files into searchable knowledge, with several selectable methods. JDK only, no new dependencies.
 Slice 2 (`wayang-knowledge`) exposes it as connectors, below. A release serves a file upload API (see "From outside the release"); Studio ingest UI is not built, by design.
 
