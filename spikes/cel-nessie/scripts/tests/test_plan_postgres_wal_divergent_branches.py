@@ -170,7 +170,7 @@ class DivergentTimelineRetentionTest(unittest.TestCase):
             encoding="ascii",
         )
 
-        with self.assertRaisesRegex(CatalogError, "timeline 1 recovery range does not reach byte before fork"):
+        with self.assertRaisesRegex(CatalogError, "recovery ranges omit timeline 2"):
             build_plan(self.archive, self.catalog, self.cutoff)
 
     def test_missing_wal_on_one_branch_does_not_get_masked_by_other_branch(self):
