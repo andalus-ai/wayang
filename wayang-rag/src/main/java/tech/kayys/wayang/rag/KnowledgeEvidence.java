@@ -21,7 +21,8 @@ public record KnowledgeEvidence(
         sourceVersion = optional(sourceVersion, 200);
         chunkId = optional(chunkId, 200);
         extractor = optional(extractor, 200);
-        if (startOffset < -1 || endOffset < -1 || (startOffset >= 0 && endOffset < startOffset)) {
+        if (startOffset < -1 || endOffset < -1 || ((startOffset == -1) != (endOffset == -1))
+                || (startOffset >= 0 && endOffset < startOffset)) {
             throw new RagException("evidence offsets must be -1 or a valid non-negative range");
         }
         if (!Double.isFinite(confidence) || confidence < 0 || confidence > 1) {
