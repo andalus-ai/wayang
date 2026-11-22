@@ -37,6 +37,7 @@ All transports are thin shells over `WayangApi` (`wayang-api-core`). They authen
 | `GET /projects/{id}/export`, `POST /workspace/import` `{bundle, options}` | workspace bundle, dry run by default |
 | `GET /templates`, `POST /templates/{id}/instantiate` `{params, dryRun}` | starter projects (`assistant-telegram`, `knowledge-assistant` and others, see `GET /templates`); a dry run unless `dryRun` is false; triggers are created disabled |
 | `POST /projects/{id}/release/plan`, `POST /projects/{id}/release` `{target, groupId, artifactId, version, package, port, profile}` | release preview includes resolved component IDs; generated archive includes `wayang/component-lock.json` and its digest in `wayang/release.json` (`docs/RELEASE.md`) |
+| `GET /mode` | `{mode, executes}`: `executes` is false on a design-only server (`WAYANG_MODE=design`) |
 | `POST /admin/timers/fire` | ADMIN; a ticker also does it every 5s |
 
 ## WebSocket `/ws/events`

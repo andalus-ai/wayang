@@ -230,6 +230,17 @@ class WayangRepository {
       _api.sendJson('PATCH', '/api/v1/feedback/${Uri.encodeComponent(id)}', body: {'status': done ? 'done' : 'open'});
 
   /// The starter templates this server offers (empty when its profile has none).
+  /// Whether the server executes runs. A design-only server (`WAYANG_MODE=design`) answers false; an older server without the
+  /// endpoint is treated as executing.
+  Future<bool> executes() async {
+    try {
+      final m = asMap(await _api.getJson('/api/v1/mode'));
+      return m['executes'] != false;
+    } catch (_) {
+      return true;
+    }
+  }
+
   Future<List<TemplateInfo>> listTemplates() async => [
         for (final t in asList(await _api.getJson('/api/v1/templates'))) if (t is Map) TemplateInfo.fromJson(asMap(t)),
       ];

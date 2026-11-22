@@ -62,7 +62,7 @@ The same definitions work in both: a project built in the all-in-one mode is rel
 | unset, `community` (also `all-in-one`, `development`) | design and execute in one server |
 | `design` (also `design-only`) | the server designs but never executes: starting a run, completing a task, sending a message and firing timers answer **409** ("this server runs in design mode"). Definitions, validation, versions, projects, secrets, templates and releases work as usual |
 
-Any other value is an error at start-up (never a silent fall-back to executing). Use `design` for the production Studio of the separated edition and ship runs through generated runtimes. Do not configure triggers or chat channels on a design server: they start runs, which it refuses. Listing and reading runs still works (it is empty unless the server previously ran in community mode).
+Any other value is an error at start-up (never a silent fall-back to executing). Use `design` for the production Studio of the separated edition and ship runs through generated runtimes. Do not configure triggers or chat channels on a design server: they start runs, which it refuses. `GET /api/v1/mode` returns `{mode, executes}`; Studio hides the Runs and Tasks screens when `executes` is false (an older server without the endpoint is treated as executing). Listing and reading runs still works (it is empty unless the server previously ran in community mode).
 
 ## Rules that keep the two modes one product
 
@@ -76,7 +76,7 @@ Any other value is an error at start-up (never a silent fall-back to executing).
 ## Next steps (proposed, in order)
 
 1. All-in-one packaging so Community is one command; document it as the quick start.
-2. In design mode, have Studio hide run, task and timer actions (it needs the mode from the server) and refuse trigger configuration; test that a production release has no route back to the design server.
+2. In design mode, refuse trigger configuration (Studio already hides the Runs and Tasks screens, using `GET /api/v1/mode`); test that a production release has no route back to the design server.
 3. An agent-runtime generator and an agent-oriented release profile (HTTP chat/invoke API, memory, knowledge, tools) as a first-class release kind.
 4. Release signing and an artifact registry hand-off the Console can pull from (`docs/architecture/release-artifact-resolution.md`).
 5. Console integration tests against a real Console once it publishes a stable management protocol (`wayang-core`).

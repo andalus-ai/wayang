@@ -63,6 +63,8 @@ Widget _surfacesBuilder(BuildContext context) => const SurfacesScreen();
 Widget _feedbackBuilder(BuildContext context) => const FeedbackScreen();
 Widget _settingsBuilder(BuildContext context) => const SettingsScreen();
 
+const _executionKeys = {'runs', 'tasks'};
+
 /// Assembles the full nav list: Dashboard, then every installed plugin's
 /// nav entry (Studio, Process Designer, Decision Tables, ...), then the
 /// remaining fixed platform sections. This is the one place plugin
@@ -91,7 +93,9 @@ class AppShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final plugins = ref.watch(pluginRegistryProvider);
-    final navItems = _buildNavItems(plugins);
+    // Until the answer arrives (or when the server is older) everything is shown; a design-only server hides what it would refuse.
+    final executes = ref.watch(executesProvider).maybeWhen(data: (v) => v, orElse: () => true);
+    final navItems = _buildNavItems(plugins).where((n) => executes || !_executionKeys.contains(n.key)).toList();
     final selectedKey = ref.watch(selectedNavKeyProvider);
     final selectedIndex = navItems.indexWhere((n) => n.key == selectedKey);
     final effectiveIndex = selectedIndex >= 0 ? selectedIndex : 0;
