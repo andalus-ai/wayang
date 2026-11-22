@@ -145,6 +145,41 @@ class DivergentTimelineRetentionTest(unittest.TestCase):
         with self.assertRaisesRegex(CatalogError, "timeline 1 recovery range does not reach byte before fork"):
             build_plan(self.archive, self.catalog, self.cutoff)
 
+
+    def test_missing_wal_on_one_retained_sibling_fails_closed(self):
+        self.seed_sibling_branches()
+        (self.archive / "000000030000000000000003").unlink()
+
+        with self.assertRaisesRegex(CatalogError, "archive is missing required WAL files"):
+            build_plan(self.archive, self.catalog, self.cutoff)
+
+    def test_corrupt_sibling_history_fails_closed(self):
+        self.seed_sibling_branches()
+        (self.archive / "00000003.history").write_text(
+            "this is not a PostgreSQL timeline history record\\n",
+            encoding="ascii",
+        )
+
+        with self.assertRaisesRegex(CatalogError, "malformed timeline history 00000003.history"):
+            build_plan(self.archive, self.catalog, self.cutoff)
+
+    def test_sibling_history_with_wrong_parent_fails_closed(self):
+        self.seed_sibling_branches()
+        (self.archive / "00000003.history").write_text(
+            "2 0/02000000 incorrectly points to sibling timeline\\n",
+            encoding="ascii",
+        )
+
+        with self.assertRaisesRegex(CatalogError, "timeline 1 recovery range does not reach byte before fork"):
+            build_plan(self.archive, self.catalog, self.cutoff)
+
+    def test_missing_wal_on_one_branch_does_not_get_masked_by_other_branch(self):
+        self.seed_sibling_branches()
+        (self.archive / "000000020000000000000002").unlink()
+
+        with self.assertRaisesRegex(CatalogError, "archive is missing required WAL files"):
+            build_plan(self.archive, self.catalog, self.cutoff)
+
     def test_unretained_sibling_branch_is_not_a_recovery_dependency(self):
         self.seed_sibling_branches()
         catalog = json.loads(self.catalog.read_text(encoding="utf-8"))
