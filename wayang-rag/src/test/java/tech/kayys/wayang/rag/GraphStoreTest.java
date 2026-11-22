@@ -76,7 +76,7 @@ class GraphStoreTest {
         assertThrows(RagException.class, () -> new GraphQuery("tenant-a", "policies",
                 Set.of("a"), GraphQuery.Direction.BOTH, Set.of(), 4, 10, 10));
         assertThrows(RagException.class,
-                () -> new KnowledgeEvidence("source", "v1", "chunk", -1, 2, "extractor", 1.1));
+                () -> new KnowledgeEvidence("source", "v1", "chunk", 0, 2, "extractor", 1.1));
     }
 
     @Test
