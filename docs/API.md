@@ -77,6 +77,7 @@ Configuration (`application.properties`):
 |---|---|---|
 | `wayang.store` | `memory` (default), `jdbc` | definitions + wait tickets; `jdbc` uses the default Quarkus datasource and creates tables unless `wayang.jdbc.init-schema=false` |
 | `wayang.engine` | `reference` (default), `gamelan` | in-memory demo engine, or durable runs on Gamelan (`wayang.gamelan.endpoint`, `wayang.gamelan.api-key`) |
+| `WAYANG_MODE` (env) | `community` (default), `design` | design only: run, task, message and timer calls answer 409 (`docs/EDITIONS.md`); anything else fails at start-up |
 | `wayang.auth.tenant-claim` | default `tenant_id` | JWT claim carrying the tenant |
 
 `memory` + `reference` lose everything on restart. Production = `jdbc` + `gamelan` + OIDC. In `gamelan` mode, definitions are deployed

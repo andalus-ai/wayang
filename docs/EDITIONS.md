@@ -49,10 +49,20 @@ The same definitions work in both: a project built in the all-in-one mode is rel
 | Deployment lifecycle ledger, reconciliation, receipts | implemented as engine-neutral modules (`docs/deployment/`) |
 | Management Agent: heartbeat, inventory, command polling with handler gating, artifact download | implemented in `wayang-management-client` (`docs/architecture/`); opt-in; verified only against test servers |
 | Wayang Console (fleet registry, orchestration, digital twin, UI) | **separate repository**, not part of this one |
-| **A single switch for the mode** (for example `WAYANG_MODE=community|design`) and one all-in-one distribution (one image or jar that serves Studio, API and execution) | **proposed**: today the pieces exist but are assembled by hand |
+| **Mode switch** `WAYANG_MODE=community|design` on the design server (`Mode`, `WayangApi`) | implemented and unit-tested in `wayang-api-core`; see below. Not exercised through the Quarkus REST shell (it compiles against stubs only) |
+| One all-in-one distribution (one image or jar that serves Studio, API and execution) | **proposed**: the pieces exist but are assembled by hand |
 | A dedicated agent-runtime generator (an agent definition straight to a service, without a wrapping workflow) | **proposed** |
-| Design server hardened for production use (disabling run execution so it only designs, split Studio hosting) | **proposed** |
+| Design-only server (no run execution) | implemented as `WAYANG_MODE=design`; serving Studio separately from the API is **proposed** |
 | Pro / Enterprise licensing and which features sit in which edition | **not decided**; this document describes topology, not entitlements |
+
+## `WAYANG_MODE`
+
+| Value | Meaning |
+|---|---|
+| unset, `community` (also `all-in-one`, `development`) | design and execute in one server |
+| `design` (also `design-only`) | the server designs but never executes: starting a run, completing a task, sending a message and firing timers answer **409** ("this server runs in design mode"). Definitions, validation, versions, projects, secrets, templates and releases work as usual |
+
+Any other value is an error at start-up (never a silent fall-back to executing). Use `design` for the production Studio of the separated edition and ship runs through generated runtimes. Do not configure triggers or chat channels on a design server: they start runs, which it refuses. Listing and reading runs still works (it is empty unless the server previously ran in community mode).
 
 ## Rules that keep the two modes one product
 
@@ -65,8 +75,8 @@ The same definitions work in both: a project built in the all-in-one mode is rel
 
 ## Next steps (proposed, in order)
 
-1. A mode switch and an all-in-one packaging so Community is one command; document it as the quick start.
-2. A design-only setting for the server (no run execution) for the separated mode; test that a production release has no route back to it.
+1. All-in-one packaging so Community is one command; document it as the quick start.
+2. In design mode, have Studio hide run, task and timer actions (it needs the mode from the server) and refuse trigger configuration; test that a production release has no route back to the design server.
 3. An agent-runtime generator and an agent-oriented release profile (HTTP chat/invoke API, memory, knowledge, tools) as a first-class release kind.
 4. Release signing and an artifact registry hand-off the Console can pull from (`docs/architecture/release-artifact-resolution.md`).
 5. Console integration tests against a real Console once it publishes a stable management protocol (`wayang-core`).
