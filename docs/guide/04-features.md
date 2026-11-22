@@ -66,6 +66,7 @@ Connectors are selected by `config.connector` (or as an agent tool `type`). All 
 | SaaS | GitHub, Notion, Google Calendar and Sheets, Airtable, Todoist, Linear, Trello |
 | AI and agents | `mcp` (call MCP tools; generate an MCP server from OpenAPI, [MCP](../MCP.md)), A2A, multimodal (image generation, ComfyUI, transcribe, speak, describe: [MULTIMODAL](../MULTIMODAL.md)) |
 | Scripting | CES, JavaScript, Python via JSR-223, with limits ([SCRIPTING](../SCRIPTING.md)) |
+| Endpoints (ESB) | `fs-read`, `fs-write`, `fs-list`, `fs-move`, `fs-delete` and the `fs` trigger source ([ENDPOINTS](../ENDPOINTS.md)); JDBC, SFTP, Kafka, AMQP and an optional Camel bridge are **proposed** |
 | Knowledge and files | `rag-ingest`, `rag-search`, `rag-forget`, `rag-list`, `file-put`, `file-fetch`, `file-get`, `file-list`, `file-delete`, `file-purge` |
 
 ## Knowledge (RAG) and files
