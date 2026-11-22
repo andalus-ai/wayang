@@ -3,13 +3,11 @@ package tech.kayys.wayang.rag;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Bounded reference implementation of {@link GraphStore}.
@@ -157,6 +155,6 @@ public final class InMemoryGraphStore implements GraphStore {
         if (tenantId == null || tenantId.isBlank() || collectionId == null || collectionId.isBlank()) {
             throw new RagException("tenantId and collectionId are required for graph access");
         }
-        return new Scope(tenantId, collectionId);
+        return new Scope(tenantId.strip(), collectionId.strip());
     }
 }
