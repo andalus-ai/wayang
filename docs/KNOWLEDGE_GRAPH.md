@@ -1,6 +1,6 @@
 # Knowledge graph and hybrid retrieval
 
-**Status: graph foundation, extraction SPIs, schema validation and conservative alias resolution are implemented.** Evidence lifecycle, persistence, workflow nodes and graph-aware retrieval remain planned. This document distinguishes implemented contracts from the intended architecture. A type or SPI is not evidence that a complete graph pipeline exists.
+**Status: graph foundation, extraction SPIs, schema validation, conservative alias resolution and an in-memory evidence lifecycle are implemented.** Durable persistence, workflow nodes and graph-aware retrieval remain planned. This document distinguishes implemented contracts from the intended architecture. A type or SPI is not evidence that a complete graph pipeline exists.
 
 ## Goals and non-goals
 
@@ -142,6 +142,25 @@ Each candidate receives one of three outcomes:
 
 The resolver never fuzzy-matches, writes to the graph, creates canonical IDs or crosses tenant/collection boundaries. Other-scope entities are ignored rather than returned as possible matches. Production resolvers may add curated identifiers or human-approved mappings, but must preserve these scope and ambiguity guarantees.
 
+
+## Canonical graph ingestion and evidence lifecycle
+
+**Foundation status: implemented for the in-memory adapter.** `KnowledgeGraphIngestionService` applies validated chunk candidates and explicit resolution decisions to a `GraphStore`.
+
+- New canonical entity IDs are deterministic hashes of tenant, collection, entity type and normalized name. They are stable across source documents in the same scope; the ID is not derived from display text alone.
+- Matched entities must already exist in the requested tenant and collection. An out-of-scope or missing match is reported and not written.
+- Ambiguous or missing resolution decisions do not create entities. Relationships whose endpoints were not resolved are skipped with structured issues.
+- Relationship IDs are deterministic from scope, canonical endpoints and predicate.
+- Each entity/relationship write carries source ID, exact source version, chunk ID, extractor name, offsets and confidence in a `KnowledgeEvidence` record.
+- `InMemoryGraphStore` merges aliases and evidence idempotently. Reprocessing the same source version/chunk does not duplicate identical evidence; independent sources accumulate separate evidence records.
+- Reusing an entity ID with a different entity type, or a relationship ID with different endpoints/predicate, is rejected as an identity collision.
+
+`GraphStore.retractEvidence(tenantId, collectionId, sourceId, sourceVersion)` removes only evidence for that exact source/version in that exact scope. A relationship is removed only when its last evidence record is removed. Canonical entities are retained even when their evidence list becomes empty; automatic entity deletion is intentionally avoided until curated-vs-extracted ownership and reference semantics are explicit.
+
+For source replacement, the caller should ingest and verify the new source version first, then retract the old version. The current port does not promise a cross-operation transaction, so persistent adapters must define transaction behavior before production use. The in-memory adapter is process-local and does not provide durability or crash atomicity.
+
+The service does not invoke extractors or resolvers itself. The caller supplies validated candidates and resolution decisions, making the boundary explicit and allowing human review for ambiguous candidates. The returned result reports upsert counts, unresolved mentions, skipped relationships and structured issues.
+
 ## Graph storage and query
 
 `GraphStore` is the adapter boundary. The initial in-memory implementation is a reference adapter, not a production persistence solution. A persistent provider should be selected only after its transaction, tenant isolation, indexing, migration, backup and operational characteristics are evaluated.
@@ -207,9 +226,10 @@ Nodes should use the existing advisory mandatory-input convention: missing input
 | 2 | Vendor-neutral GraphStore SPI and bounded in-memory adapter | Implemented |
 | 3 | Entity/relationship extractor SPIs and deterministic regex extractors | Implemented in follow-up PR |
 | 4 | Versioned schema model, candidate validation and exact-alias entity resolution | Implemented |
-| 5 | Persistent schema registry, evidence retraction lifecycle and canonical graph upsert | Planned |
-| 6 | Graph-aware retrieval, evidence fusion and citation-preserving context | Planned |
-| 7 | Wayang workflow nodes and optional persistent provider | Planned |
+| 5 | In-memory canonical graph upsert, idempotent evidence merge and source-version retraction | Implemented |
+| 6 | Persistent schema registry and durable graph/evidence transactions | Planned |
+| 7 | Graph-aware retrieval, evidence fusion and citation-preserving context | Planned |
+| 8 | Wayang workflow nodes and optional persistent provider | Planned |
 
 Suggested follow-up PRs should remain small and independently testable. The first persistent provider should be chosen after the storage requirements are documented; PostgreSQL relational tables may be a simpler initial option than introducing a graph database, while Neo4j or other graph-native stores can remain optional adapters.
 
@@ -228,4 +248,4 @@ Suggested follow-up PRs should remain small and independently testable. The firs
 
 ## Verification
 
-This branch adds unit tests for schema validation, partial acceptance, predicate/type constraints, dangling endpoints, duplicate IDs, offset bounds, exact alias matching, ambiguity handling and tenant/collection isolation. Together with the existing graph-store and extraction tests, these tests are authored but have not been executed in this change session. CI must run the module tests and the repository's standard Maven verification before merge.
+This branch adds unit tests for idempotent evidence merge, multi-source provenance, exact source-version retraction, relationship cleanup after the last evidence, ambiguous/missing resolution behavior, and tenant/collection/source/version scoping. Together with the existing graph-store, extraction and schema tests, these tests are authored but have not been executed in this change session. CI must run the module tests and the repository's standard Maven verification before merge.
