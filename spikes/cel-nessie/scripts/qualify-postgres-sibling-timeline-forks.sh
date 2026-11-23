@@ -263,7 +263,13 @@ expect_incomplete_restore() {
     echo "expected failed recovery container disappeared: $container" >&2
     return 1
   fi
-  docker logs "$container" > "/tmp/wayang-sibling-forks-${container}.log" 2>&1 || true
+  local failure_log="/tmp/wayang-sibling-forks-${container}.log"
+  docker logs "$container" > "$failure_log" 2>&1 || true
+  if ! grep -Eiq "cp: cannot stat|invalid data in file|could not read from file|could not find a valid checkpoint record|requested timeline" "$failure_log"; then
+    cat "$failure_log" >&2
+    echo "missing expected PostgreSQL recovery failure evidence: $container" >&2
+    return 1
+  fi
   echo "incomplete_restore_rejected=$container timeline=$timeline" | tee -a /tmp/wayang-sibling-forks-recovery.txt
 }
 
