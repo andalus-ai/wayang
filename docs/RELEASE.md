@@ -162,7 +162,16 @@ Connectors named by an agent's tools (`type`) are wired into the release even wh
 * `X-Wayang-Release-Sha256`: SHA-256 (hex) of the archive. The archive is deterministic: the same published project, options and settings give the same bytes.
 * `X-Wayang-Release-Signature`: only when the server has a workspace signing key (`wayang.workspace.signing-key-file`): HMAC-SHA256 over `wayang-release-v1:<sha256>`, hex. The label keeps it from ever being valid as a bundle signature.
 
-Limits: the signature is symmetric, so it proves origin only to a party that holds the same key (the Console would have to be given it); it is not a public-key signature a third party can verify. The signed server's bundle also carries `integrity.hmac`, so a signed and an unsigned server produce different archives for the same project. Public-key signing (as the offline package path already does for its artifact manifest) and a registry the Console pulls from remain open.
+The HMAC is symmetric: it proves origin only to a party that holds the same key. For a signature **anyone** can check, configure Ed25519 keys:
+
+```
+wayang.release.signing-private-key-file=/run/secrets/release-signing.pk8.pem   # PKCS#8, PEM or base64
+wayang.release.signing-public-key-file=/etc/wayang/release-signing.pub.pem     # X.509, PEM or base64
+```
+
+Both or neither (files only, never inline); the pair is checked against each other on first use and a mismatch refuses to release. Responses then add `X-Wayang-Release-Signature-Ed25519` (base64 over the same statement `wayang-release-v1:<sha256>`) and `X-Wayang-Release-Key-Id` (first 16 hex characters of the SHA-256 of the public key). A registry or the Console verifies with `ReleaseSigner.verify(zip, signature, publicKey)` or any Ed25519 implementation; key rotation is by key id. Generate a pair with `openssl genpkey -algorithm ed25519` (private, PKCS#8 PEM) and `openssl pkey -pubout`.
+
+Limits: the signed server's bundle also carries `integrity.hmac` when an HMAC key is set, so a signed and an unsigned server produce different archives for the same project. Nothing yet pulls from a registry; the Console hand-off beyond these headers is open.
 
 ## An agent on its own
 

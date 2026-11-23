@@ -24,6 +24,7 @@
         <module>wayang-rag</module>
         <module>wayang-knowledge</module>
         <module>wayang-endpoints</module>
+        <module>wayang-endpoints-kafka</module>
         <module>wayang-rag-pdf</module>
         <module>wayang-publish</module>
         <module>wayang-deployment</module>
