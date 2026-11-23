@@ -10,7 +10,9 @@ branch_a="${prefix}-branch-a"
 branch_b="${prefix}-branch-b"
 restore_a="${prefix}-restore-a"
 restore_b="${prefix}-restore-b"
-volumes=("${prefix}-source-data" "${prefix}-archive" "${prefix}-base-backup" "${prefix}-branch-a-data" "${prefix}-branch-b-data" "${prefix}-restore-a-data" "${prefix}-restore-b-data")
+failed_missing="${prefix}-restore-missing-wal"
+failed_history="${prefix}-restore-corrupt-history"
+volumes=("${prefix}-source-data" "${prefix}-archive" "${prefix}-base-backup" "${prefix}-branch-a-data" "${prefix}-branch-b-data" "${prefix}-restore-a-data" "${prefix}-restore-b-data" "${prefix}-restore-missing-wal-data" "${prefix}-restore-corrupt-history-data")
 source_vol="${volumes[0]}"
 archive_vol="${volumes[1]}"
 backup_vol="${volumes[2]}"
@@ -18,7 +20,7 @@ a_vol="${volumes[3]}"
 b_vol="${volumes[4]}"
 
 cleanup() {
-  docker rm -f "$restore_b" "$restore_a" "$branch_b" "$branch_a" "$source" >/dev/null 2>&1 || true
+  docker rm -f "$failed_history" "$failed_missing" "$restore_b" "$restore_a" "$branch_b" "$branch_a" "$source" >/dev/null 2>&1 || true
   docker volume rm "${volumes[@]}" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -226,6 +228,62 @@ restore_sibling() {
 : > /tmp/wayang-sibling-forks-recovery.txt
 restore_sibling "$restore_a" "${volumes[5]}" 2 "$a_target_time"
 restore_sibling "$restore_b" "${volumes[6]}" 3 "$b_target_time"
+
+# Negative physical-restore qualification. Each case gets a disposable copy
+# of the simulated retained archive and a fresh clone of the same base backup.
+# PostgreSQL may remain available read-only in recovery or fail to start; it
+# must never report a completed recovery/promoted primary on a damaged chain.
+expect_incomplete_restore() {
+  local container="$1" data_volume="$2" archive_dir="$3" timeline="$4" target_time="$5"
+  docker run --rm --user root -v "$backup_vol:/from:ro" -v "$data_volume:/to" --entrypoint sh postgres:17 \
+    -c "cp -a /from/. /to/ && touch /to/recovery.signal && chown -R postgres:postgres /to"
+  docker run -d --name "$container" \
+    -v "$data_volume:/var/lib/postgresql/data" \
+    -v "$archive_dir:/damaged-wal:ro" \
+    postgres:17 \
+    -c "restore_command=cp /damaged-wal/%f %p" \
+    -c "recovery_target_timeline=$timeline" \
+    -c "recovery_target_time=$target_time" \
+    -c recovery_target_inclusive=off -c recovery_target_action=promote >/dev/null
+  local promoted="false"
+  for attempt in $(seq 1 15); do
+    if docker exec "$container" pg_isready -U postgres -d wayang_forks >/dev/null 2>&1; then
+      local state
+      state="$(docker exec "$container" psql -U postgres -d wayang_forks -At -v ON_ERROR_STOP=1 -c "SELECT pg_is_in_recovery()" 2>/dev/null || echo unavailable)"
+      if [[ "$state" == "f" ]]; then promoted="true"; break; fi
+    fi
+    sleep 2
+  done
+  if [[ "$promoted" == "true" ]]; then
+    docker logs "$container" >&2 || true
+    echo "DAMAGED_ARCHIVE_ACCEPTED: timeline=$timeline container=$container" >&2
+    return 1
+  fi
+  if ! docker inspect "$container" >/dev/null 2>&1; then
+    echo "expected failed recovery container disappeared: $container" >&2
+    return 1
+  fi
+  local failure_log="/tmp/wayang-sibling-forks-${container}.log"
+  docker logs "$container" > "$failure_log" 2>&1 || true
+  if ! grep -Eiq "cp: cannot stat|invalid data in file|could not read from file|could not find a valid checkpoint record|requested timeline" "$failure_log"; then
+    cat "$failure_log" >&2
+    echo "missing expected PostgreSQL recovery failure evidence: $container" >&2
+    return 1
+  fi
+  echo "incomplete_restore_rejected=$container timeline=$timeline" | tee -a /tmp/wayang-sibling-forks-recovery.txt
+}
+
+# Remove a WAL segment explicitly required by the retention plan for timeline 2.
+missing_tli2_wal="$(python3 -c 'import json; p=json.load(open("/tmp/wayang-sibling-forks-plan.json")); print(next((x for x in p["required_wal_files"] if x.startswith("00000002")), ""))')"
+test -n "$missing_tli2_wal" || { echo "planner did not report required timeline-2 WAL" >&2; exit 1; }
+mkdir -p /tmp/wayang-sibling-forks-damaged-missing-wal /tmp/wayang-sibling-forks-damaged-history
+cp -a /tmp/wayang-sibling-forks-simulated/. /tmp/wayang-sibling-forks-damaged-missing-wal/
+rm -f "/tmp/wayang-sibling-forks-damaged-missing-wal/$missing_tli2_wal"
+cp -a /tmp/wayang-sibling-forks-simulated/. /tmp/wayang-sibling-forks-damaged-history/
+printf 'not a PostgreSQL timeline history record\\n' > /tmp/wayang-sibling-forks-damaged-history/00000003.history
+
+expect_incomplete_restore "$failed_missing" "${volumes[7]}" /tmp/wayang-sibling-forks-damaged-missing-wal 2 "$a_target_time"
+expect_incomplete_restore "$failed_history" "${volumes[8]}" /tmp/wayang-sibling-forks-damaged-history 3 "$b_target_time"
 
 {
  echo "timeline2=$a_tli"
