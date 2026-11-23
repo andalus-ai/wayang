@@ -155,6 +155,17 @@ Not verified: tested against scripted fake replies and one local HTTP server spe
 
 Connectors named by an agent's tools (`type`) are wired into the release even when no process calls them. A tool type with no connector is not a release error: the agent is told it has no such tool.
 
+## An agent on its own
+
+A bundle whose only definitions are AGENTs (no process) releases as a **standalone agent service** (`STANDALONE` or `SERVICE` target; the Gamelan target needs a process). Nothing is invented in the bundle: at start the runtime wraps each agent in a one-node plan that is not listed as a process.
+
+```
+GET  /v1/agents
+POST /v1/agents/{id}/chat   {"message": "...", "chatId": "..."}   ->   {"agent", "chatId", "reply", "runId", "status"}
+```
+
+`chatId` (1-128 characters of letters, digits and `. _ : @ -`) is optional; without one each call is its own conversation. The agent's memory key, persona and guardrails apply exactly as in a workflow (the plan is a normal agent task). Templates see the message as `event.text` (also `event.message`, `message`, `input`) and the conversation as `event.chatId`/`chatId`. `message` is at most 16,000 characters; the API key rules are those of the rest of `/v1`. A model failure is a 502 with the run's error. Each call is a run and appears in `GET /v1/runs`. Not covered: streaming replies, and chat on the Gamelan engine (a durable engine keeps processes only).
+
 ## Agent memory
 
 An agent with `options.memory: {key: "{{ event.chatId }}", turns: 10}` is given the last `turns` exchanges of the conversation `key` names
