@@ -150,7 +150,7 @@ public final class JdbcGraphStore implements GraphStore {
                 Visit current = queue.removeFirst();
                 if (current.depth() >= query.maxDepth()) continue;
                 int remaining = query.maxEdges() - foundRelationships.size();
-                List<String> edgeIds = adjacentIds(connection, query, current.entityId(), remaining + 1);
+                List<String> edgeIds = adjacentIds(connection, query, current.entityId(), remaining + 1, foundRelationships.keySet());
                 if (edgeIds.size() > remaining) {
                     edgeIds = edgeIds.subList(0, remaining);
                     truncated = true;
@@ -181,8 +181,8 @@ public final class JdbcGraphStore implements GraphStore {
         });
     }
 
-    private static List<String> adjacentIds(Connection connection, GraphQuery query, String entityId, int limit)
-            throws SQLException {
+    private static List<String> adjacentIds(Connection connection, GraphQuery query, String entityId, int limit,
+            Set<String> excludedIds) throws SQLException {
         String predicate = query.predicates().isEmpty() ? "" : " AND predicate IN ("
                 + String.join(",", java.util.Collections.nCopies(query.predicates().size(), "?")) + ")";
         String direction = switch (query.direction()) {
@@ -190,8 +190,10 @@ public final class JdbcGraphStore implements GraphStore {
             case INCOMING -> "to_entity_id = ?";
             case BOTH -> "(from_entity_id = ? OR to_entity_id = ?)";
         };
+        String excluded = excludedIds.isEmpty() ? "" : " AND relationship_id NOT IN ("
+                + String.join(",", java.util.Collections.nCopies(excludedIds.size(), "?")) + ")";
         String sql = "SELECT relationship_id FROM wayang_kg_relationship WHERE tenant_id = ?"
-                + " AND collection_id = ? AND " + direction + predicate
+                + " AND collection_id = ? AND " + direction + predicate + excluded
                 + " ORDER BY relationship_id LIMIT ?";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             int index = 1;
@@ -200,6 +202,7 @@ public final class JdbcGraphStore implements GraphStore {
             statement.setString(index++, entityId);
             if (query.direction() == GraphQuery.Direction.BOTH) statement.setString(index++, entityId);
             for (String value : query.predicates().stream().sorted().toList()) statement.setString(index++, value);
+            for (String value : excludedIds.stream().sorted().toList()) statement.setString(index++, value);
             statement.setInt(index, Math.max(1, limit));
             List<String> ids = new ArrayList<>();
             try (ResultSet result = statement.executeQuery()) {
