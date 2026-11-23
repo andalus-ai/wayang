@@ -45,6 +45,9 @@ public class ReleaseResource {
         if (r.signature() != null) {
             out.header("X-Wayang-Release-Signature", r.signature());
         }
+        if (r.publicSignature() != null) {
+            out.header("X-Wayang-Release-Signature-Ed25519", r.publicSignature()).header("X-Wayang-Release-Key-Id", r.keyId());
+        }
         return out.build();
     }
 }
