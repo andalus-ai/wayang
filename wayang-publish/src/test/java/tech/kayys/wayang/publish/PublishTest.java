@@ -402,6 +402,70 @@ class PublishTest {
         }
     }
 
+    private static String agentOnlyBundle() {
+        Map<String, Object> agent = new LinkedHashMap<>(Map.of("id", "bot", "name", "Bot", "model", "ollama/x", "systemPrompt", "Be brief.",
+                "inputTemplate", "{{ event.text }}", "maxSteps", 2, "timeoutSeconds", 20));
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("format", "wayang.workspace");
+        m.put("formatVersion", 1);
+        m.put("project", Map.of("name", "Solo"));
+        m.put("definitions", List.of(Map.of("kind", "AGENT", "id", "bot", "publishedVersion", 1, "document", agent)));
+        m.put("config", Map.of());
+        m.put("requires", Map.of("secrets", List.of(), "externalSecrets", List.of(), "oauthConnections", List.of(), "config", List.of()));
+        m.put("integrity", Map.of("sha256", "deadbeef"));
+        return Json.write(m);
+    }
+
+    @Test
+    void anAgentCanBeReleasedOnItsOwnWithoutAWorkflow() throws Exception {
+        var p = Publisher.generate(agentOnlyBundle(), OPTS);
+        assertTrue(p.usesAgents());
+        assertTrue(p.processes().isEmpty());
+        assertTrue(p.files().containsKey("src/main/java/com/acme/release/Agents.java"));
+        build(p); // the generated project compiles
+        assertThrows(IllegalArgumentException.class, () -> Publisher.generate(agentOnlyBundle(),
+                new ReleaseOptions(ReleaseOptions.Target.GAMELAN, "com.acme", "my-release", "1.2.3", "com.acme.release", "0.0.1", 8080)),
+                "a Gamelan release is made of processes");
+        assertThrows(IllegalArgumentException.class, () -> Publisher.generate(Json.write(Map.of("format", "wayang.workspace", "formatVersion", 1,
+                "project", Map.of("name", "x"), "definitions", List.of(), "config", Map.of(),
+                "requires", Map.of("secrets", List.of(), "externalSecrets", List.of(), "oauthConnections", List.of(), "config", List.of()),
+                "integrity", Map.of("sha256", "d"))), OPTS), "nothing to release");
+    }
+
+    /** The separated edition: a production release must not carry the design server, its stores, identity or the management host. */
+    @Test
+    void aReleaseCarriesNoCodeOrRouteBackToTheDesignServer() {
+        java.util.Set<String> design = java.util.Set.of("wayang-api-core", "wayang-api-rest", "wayang-adapter-core", "wayang-adapter-andalus", "wayang-adapter-numu",
+                "wayang-store-jdbc", "wayang-management-client", "wayang-publish", "wayang-deployment", "wayang-deployment-quarkus", "wayang-rag-pdf");
+        for (var target : ReleaseOptions.Target.values()) {
+            var p = Publisher.generate(withTriggers(bundle(true, true, "Prod"),
+                    List.of(trigger("plain", "WEBHOOK", Map.of()), trigger("feed", "POLL", Map.of("source", "rss", "url", "https://example.com/feed.xml"))),
+                    List.of("GH_SECRET")), new ReleaseOptions(target, "com.acme", "my-release", "1.2.3", "com.acme.release", "0.0.1", 8080));
+            String pom = text(p, "pom.xml");
+            String lock = text(p, "src/main/resources/wayang/artifact-lock.json");
+            for (String d : design) {
+                assertFalse(pom.contains("<artifactId>" + d + "</artifactId>"), target + ": pom must not depend on " + d);
+                assertFalse(lock.contains("\"artifactId\":\"" + d + "\""), target + ": artifact lock must not contain " + d);
+            }
+            assertFalse(pom.contains("quarkus-rest") || pom.contains("quarkus-oidc") || pom.contains("quarkus-agroal"), target + ": no REST shell, OIDC or database");
+            p.files().forEach((path, bytes) -> {
+                String content = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+                assertFalse(content.contains("tech.kayys.wayang.api."), target + ": " + path + " references the design API package");
+                assertFalse(content.contains("WAYANG_MODE") || content.contains("WAYANG_STUDIO"), target + ": " + path + " references design-server settings");
+                assertFalse(content.contains("/api/v1"), target + ": " + path + " calls the design server's API");
+            });
+        }
+    }
+
+    @Test
+    void aKafkaTriggerBringsTheKafkaModuleAndIsAcceptedAsASource() {
+        var b = withTriggers(bundle(false, false, "x"), List.of(trigger("t", "POLL", Map.of("source", "kafka"))), List.of());
+        var p = Publisher.generate(b, OPTS);
+        assertTrue(text(p, "pom.xml").contains("wayang-endpoints-kafka"));
+        assertFalse(text(p, "pom.xml").contains("<artifactId>wayang-endpoints</artifactId>"), "only the module that is used");
+        assertTrue(text(p, "src/main/java/com/acme/release/Processes.java").contains("\"kafka\""));
+    }
+
     private static Publisher.Project build0(String bundle) {
         return Publisher.generate(bundle, OPTS);
     }
