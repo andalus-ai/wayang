@@ -74,7 +74,7 @@ final class Kafka {
     }
 
     /** @return the validated topic */
-    String check(Map<String, Object> config) {
+    String check(Map<String, Object> config) throws ConnectorException {
         if (!enabled()) {
             throw new ConnectorException("kafka endpoints are not enabled (the operator sets " + SERVERS_ENV + " and " + PREFIXES_ENV + ")", false);
         }
@@ -89,7 +89,7 @@ final class Kafka {
         return t;
     }
 
-    static List<String> servers(Map<String, Object> config) {
+    static List<String> servers(Map<String, Object> config) throws ConnectorException {
         if (!(config.get("bootstrapServers") instanceof String b) || b.isBlank()) {
             throw new ConnectorException("bootstrapServers is needed (host:port, comma-separated)", false);
         }
@@ -101,7 +101,7 @@ final class Kafka {
     }
 
     /** Common client properties: brokers, security, bounded timeouts; the password goes only into the client. */
-    Properties base(Map<String, Object> config) {
+    Properties base(Map<String, Object> config) throws ConnectorException {
         Properties p = new Properties();
         p.put("bootstrap.servers", String.join(",", servers(config)));
         p.put("client.id", "wayang");
