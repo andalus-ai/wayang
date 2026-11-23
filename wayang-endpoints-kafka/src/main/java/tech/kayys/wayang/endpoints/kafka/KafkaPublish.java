@@ -40,7 +40,7 @@ final class KafkaPublish implements ServiceHandler.Connector {
     }
 
     @Override
-    public Map<String, Object> call(Map<String, Object> inputs) {
+    public Map<String, Object> call(Map<String, Object> inputs) throws ServiceHandler.ConnectorException {
         throw new ServiceHandler.ConnectorException("kafka-publish needs node configuration (bootstrapServers, topic)", false);
     }
 

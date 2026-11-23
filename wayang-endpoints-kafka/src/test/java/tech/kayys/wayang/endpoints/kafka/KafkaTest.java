@@ -61,7 +61,7 @@ class KafkaTest {
                                 return f;
                             }
                             sent.add(r);
-                            return CompletableFuture.completedFuture(new RecordMetadata(new TopicPartition(r.topic(), 1), 40L, 2L, 1700L, 3, 4));
+                            return CompletableFuture.completedFuture(new RecordMetadata(new TopicPartition(r.topic(), 1), 40L, 2, 1700L, 3, 4));
                         }
                         return null; // close and the rest
                     });
@@ -271,7 +271,7 @@ class KafkaTest {
     }
 
     @Test
-    void theExtensionExposesBothEndpointsAndDescribesThem() {
+    void theExtensionExposesBothEndpointsAndDescribesThem() throws Exception {
         var e = new KafkaExtension(kafka(new Fake()));
         assertEquals("wayang-endpoints-kafka", e.id());
         assertEquals(Set.of("kafka-publish"), e.connectors().keySet());

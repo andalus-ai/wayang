@@ -41,6 +41,11 @@ def inventory(directory: Path) -> dict[str, str]:
     return result
 
 
+def inventory_fingerprint(files: dict[str, str]) -> str:
+    encoded = json.dumps(files, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def load_plan(path: Path) -> dict[str, Any]:
     try:
         plan = json.loads(path.read_text(encoding="utf-8"))
@@ -58,6 +63,9 @@ def load_plan(path: Path) -> dict[str, Any]:
             raise SimulationError(f"plan {key} contains duplicate filenames")
     if set(plan["eligible_wal_files"]) & set(plan["required_wal_files"]):
         raise SimulationError("plan marks a required WAL segment as eligible")
+    fingerprint = plan.get("archive_snapshot_sha256")
+    if not isinstance(fingerprint, str) or not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
+        raise SimulationError("plan must contain a valid archive_snapshot_sha256 fingerprint")
     if plan.get("missing_required_files") != []:
         raise SimulationError("plan reports missing required files; refusing simulation")
     return plan
@@ -83,6 +91,8 @@ def simulate(archive: Path, plan_path: Path, destination: Path,
     missing = (candidates | required) - set(before)
     if missing:
         raise SimulationError(f"plan references absent archive files: {', '.join(sorted(missing))}")
+    if inventory_fingerprint(before) != plan["archive_snapshot_sha256"]:
+        raise SimulationError("archive snapshot changed since planning; re-plan and re-approve")
 
     removed = candidates | (required if remove_required_wal else set())
     try:
