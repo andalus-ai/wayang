@@ -105,7 +105,7 @@ public final class Publisher {
             }
         }
         List<String> unknownTriggers = new ArrayList<>();
-        pollSources.stream().filter(x -> !ENDPOINTS_POLL_SOURCES.contains(x))
+        pollSources.stream().filter(x -> !ENDPOINTS_POLL_SOURCES.contains(x) && !KAFKA_POLL_SOURCES.contains(x))
                 .filter(x -> !Connectors.pollers(new tech.kayys.wayang.connectors.UrlGuard(false, Set.of())).containsKey(x))
                 .forEach(x -> unknownTriggers.add("poll source " + x));
         providers.stream().filter(x -> !Connectors.webhookProviders().containsKey(x)).forEach(x -> unknownTriggers.add("webhook provider " + x));
@@ -117,6 +117,9 @@ public final class Publisher {
                 ? KNOWLEDGE_DEP + (used.contains("rag-ingest") ? PDF_DEP : "") : "";
         if (used.stream().anyMatch(ENDPOINTS_CONNECTORS::contains) || pollSources.stream().anyMatch(ENDPOINTS_POLL_SOURCES::contains)) {
             knowledge += ENDPOINTS_DEP; // same mechanism: an extension found through ServiceLoader
+        }
+        if (used.stream().anyMatch(KAFKA_CONNECTORS::contains) || pollSources.stream().anyMatch(KAFKA_POLL_SOURCES::contains)) {
+            knowledge += KAFKA_DEP; // brings kafka-clients; the operator sets the permitted brokers and topic prefixes
         }
         boolean mcp = used.stream().anyMatch(MCP_CONNECTORS::contains);
         boolean needsConnectors = !used.isEmpty() || !pollSources.isEmpty() || !providers.isEmpty();
@@ -341,6 +344,16 @@ public final class Publisher {
                                     <version>${wayang.version}</version>
                                 </dependency>
                         """;
+    /** Needed only for the {@code kafka-publish} connector or a {@code kafka} trigger; its own module because it needs kafka-clients. */
+    static final String KAFKA_DEP = """
+                                <dependency>
+                                    <groupId>tech.kayys.wayang</groupId>
+                                    <artifactId>wayang-endpoints-kafka</artifactId>
+                                    <version>${wayang.version}</version>
+                                </dependency>
+                        """;
+    static final Set<String> KAFKA_POLL_SOURCES = Set.of("kafka");
+    static final Set<String> KAFKA_CONNECTORS = Set.of("kafka-publish");
     /** Trigger sources served by the endpoints extension (found through ServiceLoader, like its connectors). */
     static final Set<String> ENDPOINTS_POLL_SOURCES = Set.of("fs", "jdbc");
     static final Set<String> ENDPOINTS_CONNECTORS = Set.of("sql", "camel", "fs-read", "fs-write", "fs-list", "fs-move", "fs-delete");

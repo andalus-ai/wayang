@@ -457,6 +457,15 @@ class PublishTest {
         }
     }
 
+    @Test
+    void aKafkaTriggerBringsTheKafkaModuleAndIsAcceptedAsASource() {
+        var b = withTriggers(bundle(false, false, "x"), List.of(trigger("t", "POLL", Map.of("source", "kafka"))), List.of());
+        var p = Publisher.generate(b, OPTS);
+        assertTrue(text(p, "pom.xml").contains("wayang-endpoints-kafka"));
+        assertFalse(text(p, "pom.xml").contains("<artifactId>wayang-endpoints</artifactId>"), "only the module that is used");
+        assertTrue(text(p, "src/main/java/com/acme/release/Processes.java").contains("\"kafka\""));
+    }
+
     private static Publisher.Project build0(String bundle) {
         return Publisher.generate(bundle, OPTS);
     }
