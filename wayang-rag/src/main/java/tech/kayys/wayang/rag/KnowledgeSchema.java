@@ -21,7 +21,9 @@ public record KnowledgeSchema(
         }
         Map<String, RelationshipTypeDefinition> normalized = new LinkedHashMap<>();
         if (relationshipTypes != null) {
-            relationshipTypes.forEach((key, definition) -> {
+            for (Map.Entry<String, RelationshipTypeDefinition> entry : relationshipTypes.entrySet()) {
+                String key = entry.getKey();
+                RelationshipTypeDefinition definition = entry.getValue();
                 if (key == null || definition == null
                         || !key.strip().equalsIgnoreCase(definition.predicate())) {
                     throw new RagException("relationship schema key must match its predicate");
@@ -34,7 +36,7 @@ public record KnowledgeSchema(
                         || !entityTypes.containsAll(definition.toEntityTypes())) {
                     throw new RagException("relationship endpoint types must be declared entity types");
                 }
-            });
+            }
         }
         relationshipTypes = Map.copyOf(normalized);
     }
