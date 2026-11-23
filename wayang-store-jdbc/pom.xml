@@ -9,7 +9,7 @@
     </parent>
     <artifactId>wayang-store-jdbc</artifactId>
     <name>Wayang JDBC store</name>
-    <description>Durable WaitRegistry over plain JDBC (no driver bundled)</description>
+    <description>Durable Wayang stores over plain JDBC (no driver bundled)</description>
 
     <dependencies>
         <dependency>
@@ -20,6 +20,11 @@
         <dependency>
             <groupId>tech.kayys.wayang</groupId>
             <artifactId>wayang-api-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>tech.kayys.wayang</groupId>
+            <artifactId>wayang-rag</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
