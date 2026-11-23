@@ -84,6 +84,89 @@ class DeploymentLifecycleReconciliationWorkerTest {
         assertEquals(DeploymentState.ACTIVATING, ledger.find("dep-1").orElseThrow().state());
     }
 
+
+    @Test
+    void reconcilesSuccessfulDeactivationWithoutRedispatch() {
+        var ledger = installedLedger();
+        var lifecycle = new DeploymentLifecycleService(ledger, clock());
+        lifecycle.beginActivation("dep-1", 0, "operator", "activation requested", "corr-1", "begin-activation");
+        lifecycle.recordHealth("dep-1", 1, HealthOutcome.HEALTHY, "operator", "healthy",
+                "corr-1", "activation-health");
+        lifecycle.beginDeactivation("dep-1", 2, "operator", "deactivation requested",
+                "corr-1", "begin-deactivation");
+        var command = command("op-deactivate");
+        var receipt = receipt("DEACTIVATE", command, DeploymentOperationStatus.SUCCEEDED);
+        var targetCalls = new AtomicInteger();
+        var healthCalls = new AtomicInteger();
+        var targets = new DeploymentTargetRegistry();
+        targets.register("target-a", target(targetCalls, healthCalls));
+        var work = new FakeWorkStore();
+        var worker = worker(new FakeReceiptStore(receipt), context("DEACTIVATE", command), work,
+                new DeploymentLifecycleReconciliationService(ledger, lifecycle, targets, clock()));
+
+        var report = worker.runOnce(10);
+
+        assertEquals(1, report.reconciled());
+        assertEquals(DeploymentState.DEACTIVATED, ledger.find("dep-1").orElseThrow().state());
+        assertEquals(0, targetCalls.get());
+        assertEquals(0, healthCalls.get());
+    }
+
+    @Test
+    void reconcilesSuccessfulRollbackOnlyAfterHealthyReadinessWithoutRedispatch() {
+        var ledger = installedLedger();
+        var lifecycle = new DeploymentLifecycleService(ledger, clock());
+        lifecycle.beginActivation("dep-1", 0, "operator", "activation requested", "corr-1", "begin-activation");
+        lifecycle.recordHealth("dep-1", 1, HealthOutcome.HEALTHY, "operator", "healthy",
+                "corr-1", "activation-health");
+        lifecycle.beginRollback("dep-1", 2, "operator", "rollback requested",
+                "corr-1", "begin-rollback");
+        var command = command("op-rollback");
+        var receipt = receipt("ROLLBACK", command, DeploymentOperationStatus.SUCCEEDED);
+        var targetCalls = new AtomicInteger();
+        var healthCalls = new AtomicInteger();
+        var targets = new DeploymentTargetRegistry();
+        targets.register("target-a", target(targetCalls, healthCalls));
+        var work = new FakeWorkStore();
+        var worker = worker(new FakeReceiptStore(receipt), context("ROLLBACK", command), work,
+                new DeploymentLifecycleReconciliationService(ledger, lifecycle, targets, clock()));
+
+        var report = worker.runOnce(10);
+
+        assertEquals(1, report.reconciled());
+        assertEquals(DeploymentState.ROLLED_BACK, ledger.find("dep-1").orElseThrow().state());
+        assertEquals(0, targetCalls.get());
+        assertEquals(1, healthCalls.get());
+    }
+
+    @Test
+    void rejectsContextForDifferentOperationWithoutChangingLifecycle() {
+        var ledger = installedLedger();
+        var lifecycle = new DeploymentLifecycleService(ledger, clock());
+        lifecycle.beginActivation("dep-1", 0, "operator", "activation requested", "corr-1", "begin-activation");
+        lifecycle.recordHealth("dep-1", 1, HealthOutcome.HEALTHY, "operator", "healthy",
+                "corr-1", "activation-health");
+        lifecycle.beginDeactivation("dep-1", 2, "operator", "deactivation requested",
+                "corr-1", "begin-deactivation");
+        var command = command("op-context-mismatch");
+        var receipt = receipt("DEACTIVATE", command, DeploymentOperationStatus.SUCCEEDED);
+        var targetCalls = new AtomicInteger();
+        var healthCalls = new AtomicInteger();
+        var targets = new DeploymentTargetRegistry();
+        targets.register("target-a", target(targetCalls, healthCalls));
+        var work = new FakeWorkStore();
+        var worker = worker(new FakeReceiptStore(receipt), context("ACTIVATE", command), work,
+                new DeploymentLifecycleReconciliationService(ledger, lifecycle, targets, clock()));
+
+        var report = worker.runOnce(10);
+
+        assertEquals(1, report.conflicts());
+        assertEquals(DeploymentLifecycleReconciliationWorkStatus.CONFLICT, work.status(receipt));
+        assertEquals(DeploymentState.DEACTIVATING, ledger.find("dep-1").orElseThrow().state());
+        assertEquals(0, targetCalls.get());
+        assertEquals(0, healthCalls.get());
+    }
+
     private static DeploymentLifecycleReconciliationWorker worker(DeploymentOperationReceiptStore receipts,
             DeploymentLifecycleReconciliationContextStore contexts, FakeWorkStore work,
             DeploymentLifecycleReconciliationService reconciliation) {
@@ -103,8 +186,13 @@ class DeploymentLifecycleReconciliationWorkerTest {
     }
 
     private static DeploymentOperationReceipt receipt(DeploymentCommand command, DeploymentOperationStatus status) {
+        return receipt("ACTIVATE", command, status);
+    }
+
+    private static DeploymentOperationReceipt receipt(String operation, DeploymentCommand command,
+            DeploymentOperationStatus status) {
         return new DeploymentOperationReceipt(command.deploymentId(), command.idempotencyKey(),
-                DeploymentCommandFingerprint.of("ACTIVATE", command), "ACTIVATE", status, 1,
+                DeploymentCommandFingerprint.of(operation, command), operation, status, 1,
                 "target-" + command.idempotencyKey(), status.name(), "target result", null, NOW, NOW);
     }
 
@@ -118,8 +206,12 @@ class DeploymentLifecycleReconciliationWorkerTest {
     }
 
     private static DeploymentLifecycleReconciliationContextStore context(DeploymentCommand command) {
-        var context = new DeploymentLifecycleReconciliationContext("ACTIVATE", command, "operator",
-                "activation requested", "corr-1", Duration.ofSeconds(20));
+        return context("ACTIVATE", command);
+    }
+
+    private static DeploymentLifecycleReconciliationContextStore context(String operation, DeploymentCommand command) {
+        var context = new DeploymentLifecycleReconciliationContext(operation, command, "operator",
+                operation.toLowerCase() + " requested", "corr-1", Duration.ofSeconds(20));
         return new DeploymentLifecycleReconciliationContextStore() {
             @Override public void save(DeploymentLifecycleReconciliationContext ignored) { }
             @Override public Optional<DeploymentLifecycleReconciliationContext> find(DeploymentOperationReceipt receipt) {
