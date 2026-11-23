@@ -1,6 +1,6 @@
 # Knowledge graph and hybrid retrieval
 
-**Status: foundation implemented in this branch; extraction, persistence, workflow nodes and hybrid retrieval are planned follow-up work.** This document distinguishes the current contract from the intended architecture. A type or SPI is not evidence that a complete graph pipeline exists.
+**Status: graph foundation, extraction SPIs, schema validation and conservative alias resolution are implemented.** Evidence lifecycle, persistence, workflow nodes and graph-aware retrieval remain planned. This document distinguishes implemented contracts from the intended architecture. A type or SPI is not evidence that a complete graph pipeline exists.
 
 ## Goals and non-goals
 
@@ -113,6 +113,35 @@ List<RelationshipCandidate> relationships = relationshipExtractor.extract(input,
 
 Extraction does not write to `GraphStore`, call a model, make network requests or mutate the source document. Provider-backed extractors can implement the same SPIs, but their output must pass the same validation and scope checks before resolution or persistence.
 
+
+## Versioned schema validation
+
+**Foundation status: implemented.** `KnowledgeSchema` is an immutable, versioned allow-list of entity types and directed relationship predicates. Each `RelationshipTypeDefinition` declares permitted source and target entity types. A schema rejects relationship definitions that refer to undeclared entity types.
+
+`KnowledgeCandidateValidator` validates extracted candidates before resolution or persistence:
+
+- entity types and relationship predicates must be declared;
+- relationship endpoints must refer to unique, valid entity candidate IDs from the same extraction result;
+- source and target entity types must satisfy the predicate definition;
+- entity and relationship offsets must fit within the normalized source chunk;
+- duplicate candidate IDs are rejected.
+
+Validation is deliberately partial: the result contains valid entities/relationships plus machine-readable `KnowledgeValidationIssue` entries. One malformed candidate does not discard unrelated valid candidates. Callers must inspect and record issues; this API does not silently treat rejected candidates as accepted.
+
+The schema is supplied to validation explicitly in this first slice. A persistent/versioned schema registry and migration lifecycle are not included.
+
+## Conservative entity resolution
+
+**Foundation status: implemented.** `EntityResolver` is the provider-neutral resolution SPI. `ExactAliasEntityResolver` is a deterministic reference implementation that matches only exact normalized canonical names or aliases, with the same entity type, within the requested tenant and collection.
+
+Each candidate receives one of three outcomes:
+
+- `MATCHED`: exactly one in-scope canonical entity matched;
+- `NEW_ENTITY`: no in-scope canonical entity matched; the caller may propose creation;
+- `AMBIGUOUS`: multiple in-scope canonical entities matched and no merge is performed.
+
+The resolver never fuzzy-matches, writes to the graph, creates canonical IDs or crosses tenant/collection boundaries. Other-scope entities are ignored rather than returned as possible matches. Production resolvers may add curated identifiers or human-approved mappings, but must preserve these scope and ambiguity guarantees.
+
 ## Graph storage and query
 
 `GraphStore` is the adapter boundary. The initial in-memory implementation is a reference adapter, not a production persistence solution. A persistent provider should be selected only after its transaction, tenant isolation, indexing, migration, backup and operational characteristics are evaluated.
@@ -177,9 +206,10 @@ Nodes should use the existing advisory mandatory-input convention: missing input
 | 1 | Canonical entity, relationship and evidence contracts | Implemented |
 | 2 | Vendor-neutral GraphStore SPI and bounded in-memory adapter | Implemented |
 | 3 | Entity/relationship extractor SPIs and deterministic regex extractors | Implemented in follow-up PR |
-| 4 | Schema registry, entity resolution and evidence retraction lifecycle | Planned |
-| 5 | Graph-aware retrieval, evidence fusion and citation-preserving context | Planned |
-| 6 | Wayang workflow nodes and optional persistent provider | Planned |
+| 4 | Versioned schema model, candidate validation and exact-alias entity resolution | Implemented |
+| 5 | Persistent schema registry, evidence retraction lifecycle and canonical graph upsert | Planned |
+| 6 | Graph-aware retrieval, evidence fusion and citation-preserving context | Planned |
+| 7 | Wayang workflow nodes and optional persistent provider | Planned |
 
 Suggested follow-up PRs should remain small and independently testable. The first persistent provider should be chosen after the storage requirements are documented; PostgreSQL relational tables may be a simpler initial option than introducing a graph database, while Neo4j or other graph-native stores can remain optional adapters.
 
@@ -198,4 +228,4 @@ Suggested follow-up PRs should remain small and independently testable. The firs
 
 ## Verification
 
-This branch adds unit tests for traversal, tenant/collection isolation, endpoint validation, configured capacity, evidence confidence and traversal truncation. These tests are authored but have not been executed in this change session. CI must run the module tests and the repository's standard Maven verification before merge.
+This branch adds unit tests for schema validation, partial acceptance, predicate/type constraints, dangling endpoints, duplicate IDs, offset bounds, exact alias matching, ambiguity handling and tenant/collection isolation. Together with the existing graph-store and extraction tests, these tests are authored but have not been executed in this change session. CI must run the module tests and the repository's standard Maven verification before merge.
