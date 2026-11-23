@@ -26,8 +26,8 @@ flowchart LR
 | 1 | `wayang-endpoints`: file system connectors and the `fs` trigger source (JDK only) | implemented (this document) |
 | 2 | `sql` connector and `jdbc` trigger source over JDBC (driver supplied by the deployment, parameterized queries only) | implemented (below) |
 | 3 | SFTP/FTP, Kafka and AMQP/JMS as separate optional modules (each needs a client library) | **proposed** |
-| 4 | Optional `camel` bridge: call a Camel route or endpoint URI from a step, for teams that already have Camel components (DSL routes, Kamelets) | **proposed**; heavy dependency, never in the core |
-| 5 | Releases that serve poll sources from extensions (today a release can run `fs` connectors, but not an `fs` trigger) | **proposed** |
+| 4 | `camel` connector: send a message to an Apache Camel route (DSL, Kamelet) exposed over HTTP; Camel runs in its own process, nothing of Camel is embedded | **implemented** (JDK only; tested against a local HTTP server, never a real Camel runtime) |
+| 5 | Releases that serve poll sources from extensions: an `fs` or `jdbc` POLL trigger now generates a release with `wayang-endpoints` and wires `Extensions.load` (tenant `release`) | **implemented** (CI-verified only; not run in a deployed release) |
 
 ## File endpoints (`wayang-endpoints`)
 
@@ -70,3 +70,17 @@ Why it is safe to expose to workflows and agents:
 - Network file systems and clock skew can break "settled" detection; raise `settleSeconds`.
 - A design-only server (`WAYANG_MODE=design`) refuses triggers like any other.
 - Unit-tested (temp directories, symlink, traversal, tenant isolation, atomic write, poller order, settle, cursor). The SQL steps are tested against a fake JDBC driver (statements, binding, read-only enforcement, bounds, hidden errors, cursor): **never run against a real database or driver**. Not run on a network file system or with real inbound traffic.
+
+
+## Camel bridge (`camel`)
+
+Wayang does not re-implement Camel. Write the integration in Camel's own DSL (YAML, XML or Java route, or a Kamelet binding) and run it with Camel Main, Camel Quarkus, Camel K or JBang, exposing the route over HTTP (`platform-http` or the `rest` DSL). The `camel` step sends it a message and returns the answer.
+
+| Config | Meaning |
+|---|---|
+| `baseUrl` | http(s) URL of the Camel runtime (required); same SSRF guard as `http`, a private address needs `WAYANG_CONNECTORS_ALLOW_PRIVATE=true` |
+| `route` | plain path below `baseUrl`, for example `orders/enrich` (no `..`, query or scheme) |
+| `method` | default `POST` |
+| `headers` | for example `Authorization: ${secret:CAMEL_TOKEN}` |
+
+Inputs `body` (JSON or text) and `headers` (become Camel message headers). Output and retry rules are those of `http` (5xx, 408, 425 and 429 retry). Limits: request/response over HTTP only; no direct Camel endpoint URIs such as `kafka:` or `sftp:` from Wayang, put those in the Camel route.

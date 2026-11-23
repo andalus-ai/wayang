@@ -28,18 +28,30 @@ public final class EndpointsExtension implements WayangExtension {
     }
 
     EndpointsExtension(FsRoot root, Clock clock) {
-        this(root, clock, Jdbc.fromEnvironment());
+        this(root, clock, Jdbc.fromEnvironment(), guardFromEnvironment());
     }
 
     EndpointsExtension(FsRoot root, Clock clock, Jdbc jdbc) {
+        this(root, clock, jdbc, UrlGuard.strict());
+    }
+
+    EndpointsExtension(FsRoot root, Clock clock, Jdbc jdbc, UrlGuard guard) {
         this.connectors = Map.of(
                 "sql", new SqlConnector(jdbc),
+                "camel", new CamelConnector(guard),
                 "fs-read", new FsConnectors.Read(root),
                 "fs-write", new FsConnectors.Write(root),
                 "fs-list", new FsConnectors.ListFiles(root),
                 "fs-move", new FsConnectors.Move(root),
                 "fs-delete", new FsConnectors.Delete(root));
         this.pollers = Map.of("fs", new FsPoller(root, clock), "jdbc", new JdbcPoller(jdbc));
+    }
+
+    private static UrlGuard guardFromEnvironment() {
+        String h = System.getenv("WAYANG_CONNECTORS_ALLOWED_HOSTS");
+        Set<String> hosts = h == null || h.isBlank() ? Set.of()
+                : Set.copyOf(java.util.Arrays.stream(h.split(",")).map(String::trim).filter(x -> !x.isEmpty()).toList());
+        return new UrlGuard("true".equalsIgnoreCase(System.getenv("WAYANG_CONNECTORS_ALLOW_PRIVATE")), hosts);
     }
 
     @Override
@@ -82,6 +94,11 @@ public final class EndpointsExtension implements WayangExtension {
                                 "query", Map.of("type", "string", "description", "SQL with ? placeholders"),
                                 "mode", Map.of("type", "string", "enum", List.of("read", "write")),
                                 "maxRows", Map.of("type", "integer", "minimum", 1, "maximum", Jdbc.MAX_ROWS)), List.of("url", "query")),
+                component("camel", "Camel route", "Send a message to an Apache Camel route (DSL or Kamelet) exposed over HTTP and return its answer; Camel runs in its own process", "camel.call",
+                        Map.of("baseUrl", Map.of("type", "string", "description", "http(s) URL of the Camel runtime"),
+                                "route", Map.of("type", "string", "description", "path of the route, e.g. orders/enrich"),
+                                "method", Map.of("type", "string", "enum", List.of("GET", "POST", "PUT", "PATCH", "DELETE")),
+                                "headers", Map.of("type", "object", "description", "use ${secret:NAME} for credentials")), List.of("baseUrl")),
                 component("fs-delete", "Delete file", "Delete one file (never a directory)", "files.delete", Map.of(), List.of()));
     }
 
