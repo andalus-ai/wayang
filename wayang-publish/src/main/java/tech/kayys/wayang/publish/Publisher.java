@@ -336,7 +336,7 @@ public final class Publisher {
                         """;
     /** Trigger sources served by the endpoints extension (found through ServiceLoader, like its connectors). */
     static final Set<String> ENDPOINTS_POLL_SOURCES = Set.of("fs", "jdbc");
-    static final Set<String> ENDPOINTS_CONNECTORS = Set.of("sql", "fs-read", "fs-write", "fs-list", "fs-move", "fs-delete");
+    static final Set<String> ENDPOINTS_CONNECTORS = Set.of("sql", "camel", "fs-read", "fs-write", "fs-list", "fs-move", "fs-delete");
     static final Set<String> KNOWLEDGE_CONNECTORS = Set.of("rag-ingest", "rag-search", "rag-forget", "rag-list", "file-put", "file-fetch", "file-get", "file-list", "file-delete", "file-purge");
     /** Needed only when the {@code openapi} connector is used; the runtime finds the extension through ServiceLoader. */
     static final String MCP_DEP = """

@@ -131,6 +131,8 @@ public final class NodeCatalog {
                         "settleSeconds", Map.of("type", List.of("integer", "string"), "description", "fs poll source: wait this long after a file's last change before handing it over (default 2)"),
                         "includeExisting", Map.of("type", List.of("boolean", "string"), "description", "fs poll source: also hand over files already there at the first poll"),
                         "urlPrefix", Map.of("type", "string", "description", "file-fetch: the address the configured headers may be sent to (the fetched url must stay under it)"),
+                        "baseUrl", Map.of("type", "string", "description", "camel: http(s) URL of the Camel runtime that exposes the route"),
+                        "route", Map.of("type", "string", "description", "camel: path of the route below baseUrl, for example orders/enrich"),
                         "headers", Map.of("type", "object", "description", "http, file-fetch: request headers; may use ${secret:NAME}"),
                         "query", Map.of("type", List.of("object", "string"), "description", "http: an object of query parameters; graphql: the query text, fixed in the definition (inputs are its variables)"),
                         "timeoutMs", Map.of("type", "integer", "minimum", 100, "maximum", 60000),
