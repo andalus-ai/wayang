@@ -25,8 +25,8 @@ import org.junit.jupiter.api.Test;
 /**
  * Exercises the persisted receipt, encrypted context and work queue together.
  *
- * The lifecycle ledger remains the in-memory reference implementation here; this test focuses on
- * the durable recovery stores and proves that a restarted worker does not redispatch or reapply work.
+ * The JDBC lifecycle ledger, receipt, encrypted context and work queue share one database.
+ * This test proves that a restarted worker does not redispatch or reapply completed work.
  */
 class JdbcDeploymentLifecycleReconciliationIntegrationTest {
     private static final Instant NOW = Instant.parse("2026-11-22T12:00:00Z");
@@ -180,12 +180,6 @@ class JdbcDeploymentLifecycleReconciliationIntegrationTest {
                       PRIMARY KEY (deployment_id, operation_key),
                       FOREIGN KEY (deployment_id, operation_key)
                         REFERENCES wayang_deployment_operation_receipt(deployment_id, operation_key))
-                    """);
-            statement.execute("""
-                    INSERT INTO wayang_deployment_snapshot
-                    (deployment_id, tenant_id, environment, target_id, release_id, state, version, updated_at, last_reason)
-                    VALUES ('dep-jdbc', 'tenant-a', 'prod', 'target-a', 'release-7',
-                            'INSTALLED', 0, CURRENT_TIMESTAMP, 'installed')
                     """);
         }
     }
