@@ -93,25 +93,33 @@ public final class JdbcGraphStore implements GraphStore {
 
     @Override
     public Optional<KnowledgeEntity> findEntity(String tenantId, String collectionId, String entityId) {
-        return withConnection(connection -> findEntity(connection, tenantId, collectionId, entityId, false));
+        if (entityId == null || entityId.isBlank()) return Optional.empty();
+        String tenant = required(tenantId, "tenantId");
+        String collection = required(collectionId, "collectionId");
+        String id = required(entityId, "entityId");
+        return withConnection(connection -> findEntity(connection, tenant, collection, id, false));
     }
 
     @Override
     public EvidenceRetractionResult retractEvidence(
             String tenantId, String collectionId, String sourceId, String sourceVersion) {
-        required(tenantId, "tenantId");
-        required(collectionId, "collectionId");
-        required(sourceId, "sourceId");
-        required(sourceVersion, "sourceVersion");
+        tenantId = required(tenantId, "tenantId");
+        collectionId = required(collectionId, "collectionId");
+        sourceId = required(sourceId, "sourceId");
+        sourceVersion = required(sourceVersion, "sourceVersion");
+        String tenant = tenantId;
+        String collection = collectionId;
+        String source = sourceId;
+        String version = sourceVersion;
         return transaction(connection -> {
             List<String> affectedRelationships = relationshipsWithEvidence(
-                    connection, tenantId, collectionId, sourceId, sourceVersion);
+                    connection, tenant, collection, source, version);
             int entityRemoved = deleteEvidence(connection, "wayang_kg_entity_evidence",
-                    tenantId, collectionId, sourceId, sourceVersion);
+                    tenant, collection, source, version);
             int relationshipRemoved = deleteEvidence(connection, "wayang_kg_relationship_evidence",
-                    tenantId, collectionId, sourceId, sourceVersion);
+                    tenant, collection, source, version);
             int relationshipsDeleted = deleteUnsupportedRelationships(
-                    connection, tenantId, collectionId, affectedRelationships);
+                    connection, tenant, collection, affectedRelationships);
             return new EvidenceRetractionResult(entityRemoved, relationshipRemoved, relationshipsDeleted);
         });
     }
