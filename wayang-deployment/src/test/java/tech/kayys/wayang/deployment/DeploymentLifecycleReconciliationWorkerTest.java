@@ -215,8 +215,9 @@ class DeploymentLifecycleReconciliationWorkerTest {
         return new DeploymentLifecycleReconciliationContextStore() {
             @Override public void save(DeploymentLifecycleReconciliationContext ignored) { }
             @Override public Optional<DeploymentLifecycleReconciliationContext> find(DeploymentOperationReceipt receipt) {
-                return receipt.commandFingerprint().equals(context.commandFingerprint())
-                        ? Optional.of(context) : Optional.empty();
+                // Model a successfully decoded durable payload even when its identity is wrong;
+                // the worker, not the store lookup, must classify that mismatch as a conflict.
+                return Optional.of(context);
             }
         };
     }
