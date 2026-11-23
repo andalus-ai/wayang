@@ -50,7 +50,7 @@ The same definitions work in both: a project built in the all-in-one mode is rel
 | Management Agent: heartbeat, inventory, command polling with handler gating, artifact download | implemented in `wayang-management-client` (`docs/architecture/`); opt-in; verified only against test servers |
 | Wayang Console (fleet registry, orchestration, digital twin, UI) | **separate repository**, not part of this one |
 | **Mode switch** `WAYANG_MODE=community|design` on the design server (`Mode`, `WayangApi`) | implemented and unit-tested in `wayang-api-core`; see below. Not exercised through the Quarkus REST shell (it compiles against stubs only) |
-| One all-in-one distribution (one image or jar that serves Studio, API and execution) | **partly**: `wayang.auth.mode=local` lets the API run with no identity service (`docs/IDENTITY.md`); serving Studio from the same process and the image are **proposed** (the API's strict response headers, `default-src 'none'`, need a per-path exception first) |
+| One all-in-one distribution (one image or jar that serves Studio, API and execution) | **partly**: `wayang.auth.mode=local` lets the API run with no identity service (`docs/IDENTITY.md`); `wayang.studio.dir` serves the Studio web build from the API process (`StudioFiles` unit-tested; the Quarkus route compiles on CI but was never started, and Studio was not built here); the image/compose is **proposed** |
 | A dedicated agent-runtime generator (an agent definition straight to a service, without a wrapping workflow) | **proposed** |
 | Design-only server (no run execution) | implemented as `WAYANG_MODE=design`; serving Studio separately from the API is **proposed** |
 | Pro / Enterprise licensing and which features sit in which edition | **not decided**; this document describes topology, not entitlements |
@@ -80,3 +80,16 @@ Any other value is an error at start-up (never a silent fall-back to executing).
 3. An agent-runtime generator and an agent-oriented release profile (HTTP chat/invoke API, memory, knowledge, tools) as a first-class release kind.
 4. Release signing and an artifact registry hand-off the Console can pull from (`docs/architecture/release-artifact-resolution.md`).
 5. Console integration tests against a real Console once it publishes a stable management protocol (`wayang-core`).
+
+## All-in-one on one machine
+
+```
+flutter build web --release                          # in studio/
+export WAYANG_AUTH_MODE=local WAYANG_AUTH_LOCAL_API_KEY=<24+ random characters>
+export QUARKUS_OIDC_ENABLED=false QUARKUS_HTTP_AUTH_PERMISSION_API_POLICY=permit
+export WAYANG_STUDIO_DIR=$PWD/studio/build/web
+java -jar wayang-api-rest/target/quarkus-app/quarkus-run.jar
+# open http://localhost:8080 and enter the key in Studio's connection settings
+```
+
+Studio is served by the same process; only GET/HEAD outside `/api/`, `/ws/`, `/hooks/`, `/oauth/`, `/admin/`, `/openapi`, `/q/` is answered by it. Unverified end to end: the recipe above has not been run.
