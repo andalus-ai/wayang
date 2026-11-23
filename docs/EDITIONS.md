@@ -50,7 +50,7 @@ The same definitions work in both: a project built in the all-in-one mode is rel
 | Management Agent: heartbeat, inventory, command polling with handler gating, artifact download | implemented in `wayang-management-client` (`docs/architecture/`); opt-in; verified only against test servers |
 | Wayang Console (fleet registry, orchestration, digital twin, UI) | **separate repository**, not part of this one |
 | **Mode switch** `WAYANG_MODE=community|design` on the design server (`Mode`, `WayangApi`) | implemented and unit-tested in `wayang-api-core`; see below. Not exercised through the Quarkus REST shell (it compiles against stubs only) |
-| One all-in-one distribution (one image or jar that serves Studio, API and execution) | **proposed**: the pieces exist but are assembled by hand |
+| One all-in-one distribution (one image or jar that serves Studio, API and execution) | **partly**: `wayang.auth.mode=local` lets the API run with no identity service (`docs/IDENTITY.md`); serving Studio from the same process and the image are **proposed** (the API's strict response headers, `default-src 'none'`, need a per-path exception first) |
 | A dedicated agent-runtime generator (an agent definition straight to a service, without a wrapping workflow) | **proposed** |
 | Design-only server (no run execution) | implemented as `WAYANG_MODE=design`; serving Studio separately from the API is **proposed** |
 | Pro / Enterprise licensing and which features sit in which edition | **not decided**; this document describes topology, not entitlements |
