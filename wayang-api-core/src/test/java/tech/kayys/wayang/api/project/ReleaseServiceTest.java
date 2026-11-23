@@ -107,6 +107,55 @@ class ReleaseServiceTest {
     }
 
     @Test
+    void aReleaseCarriesItsDigestAndASignatureOnlyWhenTheServerHoldsAKey() throws Exception {
+        String pid = project();
+        var plain = releases.release(acme, pid, null);
+        assertEquals(WorkspaceBundle.sha256Hex(plain.zip()), plain.sha256());
+        assertEquals(64, plain.sha256().length());
+        assertNull(plain.signature(), "no signing key: no signature");
+        assertEquals(plain.sha256(), releases.release(acme, pid, null).sha256(), "the archive is deterministic");
+
+        byte[] key = new byte[32];
+        java.util.Arrays.fill(key, (byte) 7);
+        var signing = new ReleaseService(new WorkspaceService(api, triggers, config, secrets, key, clock), api, "0.0.1");
+        var signed = signing.release(acme, pid, null);
+        assertEquals(WorkspaceBundle.releaseSignature(signed.zip(), key), signed.signature());
+        byte[] other = new byte[32];
+        assertNotEquals(signed.signature(), WorkspaceBundle.releaseSignature(signed.zip(), other), "another key signs differently");
+        byte[] tampered = signed.zip().clone();
+        tampered[tampered.length / 2] ^= 1;
+        assertNotEquals(signed.signature(), WorkspaceBundle.releaseSignature(tampered, key), "a changed archive no longer matches");
+    }
+
+    @Test
+    void aReleaseCanBeSignedWithAPublicKeyAnyoneCanVerify() throws Exception {
+        String pid = project();
+        var kp = java.security.KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
+        var other = java.security.KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
+        java.util.Base64.Encoder b64 = java.util.Base64.getMimeEncoder(64, "\n".getBytes());
+        String priv = "-----BEGIN PRIVATE KEY-----\n" + b64.encodeToString(kp.getPrivate().getEncoded()) + "\n-----END PRIVATE KEY-----\n";
+        String pub = java.util.Base64.getEncoder().encodeToString(kp.getPublic().getEncoded());
+        var signer = new ReleaseSigner(priv, pub);
+        assertFalse(signer.toString().contains("PRIVATE"));
+        var r = new ReleaseService(ws, api, "0.0.1").withSigner(signer).release(acme, pid, null);
+        assertEquals(signer.keyId(), r.keyId());
+        assertEquals(16, r.keyId().length());
+        assertTrue(ReleaseSigner.verify(r.zip(), r.publicSignature(), kp.getPublic()), "verifiable with the public key alone");
+        assertFalse(ReleaseSigner.verify(r.zip(), r.publicSignature(), other.getPublic()), "not with another key");
+        byte[] tampered = r.zip().clone();
+        tampered[tampered.length / 2] ^= 1;
+        assertFalse(ReleaseSigner.verify(tampered, r.publicSignature(), kp.getPublic()), "not for another archive");
+        assertFalse(ReleaseSigner.verify(r.zip(), "not base64!", kp.getPublic()));
+        assertNull(releases.release(acme, pid, null).publicSignature(), "unconfigured: no signature");
+
+        String otherPub = java.util.Base64.getEncoder().encodeToString(other.getPublic().getEncoded());
+        var mismatch = assertThrows(IllegalArgumentException.class, () -> new ReleaseSigner(priv, otherPub));
+        assertFalse(mismatch.getMessage().contains(java.util.Base64.getEncoder().encodeToString(kp.getPrivate().getEncoded())));
+        assertThrows(IllegalArgumentException.class, () -> new ReleaseSigner("garbage", pub));
+        assertThrows(IllegalArgumentException.class, () -> new ReleaseSigner(priv, "garbage"));
+    }
+
+    @Test
     void aReleaseIsBuiltFromPublishedVersionsAndCarriesOnlyWhatItNeeds() throws Exception {
         String pid = project();
         // a newer draft of the process exists: the release must use the published one and say so

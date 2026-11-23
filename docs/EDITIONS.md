@@ -50,7 +50,7 @@ The same definitions work in both: a project built in the all-in-one mode is rel
 | Management Agent: heartbeat, inventory, command polling with handler gating, artifact download | implemented in `wayang-management-client` (`docs/architecture/`); opt-in; verified only against test servers |
 | Wayang Console (fleet registry, orchestration, digital twin, UI) | **separate repository**, not part of this one |
 | **Mode switch** `WAYANG_MODE=community|design` on the design server (`Mode`, `WayangApi`) | implemented and unit-tested in `wayang-api-core`; see below. Not exercised through the Quarkus REST shell (it compiles against stubs only) |
-| One all-in-one distribution (one image or jar that serves Studio, API and execution) | **partly**: `wayang.auth.mode=local` lets the API run with no identity service (`docs/IDENTITY.md`); `wayang.studio.dir` serves the Studio web build from the API process (`StudioFiles` unit-tested; the Quarkus route compiles on CI but was never started, and Studio was not built here); the image/compose is **proposed** |
+| One all-in-one distribution (one image or jar that serves Studio, API and execution) | **partly**: `wayang.auth.mode=local` lets the API run with no identity service (`docs/IDENTITY.md`); `wayang.studio.dir` serves the Studio web build from the API process (`StudioFiles` unit-tested; the Quarkus route compiles on CI but was never started, and Studio was not built here); `deploy/Dockerfile.all-in-one` and `deploy/docker-compose.all-in-one.yml` exist but were **never built or run** (no Docker daemon, Flutter SDK or Maven Central here); data is in memory unless a database is configured |
 | A dedicated agent-runtime generator (an agent definition straight to a service, without a wrapping workflow) | **implemented** as an agent-only release with `POST /v1/agents/{id}/chat` (`docs/RELEASE.md`); runtime path tested end to end locally, generated project compiled on CI only; not on the Gamelan target, no streaming |
 | Design-only server (no run execution) | implemented as `WAYANG_MODE=design`; serving Studio separately from the API is **proposed** |
 | Pro / Enterprise licensing and which features sit in which edition | **not decided**; this document describes topology, not entitlements |
@@ -62,7 +62,7 @@ The same definitions work in both: a project built in the all-in-one mode is rel
 | unset, `community` (also `all-in-one`, `development`) | design and execute in one server |
 | `design` (also `design-only`) | the server designs but never executes: starting a run, completing a task, sending a message and firing timers answer **409** ("this server runs in design mode"). Definitions, validation, versions, projects, secrets, templates and releases work as usual |
 
-Any other value is an error at start-up (never a silent fall-back to executing). Use `design` for the production Studio of the separated edition and ship runs through generated runtimes. Triggers and chat channels start runs, so a design server refuses to create or switch one on (409), and its trigger ticker starts nothing; switching one off or deleting it still works. `GET /api/v1/mode` returns `{mode, executes}`; Studio hides the Runs and Tasks screens when `executes` is false (an older server without the endpoint is treated as executing). Listing and reading runs still works (it is empty unless the server previously ran in community mode).
+Any other value is an error at start-up (never a silent fall-back to executing). Use `design` for the production Studio of the separated edition and ship runs through generated runtimes. Do not configure triggers or chat channels on a design server: they start runs, which it refuses. `GET /api/v1/mode` returns `{mode, executes}`; Studio hides the Runs and Tasks screens when `executes` is false (an older server without the endpoint is treated as executing). Listing and reading runs still works (it is empty unless the server previously ran in community mode).
 
 ## Rules that keep the two modes one product
 
@@ -93,3 +93,12 @@ java -jar wayang-api-rest/target/quarkus-app/quarkus-run.jar
 ```
 
 Studio is served by the same process; only GET/HEAD outside `/api/`, `/ws/`, `/hooks/`, `/oauth/`, `/admin/`, `/openapi`, `/q/` is answered by it. Unverified end to end: the recipe above has not been run.
+
+### Container (unbuilt)
+
+```
+export WAYANG_AUTH_LOCAL_API_KEY=$(openssl rand -hex 24)
+docker compose -f deploy/docker-compose.all-in-one.yml up --build
+```
+
+The compose file publishes on `127.0.0.1` only, refuses to start without the key, and runs as a non-root user. The store is in memory by default: stopping the container loses everything; set `WAYANG_STORE=jdbc` and a datasource for durability. Studio is built with `WAYANG_API=http://localhost:8080`; build with `--build-arg WAYANG_API=...` if the server is reached under another address.

@@ -44,6 +44,11 @@ public final class WorkspaceService {
     private final ConfigService config; // nullable
     private final SecretService secrets; // nullable
     private final byte[] signingKey; // nullable
+
+    /** The release signature of an archive when this server has a signing key, else null. */
+    public String signRelease(byte[] zip) {
+        return signingKey == null ? null : WorkspaceBundle.releaseSignature(zip, signingKey);
+    }
     private final Clock clock;
 
     public WorkspaceService(WayangApi api, TriggerService triggers, ConfigService config, SecretService secrets, byte[] signingKey,
