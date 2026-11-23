@@ -88,6 +88,31 @@ A source deletion or reprocessing must retract only the evidence contributed by 
 
 Extractor implementations should be pluggable: deterministic rules, NER libraries or model-backed extractors. A model is optional. Model output is untrusted input and must pass the same schema, scope and size validation as any other extractor.
 
+## Entity and relationship extraction
+
+**Foundation status: implemented in the follow-up extraction SPI.** The extraction API lives in `wayang-rag` and is independent of persistence and model providers.
+
+- `KnowledgeExtractionInput` binds one normalized `Document` and `Chunk` to a tenant, collection and source version. The chunk must belong to the supplied document.
+- `EntityExtractor` returns chunk-local `EntityCandidate` mentions.
+- `RelationshipExtractor` receives those candidates and returns directed `RelationshipCandidate` edges that reference candidate IDs from the same extraction result.
+- `RegexEntityExtractor` and `RegexRelationshipExtractor` provide deterministic, dependency-free implementations for explicitly configured patterns.
+
+Candidate IDs are deterministic for a given tenant, collection, source, source version, chunk, type/predicate and offsets. They are mention identities, not canonical graph entity IDs. The next entity-resolution stage maps mentions to canonical `KnowledgeEntity` records. A changed source version intentionally produces different mention IDs.
+
+Relationship rules bind capture groups to entity candidates at the exact same chunk offsets. If a matching mention is missing or ambiguous, the relationship is skipped rather than guessed. Both extractors have configurable output caps. Regex patterns are trusted application configuration; do not expose arbitrary regular-expression configuration to untrusted users.
+
+A typical composition is:
+
+```java
+KnowledgeExtractionInput input = new KnowledgeExtractionInput(
+        tenantId, collectionId, sourceVersion, document, chunk);
+
+List<EntityCandidate> entities = entityExtractor.extract(input);
+List<RelationshipCandidate> relationships = relationshipExtractor.extract(input, entities);
+```
+
+Extraction does not write to `GraphStore`, call a model, make network requests or mutate the source document. Provider-backed extractors can implement the same SPIs, but their output must pass the same validation and scope checks before resolution or persistence.
+
 ## Graph storage and query
 
 `GraphStore` is the adapter boundary. The initial in-memory implementation is a reference adapter, not a production persistence solution. A persistent provider should be selected only after its transaction, tenant isolation, indexing, migration, backup and operational characteristics are evaluated.
@@ -151,7 +176,7 @@ Nodes should use the existing advisory mandatory-input convention: missing input
 |---|---|---|
 | 1 | Canonical entity, relationship and evidence contracts | Implemented |
 | 2 | Vendor-neutral GraphStore SPI and bounded in-memory adapter | Implemented |
-| 3 | Entity/relationship extractor SPIs and deterministic first extractor | Planned |
+| 3 | Entity/relationship extractor SPIs and deterministic regex extractors | Implemented in follow-up PR |
 | 4 | Schema registry, entity resolution and evidence retraction lifecycle | Planned |
 | 5 | Graph-aware retrieval, evidence fusion and citation-preserving context | Planned |
 | 6 | Wayang workflow nodes and optional persistent provider | Planned |
