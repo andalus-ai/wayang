@@ -265,7 +265,7 @@ expect_incomplete_restore() {
   fi
   local failure_log="/tmp/wayang-sibling-forks-${container}.log"
   docker logs "$container" > "$failure_log" 2>&1 || true
-  if ! grep -Eiq "cp: cannot stat|invalid data in file|could not read from file|could not find a valid checkpoint record|requested timeline" "$failure_log"; then
+  if ! grep -Eiq "cp: cannot stat|invalid data in file|syntax error in history file|could not read from file|could not find a valid checkpoint record|requested timeline" "$failure_log"; then
     cat "$failure_log" >&2
     echo "missing expected PostgreSQL recovery failure evidence: $container" >&2
     return 1
