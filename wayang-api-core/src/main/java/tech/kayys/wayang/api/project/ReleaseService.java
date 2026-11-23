@@ -25,17 +25,25 @@ public final class ReleaseService {
             List<String> requiredConfig, List<String> files, List<String> notes, String target, String artifactId, String version) {
     }
 
-    public record Release(Plan plan, byte[] zip, String filename) {
+    /** @param sha256 of the archive; @param signature HMAC proving it came from a server holding the signing key, null without one */
+    public record Release(Plan plan, byte[] zip, String filename, String sha256, String signature, String publicSignature, String keyId) {
     }
 
     private final WorkspaceService workspace;
     private final WayangApi api;
     private final String wayangVersion;
+    private volatile ReleaseSigner signer; // optional public-key signer
 
     public ReleaseService(WorkspaceService workspace, WayangApi api, String wayangVersion) {
         this.workspace = workspace;
         this.api = api;
         this.wayangVersion = wayangVersion;
+    }
+
+    /** Also sign every archive with an Ed25519 key anyone can verify with the public key. */
+    public ReleaseService withSigner(ReleaseSigner signer) {
+        this.signer = signer;
+        return this;
     }
 
     public Plan plan(Principal p, String projectId, Map<String, Object> options) {
@@ -67,7 +75,9 @@ public final class ReleaseService {
         Object integrity = bundle.get("integrity") instanceof Map<?, ?> i ? i.get("sha256") : null;
         Plan plan = new Plan(integrity == null ? "" : String.valueOf(integrity), gen.processes(), gen.components(), gen.connectors(), gen.usesAgents(),
                 gen.requiredSecrets(), cfg, gen.files().keySet().stream().sorted().toList(), gen.notes(), o.target().name(), o.artifactId(), o.version());
-        return new Release(plan, Publisher.zip(gen), o.artifactId() + "-" + o.version() + ".zip");
+        byte[] zip = Publisher.zip(gen);
+        return new Release(plan, zip, o.artifactId() + "-" + o.version() + ".zip", WorkspaceBundle.sha256Hex(zip), workspace.signRelease(zip),
+                signer == null ? null : signer.sign(zip), signer == null ? null : signer.keyId());
     }
 
     static String defaultArtifact(String projectName) {
