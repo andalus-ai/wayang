@@ -9,7 +9,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -210,35 +209,52 @@ public final class JdbcGraphStore implements GraphStore {
             Connection connection, String tenant, String collection, String id, boolean lock) throws SQLException {
         String sql = "SELECT " + ENTITY_COLUMNS + " FROM wayang_kg_entity"
                 + " WHERE tenant_id = ? AND collection_id = ? AND entity_id = ?" + (lock ? " FOR UPDATE" : "");
+        String type;
+        String canonicalName;
+        String aliasesJson;
+        String propertiesJson;
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, tenant);
             statement.setString(2, collection);
             statement.setString(3, id);
             try (ResultSet result = statement.executeQuery()) {
                 if (!result.next()) return Optional.empty();
-                return Optional.of(new KnowledgeEntity(tenant, collection, id, result.getString(1),
-                        result.getString(2), strings(result.getString(3)), stringMap(result.getString(4)),
-                        readEvidence(connection, "wayang_kg_entity_evidence", "entity_id", id, tenant, collection)));
+                type = result.getString(1);
+                canonicalName = result.getString(2);
+                aliasesJson = result.getString(3);
+                propertiesJson = result.getString(4);
             }
         }
+        return Optional.of(new KnowledgeEntity(tenant, collection, id, type, canonicalName,
+                strings(aliasesJson), stringMap(propertiesJson),
+                readEvidence(connection, "wayang_kg_entity_evidence", "entity_id", id, tenant, collection)));
     }
 
     private Optional<KnowledgeRelationship> findRelationship(
             Connection connection, String tenant, String collection, String id, boolean lock) throws SQLException {
         String sql = "SELECT " + RELATIONSHIP_COLUMNS + " FROM wayang_kg_relationship"
                 + " WHERE tenant_id = ? AND collection_id = ? AND relationship_id = ?" + (lock ? " FOR UPDATE" : "");
+        String fromEntityId;
+        String predicate;
+        String toEntityId;
+        String propertiesJson;
+        double confidence;
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, tenant);
             statement.setString(2, collection);
             statement.setString(3, id);
             try (ResultSet result = statement.executeQuery()) {
                 if (!result.next()) return Optional.empty();
-                return Optional.of(new KnowledgeRelationship(tenant, collection, id, result.getString(1),
-                        result.getString(2), result.getString(3), stringMap(result.getString(4)),
-                        readEvidence(connection, "wayang_kg_relationship_evidence", "relationship_id",
-                                id, tenant, collection), result.getDouble(5)));
+                fromEntityId = result.getString(1);
+                predicate = result.getString(2);
+                toEntityId = result.getString(3);
+                propertiesJson = result.getString(4);
+                confidence = result.getDouble(5);
             }
         }
+        return Optional.of(new KnowledgeRelationship(tenant, collection, id, fromEntityId, predicate, toEntityId,
+                stringMap(propertiesJson), readEvidence(connection, "wayang_kg_relationship_evidence",
+                        "relationship_id", id, tenant, collection), confidence));
     }
 
     private static List<KnowledgeEvidence> readEvidence(
