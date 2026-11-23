@@ -228,4 +228,4 @@ Suggested follow-up PRs should remain small and independently testable. The firs
 
 ## Verification
 
-This branch adds unit tests for traversal, tenant/collection isolation, endpoint validation, configured capacity, evidence confidence and traversal truncation. These tests are authored but have not been executed in this change session. CI must run the module tests and the repository's standard Maven verification before merge.
+This branch adds unit tests for schema validation, partial acceptance, predicate/type constraints, dangling endpoints, duplicate IDs, offset bounds, exact alias matching, ambiguity handling and tenant/collection isolation. Together with the existing graph-store and extraction tests, these tests are authored but have not been executed in this change session. CI must run the module tests and the repository's standard Maven verification before merge.
