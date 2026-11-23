@@ -106,20 +106,14 @@ public final class JdbcGraphStore implements GraphStore {
         required(sourceId, "sourceId");
         required(sourceVersion, "sourceVersion");
         return transaction(connection -> {
+            List<String> affectedRelationships = relationshipsWithEvidence(
+                    connection, tenantId, collectionId, sourceId, sourceVersion);
             int entityRemoved = deleteEvidence(connection, "wayang_kg_entity_evidence",
                     tenantId, collectionId, sourceId, sourceVersion);
             int relationshipRemoved = deleteEvidence(connection, "wayang_kg_relationship_evidence",
                     tenantId, collectionId, sourceId, sourceVersion);
-            int relationshipsDeleted;
-            try (PreparedStatement statement = connection.prepareStatement(
-                    "DELETE FROM wayang_kg_relationship r WHERE r.tenant_id = ? AND r.collection_id = ?"
-                    + " AND NOT EXISTS (SELECT 1 FROM wayang_kg_relationship_evidence e"
-                    + " WHERE e.tenant_id = r.tenant_id AND e.collection_id = r.collection_id"
-                    + " AND e.relationship_id = r.relationship_id)")) {
-                statement.setString(1, tenantId);
-                statement.setString(2, collectionId);
-                relationshipsDeleted = statement.executeUpdate();
-            }
+            int relationshipsDeleted = deleteUnsupportedRelationships(
+                    connection, tenantId, collectionId, affectedRelationships);
             return new EvidenceRetractionResult(entityRemoved, relationshipRemoved, relationshipsDeleted);
         });
     }
@@ -347,6 +341,40 @@ public final class JdbcGraphStore implements GraphStore {
         ps.setString(6, evidence.sourceVersion()); ps.setString(7, evidence.chunkId());
         ps.setInt(8, evidence.startOffset()); ps.setInt(9, evidence.endOffset());
         ps.setString(10, evidence.extractor()); ps.setDouble(11, evidence.confidence());
+    }
+
+    private static List<String> relationshipsWithEvidence(
+            Connection c, String tenant, String collection, String source, String version) throws SQLException {
+        String sql = "SELECT DISTINCT relationship_id FROM wayang_kg_relationship_evidence"
+                + " WHERE tenant_id = ? AND collection_id = ? AND source_id = ? AND source_version = ?";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, tenant); ps.setString(2, collection); ps.setString(3, source); ps.setString(4, version);
+            List<String> ids = new ArrayList<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) ids.add(rs.getString(1));
+            }
+            return ids;
+        }
+    }
+
+    private static int deleteUnsupportedRelationships(
+            Connection c, String tenant, String collection, List<String> affectedIds) throws SQLException {
+        int deleted = 0;
+        String sql = "DELETE FROM wayang_kg_relationship r WHERE r.tenant_id = ? AND r.collection_id = ?"
+                + " AND r.relationship_id = ? AND NOT EXISTS (SELECT 1 FROM wayang_kg_relationship_evidence e"
+                + " WHERE e.tenant_id = r.tenant_id AND e.collection_id = r.collection_id"
+                + " AND e.relationship_id = r.relationship_id)";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            for (String id : affectedIds) {
+                ps.setString(1, tenant); ps.setString(2, collection); ps.setString(3, id);
+                ps.addBatch();
+            }
+            for (int count : ps.executeBatch()) {
+                if (count > 0) deleted += count;
+                else if (count == java.sql.Statement.SUCCESS_NO_INFO) deleted++;
+            }
+        }
+        return deleted;
     }
 
     private static int deleteEvidence(
