@@ -155,6 +155,24 @@ Not verified: tested against scripted fake replies and one local HTTP server spe
 
 Connectors named by an agent's tools (`type`) are wired into the release even when no process calls them. A tool type with no connector is not a release error: the agent is told it has no such tool.
 
+## Digest and signature of the archive
+
+`POST /api/v1/projects/{id}/release` answers with the zip and two headers a registry or the Console can record and check:
+
+* `X-Wayang-Release-Sha256`: SHA-256 (hex) of the archive. The archive is deterministic: the same published project, options and settings give the same bytes.
+* `X-Wayang-Release-Signature`: only when the server has a workspace signing key (`wayang.workspace.signing-key-file`): HMAC-SHA256 over `wayang-release-v1:<sha256>`, hex. The label keeps it from ever being valid as a bundle signature.
+
+The HMAC is symmetric: it proves origin only to a party that holds the same key. For a signature **anyone** can check, configure Ed25519 keys:
+
+```
+wayang.release.signing-private-key-file=/run/secrets/release-signing.pk8.pem   # PKCS#8, PEM or base64
+wayang.release.signing-public-key-file=/etc/wayang/release-signing.pub.pem     # X.509, PEM or base64
+```
+
+Both or neither (files only, never inline); the pair is checked against each other on first use and a mismatch refuses to release. Responses then add `X-Wayang-Release-Signature-Ed25519` (base64 over the same statement `wayang-release-v1:<sha256>`) and `X-Wayang-Release-Key-Id` (first 16 hex characters of the SHA-256 of the public key). A registry or the Console verifies with `ReleaseSigner.verify(zip, signature, publicKey)` or any Ed25519 implementation; key rotation is by key id. Generate a pair with `openssl genpkey -algorithm ed25519` (private, PKCS#8 PEM) and `openssl pkey -pubout`.
+
+Limits: the signed server's bundle also carries `integrity.hmac` when an HMAC key is set, so a signed and an unsigned server produce different archives for the same project. Nothing yet pulls from a registry; the Console hand-off beyond these headers is open.
+
 ## An agent on its own
 
 A bundle whose only definitions are AGENTs (no process) releases as a **standalone agent service** (`STANDALONE` or `SERVICE` target; the Gamelan target needs a process). Nothing is invented in the bundle: at start the runtime wraps each agent in a one-node plan that is not listed as a process.

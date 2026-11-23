@@ -25,7 +25,7 @@ flowchart LR
 |---|---|---|
 | 1 | `wayang-endpoints`: file system connectors and the `fs` trigger source (JDK only) | implemented (this document) |
 | 2 | `sql` connector and `jdbc` trigger source over JDBC (driver supplied by the deployment, parameterized queries only) | implemented (below) |
-| 3 | SFTP/FTP, Kafka and AMQP/JMS as separate optional modules (each needs a client library) | **proposed** |
+| 3 | SFTP/FTP, Kafka and AMQP/JMS as separate optional modules (each needs a client library) | Kafka **implemented** (`wayang-endpoints-kafka`, below); SFTP/FTP and AMQP/JMS **proposed** |
 | 4 | `camel` connector: send a message to an Apache Camel route (DSL, Kamelet) exposed over HTTP; Camel runs in its own process, nothing of Camel is embedded | **implemented** (JDK only; tested against a local HTTP server, never a real Camel runtime) |
 | 5 | Releases that serve poll sources from extensions: an `fs` or `jdbc` POLL trigger now generates a release with `wayang-endpoints` and wires `Extensions.load` (tenant `release`) | **implemented** (CI-verified only; not run in a deployed release) |
 
@@ -84,3 +84,22 @@ Wayang does not re-implement Camel. Write the integration in Camel's own DSL (YA
 | `headers` | for example `Authorization: ${secret:CAMEL_TOKEN}` |
 
 Inputs `body` (JSON or text) and `headers` (become Camel message headers). Output and retry rules are those of `http` (5xx, 408, 425 and 429 retry). Limits: request/response over HTTP only; no direct Camel endpoint URIs such as `kafka:` or `sftp:` from Wayang, put those in the Camel route.
+
+## Kafka (`wayang-endpoints-kafka`)
+
+A separate module because it needs `kafka-clients` (version managed by the Quarkus platform BOM); feature `ENDPOINTS_KAFKA` (in `integration` and `full`, not `agentic`). Connector `kafka-publish` and trigger source `kafka`. A release that uses either gets the module (and, through it, kafka-clients).
+
+**Off until the operator permits it**: `WAYANG_ENDPOINTS_KAFKA_SERVERS` (comma-separated `host:port`) and `WAYANG_ENDPOINTS_KAFKA_TOPIC_PREFIXES`. A node can only reach a listed broker and a topic starting with a listed prefix.
+
+| Config | Meaning |
+|---|---|
+| `bootstrapServers`, `topic` | required; checked against the operator's lists |
+| `securityProtocol` | `PLAINTEXT` (default), `SSL`, `SASL_PLAINTEXT`, `SASL_SSL` |
+| `saslMechanism`, `saslUsername`, `saslPassword` | `PLAIN` (default), `SCRAM-SHA-256/512`; password as `${secret:NAME}`; never echoed, and characters that could break the JAAS string are refused |
+| `startFrom`, `maxRecords` | trigger only: `earliest`/`latest` (required), 1-100 (default 50) |
+
+`kafka-publish`: inputs `value` (text, or object/array as JSON, at most 1 MiB), `key`, `headers` (at most 16); idempotent producer, `acks=all`, waits for the acknowledgement; output `topic`, `partition`, `offset`, `timestamp`. A broker timeout or retriable error is retryable.
+
+`kafka` trigger: Wayang keeps the position, not a consumer group. The cursor is the next offset per partition (`0:120,1:98`), so it is at-least-once, resumes exactly, needs no group coordination and commits nothing on the broker. `latest` pins the end the first time, so records arriving between polls are not missed. If the broker has deleted data the cursor points at, the poll fails with a clear message rather than skipping silently; reset the trigger. Events carry `topic`, `partition`, `offset`, `key`, `value`, `timestamp`, `headers`. Limits: text keys and values only (no Avro or schema registry), one replica should consume a topic, no transactions, no consumer-group scaling.
+
+Verified only against fake clients (no broker): see `KafkaTest`. Never run against a real Kafka.

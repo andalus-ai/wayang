@@ -76,9 +76,9 @@ Any other value is an error at start-up (never a silent fall-back to executing).
 ## Next steps (proposed, in order)
 
 1. All-in-one packaging so Community is one command; document it as the quick start.
-2. Test that a production release has no route back to the design server.
-3. An agent-runtime generator and an agent-oriented release profile (HTTP chat/invoke API, memory, knowledge, tools) as a first-class release kind.
-4. Release signing and an artifact registry hand-off the Console can pull from (`docs/architecture/release-artifact-resolution.md`).
+2. ~~Test that a production release has no route back to the design server.~~ Done: `PublishTest.aReleaseCarriesNoCodeOrRouteBackToTheDesignServer` checks, for every target, that the pom and artifact lock hold none of the design modules (api, stores, identity and management adapters, publisher, REST shell, OIDC, database) and that no generated file references the design API package, `WAYANG_MODE`/`WAYANG_STUDIO` or `/api/v1`.
+3. ~~An agent-runtime generator~~ Done as an agent-only release with a chat endpoint (`docs/RELEASE.md`); a dedicated agent-oriented profile remains open.
+4. Release signing and an artifact registry hand-off (digest header and an optional HMAC signature are done, `docs/RELEASE.md`; Ed25519 signing is done too; the registry is open) the Console can pull from (`docs/architecture/release-artifact-resolution.md`).
 5. Console integration tests against a real Console once it publishes a stable management protocol (`wayang-core`).
 
 ## All-in-one on one machine
@@ -93,3 +93,12 @@ java -jar wayang-api-rest/target/quarkus-app/quarkus-run.jar
 ```
 
 Studio is served by the same process; only GET/HEAD outside `/api/`, `/ws/`, `/hooks/`, `/oauth/`, `/admin/`, `/openapi`, `/q/` is answered by it. Unverified end to end: the recipe above has not been run.
+
+### Container (unbuilt)
+
+```
+export WAYANG_AUTH_LOCAL_API_KEY=$(openssl rand -hex 24)
+docker compose -f deploy/docker-compose.all-in-one.yml up --build
+```
+
+The compose file publishes on `127.0.0.1` only, refuses to start without the key, and runs as a non-root user. The store is in memory by default: stopping the container loses everything; set `WAYANG_STORE=jdbc` and a datasource for durability. Studio is built with `WAYANG_API=http://localhost:8080`; build with `--build-arg WAYANG_API=...` if the server is reached under another address.
