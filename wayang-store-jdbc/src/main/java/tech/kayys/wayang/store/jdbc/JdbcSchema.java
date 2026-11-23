@@ -13,7 +13,10 @@ import javax.sql.DataSource;
 /** Creates the Wayang tables if missing (the scripts are idempotent: {@code CREATE ... IF NOT EXISTS}). */
 public final class JdbcSchema {
 
-    private static final List<String> SCRIPTS = List.of("/wayang/schema-wait-registry.sql", "/wayang/schema-definitions.sql");
+    private static final List<String> SCRIPTS = List.of(
+            "/wayang/schema-wait-registry.sql",
+            "/wayang/schema-definitions.sql",
+            "/wayang/schema-knowledge-graph.sql");
 
     private JdbcSchema() {
     }
@@ -30,7 +33,7 @@ public final class JdbcSchema {
                 } catch (IOException e) {
                     throw new IllegalStateException(e);
                 }
-                for (String stmt : ddl.replaceAll("--[^\n]*", "").split(";")) {
+                for (String stmt : ddl.replaceAll("--[^\\n]*", "").split(";")) {
                     if (!stmt.isBlank()) {
                         st.execute(stmt);
                     }
