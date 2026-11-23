@@ -402,6 +402,36 @@ class PublishTest {
         }
     }
 
+    private static String agentOnlyBundle() {
+        Map<String, Object> agent = new LinkedHashMap<>(Map.of("id", "bot", "name", "Bot", "model", "ollama/x", "systemPrompt", "Be brief.",
+                "inputTemplate", "{{ event.text }}", "maxSteps", 2, "timeoutSeconds", 20));
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("format", "wayang.workspace");
+        m.put("formatVersion", 1);
+        m.put("project", Map.of("name", "Solo"));
+        m.put("definitions", List.of(Map.of("kind", "AGENT", "id", "bot", "publishedVersion", 1, "document", agent)));
+        m.put("config", Map.of());
+        m.put("requires", Map.of("secrets", List.of(), "externalSecrets", List.of(), "oauthConnections", List.of(), "config", List.of()));
+        m.put("integrity", Map.of("sha256", "deadbeef"));
+        return Json.write(m);
+    }
+
+    @Test
+    void anAgentCanBeReleasedOnItsOwnWithoutAWorkflow() throws Exception {
+        var p = Publisher.generate(agentOnlyBundle(), OPTS);
+        assertTrue(p.usesAgents());
+        assertTrue(p.processes().isEmpty());
+        assertTrue(p.files().containsKey("src/main/java/com/acme/release/Agents.java"));
+        build(p); // the generated project compiles
+        assertThrows(IllegalArgumentException.class, () -> Publisher.generate(agentOnlyBundle(),
+                new ReleaseOptions(ReleaseOptions.Target.GAMELAN, "com.acme", "my-release", "1.2.3", "com.acme.release", "0.0.1", 8080)),
+                "a Gamelan release is made of processes");
+        assertThrows(IllegalArgumentException.class, () -> Publisher.generate(Json.write(Map.of("format", "wayang.workspace", "formatVersion", 1,
+                "project", Map.of("name", "x"), "definitions", List.of(), "config", Map.of(),
+                "requires", Map.of("secrets", List.of(), "externalSecrets", List.of(), "oauthConnections", List.of(), "config", List.of()),
+                "integrity", Map.of("sha256", "d"))), OPTS), "nothing to release");
+    }
+
     private static Publisher.Project build0(String bundle) {
         return Publisher.generate(bundle, OPTS);
     }

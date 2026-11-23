@@ -57,8 +57,15 @@ public final class Publisher {
                 }
             }
         }
-        if (processes.isEmpty()) {
-            throw new IllegalArgumentException("The bundle has no process to release");
+        boolean agentOnly = processes.isEmpty() && bundle.definitions().stream().anyMatch(d -> d.kind().equals("AGENT"));
+        if (agentOnly) {
+            agents = true; // an agent released on its own: POST /v1/agents/{id}/chat, no workflow around it
+            if (o.target() == ReleaseOptions.Target.GAMELAN) {
+                throw new IllegalArgumentException("An agent-only release runs as a STANDALONE or SERVICE target; the Gamelan target needs a process");
+            }
+        }
+        if (processes.isEmpty() && !agentOnly) {
+            throw new IllegalArgumentException("The bundle has no process (or agent) to release");
         }
         tech.kayys.wayang.runtime.Profile profile = tech.kayys.wayang.runtime.Profile.parse(o.profile());
         for (var plan : profile == tech.kayys.wayang.runtime.Profile.FULL ? List.<tech.kayys.wayang.bpmn.ExecutionPlan>of()
@@ -693,7 +700,9 @@ public final class Publisher {
             sb.append("Start runs with `POST /v1/processes/{id}/runs` (below). `GET /readyz` tells whether the workflows are deployed and the secrets present.\n\n");
         } else {
             sb.append("## Build and run\n\n```\nmvn -q package\njava -jar target/app.jar check        # what is missing?\n");
-            sb.append("java -jar target/app.jar run ").append(processes.get(0)).append(" --input input.json\n");
+            if (!processes.isEmpty()) {
+                sb.append("java -jar target/app.jar run ").append(processes.get(0)).append(" --input input.json\n");
+            }
             if (o.target() == ReleaseOptions.Target.SERVICE) {
                 sb.append("java -jar target/app.jar serve        # HTTP on WAYANG_PORT (default ").append(o.port()).append(")\n");
             }
@@ -701,6 +710,9 @@ public final class Publisher {
         }
         if (o.target() != ReleaseOptions.Target.STANDALONE) {
             sb.append("## HTTP\n\nSend `Authorization: Bearer $WAYANG_API_KEY` on everything under `/v1`. `/healthz` and `/readyz` need no key (use them as probes).\n\n");
+            if (agents) {
+                sb.append("Agents are reachable directly: `GET /v1/agents`, and `POST /v1/agents/{id}/chat` with `{\"message\": \"...\", \"chatId\": \"...\"}` (the answer is `reply`). The agent's memory, persona and guardrails apply; templates see the message as `event.text` and the chat as `event.chatId`.\n\n");
+            }
             sb.append("```\nPOST /v1/processes/{id}/runs   {\"input\": {...}}\nGET  /v1/runs/{id}   GET /v1/runs\nPOST /v1/runs/{id}/cancel\nPOST /v1/tasks/{token}/complete   {\"outputs\": {...}}\nGET  /v1/release\n```\n\n");
         }
         sb.append("## Configuration\n\nSee `.env.example`. Secrets are read from `WAYANG_SECRET_<NAME>` or from files in `WAYANG_SECRETS_DIR`; settings from ");
