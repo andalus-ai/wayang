@@ -26,6 +26,12 @@ independent data directories, and one common timeline-1 fork point.
    once pinned to timeline 2 and once pinned to timeline 3.
 8. Verify each restore contains the common ancestor and its own branch marker,
    excludes the sibling branch marker, and stops before its after-target marker.
+9. Copy the simulated retained archive into two disposable failure fixtures.
+   Remove a planner-required timeline-2 WAL segment in one copy and corrupt
+   timeline-3 history in the other.
+10. Restore the same physical backup against each damaged fixture. PostgreSQL
+    may stay available in recovery or fail to start, but it must not report a
+    completed recovery/promoted primary.
 
 ## Assertions
 
@@ -47,7 +53,8 @@ independent data directories, and one common timeline-1 fork point.
 This qualifies live sibling promotion, dependency union, and independent PITR
 from one common physical ancestor. It does not qualify failover between
 physical hosts, streaming replication slots, or archive object-store
-consistency. The retention planner remains dry-run only; no production
+consistency. Failure injection covers a required WAL gap and malformed selected
+history; it does not attempt every possible storage corruption or hardware fault. The retention planner remains dry-run only; no production
 deletion is introduced.
 
 ## Local run

@@ -61,6 +61,16 @@
             </dependency>
             <dependency>
                 <groupId>tech.kayys.wayang</groupId>
+                <artifactId>wayang-endpoints</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tech.kayys.wayang</groupId>
+                <artifactId>wayang-endpoints-kafka</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tech.kayys.wayang</groupId>
                 <artifactId>wayang-rag-pdf</artifactId>
                 <version>${project.version}</version>
             </dependency>

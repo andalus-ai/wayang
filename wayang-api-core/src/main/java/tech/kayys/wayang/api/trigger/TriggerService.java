@@ -88,7 +88,15 @@ public final class TriggerService {
     public record Created(Trigger trigger, String webhookSecret) {
     }
 
+    /** Triggers start runs, which a design-only server never does (see {@code Mode}): refuse to create or switch one on. */
+    private void requireExecution() {
+        if (!api.mode().executes()) {
+            throw new ApiException(ApiException.Code.CONFLICT, "this server runs in design mode: triggers start runs, which are executed by generated runtimes");
+        }
+    }
+
     public Created create(Principal p, String id, Trigger.Kind kind, String processId, Map<String, Object> config) {
+        requireExecution();
         need(p, Permission.DEFINITION_WRITE);
         need(p, Permission.RUN_START);
         if (id == null || !ID.matcher(id).matches()) {
@@ -144,6 +152,9 @@ public final class TriggerService {
     }
 
     public void setEnabled(Principal p, String id, boolean enabled) {
+        if (enabled) {
+            requireExecution();
+        }
         need(p, Permission.DEFINITION_WRITE);
         Trigger t = store.get(p.tenantId(), id).orElseThrow(() -> ApiException.notFound("Trigger '" + id + "'"));
         // a schedule switched on starts counting from now: what came due while it was off is not run
@@ -513,6 +524,9 @@ public final class TriggerService {
 
     /** Polls every trigger that is due. Returns how many runs were started. Never throws for one trigger's failure. */
     public synchronized int tick() {
+        if (!api.mode().executes()) {
+            return 0; // a design-only server starts nothing; triggers saved earlier stay dormant
+        }
         int started = 0;
         Instant now = clock.instant();
         purgeJournal();
@@ -553,7 +567,8 @@ public final class TriggerService {
                 throw new IllegalStateException("poller is not available");
             }
             @SuppressWarnings("unchecked")
-            Map<String, Object> cfg = (Map<String, Object>) resolve(t.tenant(), t.config(), resolvedValues);
+            Map<String, Object> cfg = new java.util.LinkedHashMap<>((Map<String, Object>) resolve(t.tenant(), t.config(), resolvedValues));
+            cfg.put("wayang.tenant", t.tenant()); // the trigger's own tenant, never a value from its config: tenant-aware sources (fs) stay inside it
             Poller.Result res = poller.poll(cfg, t.cursor());
             Principal runner = runner(t);
             int n = 0;

@@ -56,6 +56,13 @@ final class ReleaseArtifactCatalog {
             Map.entry("wayang.knowledge.file-list", List.of("wayang-knowledge")),
             Map.entry("wayang.knowledge.file-delete", List.of("wayang-knowledge")),
             Map.entry("wayang.knowledge.file-purge", List.of("wayang-knowledge")),
+            Map.entry("wayang.endpoints.sql", List.of("wayang-endpoints")),
+            Map.entry("wayang.endpoints.camel", List.of("wayang-endpoints")),
+            Map.entry("wayang.endpoints.fs-read", List.of("wayang-endpoints")),
+            Map.entry("wayang.endpoints.fs-write", List.of("wayang-endpoints")),
+            Map.entry("wayang.endpoints.fs-list", List.of("wayang-endpoints")),
+            Map.entry("wayang.endpoints.fs-move", List.of("wayang-endpoints")),
+            Map.entry("wayang.endpoints.fs-delete", List.of("wayang-endpoints")),
             Map.entry("wayang.mcp.openapi", List.of("wayang-mcp"))
     );
 
@@ -67,6 +74,8 @@ final class ReleaseArtifactCatalog {
             Map.entry("wayang-rag", List.of()),
             Map.entry("wayang-rag-pdf", List.of("wayang-rag")),
             Map.entry("wayang-knowledge", List.of("wayang-runtime", "wayang-connectors", "wayang-rag")),
+            Map.entry("wayang-endpoints", List.of("wayang-runtime", "wayang-connectors")),
+            Map.entry("wayang-endpoints-kafka", List.of("wayang-runtime")),
             Map.entry("wayang-mcp", List.of("wayang-runtime", "wayang-connectors")),
             Map.entry("wayang-business-process", List.of("wayang-expression")),
             Map.entry("wayang-dmn", List.of("wayang-expression")),

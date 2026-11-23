@@ -150,6 +150,7 @@ jobs:
             /tmp/wayang-sibling-forks-plan.json
             /tmp/wayang-sibling-forks-simulation.json
             /tmp/wayang-sibling-forks-recovery.txt
+            /tmp/wayang-sibling-forks-*-restore-*.log
           if-no-files-found: ignore
           retention-days: 7
 
