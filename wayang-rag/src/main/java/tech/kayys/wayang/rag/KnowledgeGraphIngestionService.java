@@ -5,16 +5,11 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
-/**
- * Applies validated chunk candidates to a graph store. The service is deterministic and
- * source-aware; it does not run extraction, perform fuzzy matching, or manage transactions.
- */
+/** Applies validated chunk candidates atomically to a graph store. */
 public final class KnowledgeGraphIngestionService {
     private final GraphStore graphStore;
 
@@ -43,7 +38,8 @@ public final class KnowledgeGraphIngestionService {
         }
 
         Map<String, String> canonicalIds = new HashMap<>();
-        int entitiesUpserted = 0;
+        List<KnowledgeEntity> entitiesToUpsert = new ArrayList<>();
+        List<KnowledgeRelationship> relationshipsToUpsert = new ArrayList<>();
         int unresolvedEntities = 0;
         for (EntityCandidate candidate : validated.entities()) {
             EntityResolutionDecision decision = decisions.get(candidate.candidateId());
@@ -59,7 +55,6 @@ public final class KnowledgeGraphIngestionService {
                 unresolvedEntities++;
                 continue;
             }
-
             String entityId;
             if (decision.status() == EntityResolutionDecision.Status.MATCHED) {
                 entityId = decision.canonicalEntityId();
@@ -73,20 +68,15 @@ public final class KnowledgeGraphIngestionService {
                 entityId = stableId("entity", input.tenantId(), input.collectionId(),
                         candidate.entityType(), candidate.normalizedName());
             }
-
             KnowledgeEvidence evidence = new KnowledgeEvidence(
                     input.document().id(), input.sourceVersion(), input.chunk().id(),
                     candidate.startOffset(), candidate.endOffset(), extractor, candidate.confidence());
-            KnowledgeEntity entity = new KnowledgeEntity(
+            entitiesToUpsert.add(new KnowledgeEntity(
                     input.tenantId(), input.collectionId(), entityId, candidate.entityType(),
-                    candidate.surfaceText(), List.of(candidate.normalizedName()),
-                    Map.of(), List.of(evidence));
-            graphStore.upsertEntity(entity);
+                    candidate.surfaceText(), List.of(candidate.normalizedName()), Map.of(), List.of(evidence)));
             canonicalIds.put(candidate.candidateId(), entityId);
-            entitiesUpserted++;
         }
 
-        int relationshipsUpserted = 0;
         int skippedRelationships = 0;
         for (RelationshipCandidate candidate : validated.relationships()) {
             String fromId = canonicalIds.get(candidate.fromCandidateId());
@@ -102,17 +92,17 @@ public final class KnowledgeGraphIngestionService {
             KnowledgeEvidence evidence = new KnowledgeEvidence(
                     input.document().id(), input.sourceVersion(), input.chunk().id(),
                     candidate.startOffset(), candidate.endOffset(), extractor, candidate.confidence());
-            graphStore.upsertRelationship(new KnowledgeRelationship(
-                    input.tenantId(), input.collectionId(), relationshipId,
-                    fromId, candidate.predicate(), toId, Map.of(), List.of(evidence), candidate.confidence()));
-            relationshipsUpserted++;
+            relationshipsToUpsert.add(new KnowledgeRelationship(
+                    input.tenantId(), input.collectionId(), relationshipId, fromId, candidate.predicate(),
+                    toId, Map.of(), List.of(evidence), candidate.confidence()));
         }
 
+        graphStore.upsertGraph(entitiesToUpsert, relationshipsToUpsert);
         return new KnowledgeGraphIngestionResult(
-                entitiesUpserted, relationshipsUpserted, unresolvedEntities, skippedRelationships, issues);
+                entitiesToUpsert.size(), relationshipsToUpsert.size(), unresolvedEntities, skippedRelationships, issues);
     }
 
-    /** Retracts only evidence for the exact source version; other versions and sources remain intact. */
+    /** Retracts only evidence for the exact source version. */
     public EvidenceRetractionResult retractSourceVersion(
             String tenantId, String collectionId, String sourceId, String sourceVersion) {
         return graphStore.retractEvidence(tenantId, collectionId, sourceId, sourceVersion);

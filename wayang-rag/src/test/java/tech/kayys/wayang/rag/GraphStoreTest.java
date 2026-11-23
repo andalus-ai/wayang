@@ -85,4 +85,49 @@ class GraphStoreTest {
         store.upsertEntity(entity("tenant-a", "a", "A"));
         assertThrows(RagException.class, () -> store.upsertEntity(entity("tenant-a", "b", "B")));
     }
+
+
+    @Test
+    void batchUpsertAcceptsRelationshipsWhoseEndpointsAreInSameBatch() {
+        InMemoryGraphStore store = new InMemoryGraphStore();
+        store.upsertGraph(
+                List.of(entity("tenant-a", "sales", "Sales"), entity("tenant-a", "policy", "Policy")),
+                List.of(relation("tenant-a", "r1", "sales", "policy", "GOVERNED_BY")));
+        GraphTraversalResult result = store.traverse(new GraphQuery("tenant-a", "policies",
+                Set.of("sales"), GraphQuery.Direction.OUTGOING, Set.of(), 1, 10, 10));
+        assertEquals(2, result.entities().size());
+        assertEquals(1, result.relationships().size());
+    }
+
+    @Test
+    void batchUpsertRollsBackEntitiesWhenAnyRelationshipEndpointIsMissing() {
+        InMemoryGraphStore store = new InMemoryGraphStore();
+        KnowledgeEntity staged = entity("tenant-a", "staged", "Staged");
+        assertThrows(RagException.class, () -> store.upsertGraph(
+                List.of(staged),
+                List.of(relation("tenant-a", "r1", "staged", "missing", "LINKS_TO"))));
+        assertTrue(store.findEntity("tenant-a", "policies", "staged").isEmpty());
+    }
+
+    @Test
+    void batchUpsertRollsBackEarlierWritesWhenLaterIdentityCollisionOccurs() {
+        InMemoryGraphStore store = new InMemoryGraphStore();
+        store.upsertEntity(entity("tenant-a", "left", "Left"));
+        store.upsertEntity(entity("tenant-a", "right", "Right"));
+        store.upsertRelationship(relation("tenant-a", "fixed-edge", "left", "right", "LINKS_TO"));
+        KnowledgeEntity staged = entity("tenant-a", "staged", "Staged");
+        KnowledgeRelationship collision = relation("tenant-a", "fixed-edge", "right", "left", "LINKS_TO");
+        assertThrows(RagException.class, () -> store.upsertGraph(List.of(staged), List.of(collision)));
+        assertTrue(store.findEntity("tenant-a", "policies", "staged").isEmpty());
+    }
+
+    @Test
+    void batchUpsertRemainsIdempotentForRepeatedEvidence() {
+        InMemoryGraphStore store = new InMemoryGraphStore();
+        KnowledgeEntity same = entity("tenant-a", "sales", "Sales");
+        store.upsertGraph(List.of(same), List.of());
+        store.upsertGraph(List.of(same), List.of());
+        assertEquals(1, store.findEntity("tenant-a", "policies", "sales").orElseThrow().evidence().size());
+    }
+
 }
