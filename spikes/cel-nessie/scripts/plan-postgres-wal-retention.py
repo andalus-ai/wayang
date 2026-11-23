@@ -292,6 +292,15 @@ def build_plan(archive_dir: Path, catalog_path: Path, cutoff_epoch: float) -> Re
     if missing:
         raise CatalogError("archive is missing required WAL files: " + ", ".join(missing))
 
+    # PostgreSQL archives completed WAL segments at the configured segment size.
+    # A present-but-truncated segment is not equivalent to an available recovery dependency.
+    for name in sorted(required):
+        actual_size = files[name].stat().st_size
+        if actual_size != segment_size:
+            raise CatalogError(
+                f"required WAL segment {name} has size {actual_size}; expected {segment_size} bytes"
+            )
+
     eligible: list[str] = []
     other: list[str] = []
     for name, path in files.items():
