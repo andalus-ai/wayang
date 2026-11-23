@@ -1,0 +1,15 @@
+# Wayang Community all-in-one for one machine. Not for shared deployments. UNBUILT/untested, see Dockerfile.all-in-one.
+#   export WAYANG_AUTH_LOCAL_API_KEY=$(openssl rand -hex 24)   # then enter it in Studio's connection settings
+#   docker compose -f deploy/docker-compose.all-in-one.yml up --build
+# Data is held in memory by default (wayang.store=memory): everything is lost when the container stops. For durability
+# add a database and set WAYANG_STORE=jdbc with QUARKUS_DATASOURCE_* (docs/DEPLOYMENT.md).
+services:
+  wayang:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.all-in-one
+    ports:
+      - "127.0.0.1:8080:8080"   # loopback only: the HTTP layer is open and the key is checked by Wayang itself
+    environment:
+      WAYANG_AUTH_LOCAL_API_KEY: ${WAYANG_AUTH_LOCAL_API_KEY:?set WAYANG_AUTH_LOCAL_API_KEY to 24+ random characters}
+    restart: unless-stopped
