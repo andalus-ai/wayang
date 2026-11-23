@@ -30,11 +30,11 @@ class KnowledgeGraphIngestionTest {
     }
 
     private static EntityCandidate beta() {
-        return new EntityCandidate("e-beta", "Organization", "Beta", "beta", 11, 15, 0.98);
+        return new EntityCandidate("e-beta", "Organization", "Beta", "beta", 10, 14, 0.98);
     }
 
     private static RelationshipCandidate owns() {
-        return new RelationshipCandidate("r-owns", "e-acme", "OWNS", "e-beta", 0, 15, 0.95);
+        return new RelationshipCandidate("r-owns", "e-acme", "OWNS", "e-beta", 0, 14, 0.95);
     }
 
     private static ValidatedKnowledgeCandidates validated() {
