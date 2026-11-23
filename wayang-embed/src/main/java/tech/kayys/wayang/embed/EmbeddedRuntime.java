@@ -13,7 +13,9 @@ import java.util.TreeSet;
 
 import tech.kayys.wayang.agent.AgentInvoker;
 import tech.kayys.wayang.agent.AgentSpec;
+import tech.kayys.wayang.bpmn.ElementType;
 import tech.kayys.wayang.bpmn.ExecutionPlan;
+import tech.kayys.wayang.bpmn.ProcessModel;
 import tech.kayys.wayang.dmn.DecisionModel;
 import tech.kayys.wayang.eip.AggregationStore;
 import tech.kayys.wayang.eip.ClaimStore;
@@ -60,6 +62,8 @@ public final class EmbeddedRuntime implements ReleaseEngine {
 
     private final Map<String, ExecutionPlan> plans = new LinkedHashMap<>();
     private final Map<String, Integer> versions = new LinkedHashMap<>();
+    /** One start -> agent -> end plan per AGENT definition, for direct chat; not listed as processes. */
+    private final Map<String, ExecutionPlan> agentPlans = new LinkedHashMap<>();
     private final WaitRegistry waits = new WaitRegistry.InMemory();
     private final ReferenceEngine engine;
     private final Clock clock;
@@ -98,6 +102,9 @@ public final class EmbeddedRuntime implements ReleaseEngine {
         versions.putAll(defs.versions());
         Map<String, DecisionModel> decisions = defs.decisions();
         Map<String, AgentSpec> agents = defs.agents();
+        agents.keySet().forEach(id -> agentPlans.put(id, tech.kayys.wayang.bpmn.ProcessCompiler.compile(
+                ProcessModel.builder("agent-" + id).name(id).start("s").task("agent", ElementType.AGENT_TASK, Map.of("agent", id)).end("e")
+                        .flow("s", "agent").flow("agent", "e").build())));
         AggregationStore aggregation = new AggregationStore.InMemory(10_000);
         Map<String, Map<String, Object>> processDocs = new LinkedHashMap<>();
         bundle.definitions().stream().filter(d -> d.kind().equals("PROCESS")).forEach(d -> processDocs.put(d.id(), d.document()));
@@ -135,6 +142,29 @@ public final class EmbeddedRuntime implements ReleaseEngine {
     }
 
     @Override
+    public Set<String> agentIds() {
+        return Collections.unmodifiableSet(new TreeSet<>(agentPlans.keySet()));
+    }
+
+    @Override
+    public Optional<RunInfo> chat(String agentId, String message, String chatId) {
+        ExecutionPlan plan = agentPlans.get(agentId);
+        if (plan == null) {
+            return Optional.empty();
+        }
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("text", message);
+        event.put("message", message);
+        event.put("chatId", chatId);
+        Map<String, Object> input = new LinkedHashMap<>();
+        input.put("event", event);
+        input.put("message", message);
+        input.put("input", message);
+        input.put("chatId", chatId);
+        return Optional.of(startPlan(plan, "agent-" + agentId, input));
+    }
+
+    @Override
     public Set<String> processIds() {
         return Collections.unmodifiableSet(new TreeSet<>(plans.keySet()));
     }
@@ -167,6 +197,10 @@ public final class EmbeddedRuntime implements ReleaseEngine {
         if (plan == null) {
             throw new IllegalArgumentException("No such process: " + processId);
         }
+        return startPlan(plan, processId, callerInput);
+    }
+
+    private RunInfo startPlan(ExecutionPlan plan, String processId, Map<String, Object> callerInput) {
         Map<String, Object> input = new LinkedHashMap<>(callerInput == null ? Map.of() : callerInput);
         input.put(SecretResolver.TENANT_VARIABLE, TENANT); // never caller-controlled
         input.put(SecretResolver.PROCESS_VARIABLE, processId);
