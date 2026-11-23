@@ -432,6 +432,31 @@ class PublishTest {
                 "integrity", Map.of("sha256", "d"))), OPTS), "nothing to release");
     }
 
+    /** The separated edition: a production release must not carry the design server, its stores, identity or the management host. */
+    @Test
+    void aReleaseCarriesNoCodeOrRouteBackToTheDesignServer() {
+        java.util.Set<String> design = java.util.Set.of("wayang-api-core", "wayang-api-rest", "wayang-adapter-core", "wayang-adapter-andalus", "wayang-adapter-numu",
+                "wayang-store-jdbc", "wayang-management-client", "wayang-publish", "wayang-deployment", "wayang-deployment-quarkus", "wayang-rag-pdf");
+        for (var target : ReleaseOptions.Target.values()) {
+            var p = Publisher.generate(withTriggers(bundle(true, true, "Prod"),
+                    List.of(trigger("plain", "WEBHOOK", Map.of()), trigger("feed", "POLL", Map.of("source", "rss", "url", "https://example.com/feed.xml"))),
+                    List.of("GH_SECRET")), new ReleaseOptions(target, "com.acme", "my-release", "1.2.3", "com.acme.release", "0.0.1", 8080));
+            String pom = text(p, "pom.xml");
+            String lock = text(p, "src/main/resources/wayang/artifact-lock.json");
+            for (String d : design) {
+                assertFalse(pom.contains("<artifactId>" + d + "</artifactId>"), target + ": pom must not depend on " + d);
+                assertFalse(lock.contains("\"artifactId\":\"" + d + "\""), target + ": artifact lock must not contain " + d);
+            }
+            assertFalse(pom.contains("quarkus-rest") || pom.contains("quarkus-oidc") || pom.contains("quarkus-agroal"), target + ": no REST shell, OIDC or database");
+            p.files().forEach((path, bytes) -> {
+                String content = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+                assertFalse(content.contains("tech.kayys.wayang.api."), target + ": " + path + " references the design API package");
+                assertFalse(content.contains("WAYANG_MODE") || content.contains("WAYANG_STUDIO"), target + ": " + path + " references design-server settings");
+                assertFalse(content.contains("/api/v1"), target + ": " + path + " calls the design server's API");
+            });
+        }
+    }
+
     private static Publisher.Project build0(String bundle) {
         return Publisher.generate(bundle, OPTS);
     }
