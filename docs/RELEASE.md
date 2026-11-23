@@ -155,6 +155,15 @@ Not verified: tested against scripted fake replies and one local HTTP server spe
 
 Connectors named by an agent's tools (`type`) are wired into the release even when no process calls them. A tool type with no connector is not a release error: the agent is told it has no such tool.
 
+## Digest and signature of the archive
+
+`POST /api/v1/projects/{id}/release` answers with the zip and two headers a registry or the Console can record and check:
+
+* `X-Wayang-Release-Sha256`: SHA-256 (hex) of the archive. The archive is deterministic: the same published project, options and settings give the same bytes.
+* `X-Wayang-Release-Signature`: only when the server has a workspace signing key (`wayang.workspace.signing-key-file`): HMAC-SHA256 over `wayang-release-v1:<sha256>`, hex. The label keeps it from ever being valid as a bundle signature.
+
+Limits: the signature is symmetric, so it proves origin only to a party that holds the same key (the Console would have to be given it); it is not a public-key signature a third party can verify. The signed server's bundle also carries `integrity.hmac`, so a signed and an unsigned server produce different archives for the same project. Public-key signing (as the offline package path already does for its artifact manifest) and a registry the Console pulls from remain open.
+
 ## An agent on its own
 
 A bundle whose only definitions are AGENTs (no process) releases as a **standalone agent service** (`STANDALONE` or `SERVICE` target; the Gamelan target needs a process). Nothing is invented in the bundle: at start the runtime wraps each agent in a one-node plan that is not listed as a process.

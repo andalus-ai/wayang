@@ -25,7 +25,8 @@ public final class ReleaseService {
             List<String> requiredConfig, List<String> files, List<String> notes, String target, String artifactId, String version) {
     }
 
-    public record Release(Plan plan, byte[] zip, String filename) {
+    /** @param sha256 of the archive; @param signature HMAC proving it came from a server holding the signing key, null without one */
+    public record Release(Plan plan, byte[] zip, String filename, String sha256, String signature) {
     }
 
     private final WorkspaceService workspace;
@@ -67,7 +68,8 @@ public final class ReleaseService {
         Object integrity = bundle.get("integrity") instanceof Map<?, ?> i ? i.get("sha256") : null;
         Plan plan = new Plan(integrity == null ? "" : String.valueOf(integrity), gen.processes(), gen.components(), gen.connectors(), gen.usesAgents(),
                 gen.requiredSecrets(), cfg, gen.files().keySet().stream().sorted().toList(), gen.notes(), o.target().name(), o.artifactId(), o.version());
-        return new Release(plan, Publisher.zip(gen), o.artifactId() + "-" + o.version() + ".zip");
+        byte[] zip = Publisher.zip(gen);
+        return new Release(plan, zip, o.artifactId() + "-" + o.version() + ".zip", WorkspaceBundle.sha256Hex(zip), workspace.signRelease(zip));
     }
 
     static String defaultArtifact(String projectName) {

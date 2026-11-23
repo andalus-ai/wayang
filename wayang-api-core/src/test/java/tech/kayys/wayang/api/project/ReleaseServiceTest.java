@@ -107,6 +107,27 @@ class ReleaseServiceTest {
     }
 
     @Test
+    void aReleaseCarriesItsDigestAndASignatureOnlyWhenTheServerHoldsAKey() throws Exception {
+        String pid = project();
+        var plain = releases.release(acme, pid, null);
+        assertEquals(WorkspaceBundle.sha256Hex(plain.zip()), plain.sha256());
+        assertEquals(64, plain.sha256().length());
+        assertNull(plain.signature(), "no signing key: no signature");
+        assertEquals(plain.sha256(), releases.release(acme, pid, null).sha256(), "the archive is deterministic");
+
+        byte[] key = new byte[32];
+        java.util.Arrays.fill(key, (byte) 7);
+        var signing = new ReleaseService(new WorkspaceService(api, triggers, config, secrets, key, clock), api, "0.0.1");
+        var signed = signing.release(acme, pid, null);
+        assertEquals(WorkspaceBundle.releaseSignature(signed.zip(), key), signed.signature());
+        byte[] other = new byte[32];
+        assertNotEquals(signed.signature(), WorkspaceBundle.releaseSignature(signed.zip(), other), "another key signs differently");
+        byte[] tampered = signed.zip().clone();
+        tampered[tampered.length / 2] ^= 1;
+        assertNotEquals(signed.signature(), WorkspaceBundle.releaseSignature(tampered, key), "a changed archive no longer matches");
+    }
+
+    @Test
     void aReleaseIsBuiltFromPublishedVersionsAndCarriesOnlyWhatItNeeds() throws Exception {
         String pid = project();
         // a newer draft of the process exists: the release must use the published one and say so
