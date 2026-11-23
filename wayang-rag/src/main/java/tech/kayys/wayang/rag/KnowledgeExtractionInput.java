@@ -17,6 +17,9 @@ public record KnowledgeExtractionInput(
         if (!document.id().equals(chunk.docId())) {
             throw new RagException("chunk document id does not match extraction document");
         }
+        if (chunk.id() == null || chunk.id().isBlank() || chunk.id().length() > 200) {
+            throw new RagException("chunk needs an id of 1..200 characters for knowledge extraction");
+        }
         if (chunk.text() == null) throw new RagException("chunk text is required for knowledge extraction");
     }
 
