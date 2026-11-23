@@ -57,6 +57,7 @@ final class ReleaseArtifactCatalog {
             Map.entry("wayang.knowledge.file-delete", List.of("wayang-knowledge")),
             Map.entry("wayang.knowledge.file-purge", List.of("wayang-knowledge")),
             Map.entry("wayang.endpoints.sql", List.of("wayang-endpoints")),
+            Map.entry("wayang.endpoints.camel", List.of("wayang-endpoints")),
             Map.entry("wayang.endpoints.fs-read", List.of("wayang-endpoints")),
             Map.entry("wayang.endpoints.fs-write", List.of("wayang-endpoints")),
             Map.entry("wayang.endpoints.fs-list", List.of("wayang-endpoints")),
