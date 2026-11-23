@@ -20,6 +20,7 @@ public record KnowledgeSchema(
             throw new RagException("knowledge schema must declare at least one entity type");
         }
         Map<String, RelationshipTypeDefinition> normalized = new LinkedHashMap<>();
+        Set<String> declaredEntityTypes = entityTypes;
         if (relationshipTypes != null) {
             for (Map.Entry<String, RelationshipTypeDefinition> entry : relationshipTypes.entrySet()) {
                 String key = entry.getKey();
@@ -32,8 +33,8 @@ public record KnowledgeSchema(
                 if (normalized.putIfAbsent(predicate, definition) != null) {
                     throw new RagException("relationship schema contains duplicate normalized predicates");
                 }
-                if (!entityTypes.containsAll(definition.fromEntityTypes())
-                        || !entityTypes.containsAll(definition.toEntityTypes())) {
+                if (!declaredEntityTypes.containsAll(definition.fromEntityTypes())
+                        || !declaredEntityTypes.containsAll(definition.toEntityTypes())) {
                     throw new RagException("relationship endpoint types must be declared entity types");
                 }
             }
