@@ -86,13 +86,13 @@ def simulate(archive: Path, plan_path: Path, destination: Path,
 
     plan = load_plan(plan_path)
     before = inventory(archive)
-    if inventory_fingerprint(before) != plan["archive_snapshot_sha256"]:
-        raise SimulationError("archive snapshot changed since planning; re-plan and re-approve")
     candidates = set(plan["eligible_wal_files"])
     required = set(plan["required_wal_files"])
     missing = (candidates | required) - set(before)
     if missing:
         raise SimulationError(f"plan references absent archive files: {', '.join(sorted(missing))}")
+    if inventory_fingerprint(before) != plan["archive_snapshot_sha256"]:
+        raise SimulationError("archive snapshot changed since planning; re-plan and re-approve")
 
     removed = candidates | (required if remove_required_wal else set())
     try:
