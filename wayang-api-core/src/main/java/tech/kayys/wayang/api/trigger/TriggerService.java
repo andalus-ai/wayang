@@ -567,7 +567,8 @@ public final class TriggerService {
                 throw new IllegalStateException("poller is not available");
             }
             @SuppressWarnings("unchecked")
-            Map<String, Object> cfg = (Map<String, Object>) resolve(t.tenant(), t.config(), resolvedValues);
+            Map<String, Object> cfg = new java.util.LinkedHashMap<>((Map<String, Object>) resolve(t.tenant(), t.config(), resolvedValues));
+            cfg.put("wayang.tenant", t.tenant()); // the trigger's own tenant, never a value from its config: tenant-aware sources (fs) stay inside it
             Poller.Result res = poller.poll(cfg, t.cursor());
             Principal runner = runner(t);
             int n = 0;

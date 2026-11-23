@@ -51,6 +51,21 @@ public interface ReleaseEngine {
 
     Set<String> processIds();
 
+    /** Agents that can be talked to directly ({@code POST /v1/agents/{id}/chat}); empty when the engine cannot. */
+    default Set<String> agentIds() {
+        return Set.of();
+    }
+
+    /**
+     * Runs one agent turn without a surrounding workflow: the agent's own memory, persona and guardrails apply. The run input is
+     * {@code {event: {text, message, chatId}, message, input, chatId}} so templates written for chat triggers work unchanged.
+     *
+     * @return empty when there is no such agent
+     */
+    default Optional<RunInfo> chat(String agentId, String message, String chatId) {
+        return Optional.empty();
+    }
+
     /** The published version of a process (0 when unknown). */
     int version(String processId);
 

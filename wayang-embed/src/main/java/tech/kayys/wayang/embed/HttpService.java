@@ -27,6 +27,8 @@ import tech.kayys.wayang.runtime.json.Json;
  * GET  /healthz                      liveness (no auth)
  * GET  /readyz                       200 when every secret the release needs is present, else 503 (no auth, counts only)
  * GET  /v1/release                   what this release is: project, processes and versions, bundle hash, missing secret names
+ * GET  /v1/agents                   the agents that can be talked to directly
+ * POST /v1/agents/{id}/chat          {"message": "...", "chatId": "..."} -> {agent, chatId, reply, runId, status}
  * POST /v1/processes/{id}/runs       {"input": {...}}  -> the run (201), possibly WAITING with a task token
  * GET  /v1/runs[?processId=&amp;limit=]  newest first
  * GET  /v1/runs/{id}
@@ -191,6 +193,52 @@ public final class HttpService implements AutoCloseable {
         }
     }
 
+    private static final java.util.regex.Pattern CHAT_ID = java.util.regex.Pattern.compile("[A-Za-z0-9._:@-]{1,128}");
+    private static final int MAX_MESSAGE = 16_000;
+
+    /** The wrapping plan's agent node is called {@code agent}; its answer is {@code agent.output} (flat key) or {@code agent: {output}}. */
+    static Object replyOf(Map<String, Object> vars) {
+        if (vars == null) {
+            return null;
+        }
+        if (vars.get("agent.output") != null) {
+            return vars.get("agent.output");
+        }
+        return vars.get("agent") instanceof Map<?, ?> a ? a.get("output") : null;
+    }
+
+    private void chat(HttpExchange ex, String agent) throws IOException {
+        Map<String, Object> body = body(ex);
+        if (!(body.get("message") instanceof String msg) || msg.isBlank() || msg.length() > MAX_MESSAGE) {
+            throw new Http(400, "\"message\" must be a non-empty string of at most " + MAX_MESSAGE + " characters");
+        }
+        Object c = body.get("chatId");
+        if (c != null && !(c instanceof String cs && CHAT_ID.matcher(cs).matches())) {
+            throw new Http(400, "\"chatId\" must be 1-128 characters of letters, digits and . _ : @ -");
+        }
+        String chatId = c == null ? java.util.UUID.randomUUID().toString() : (String) c;
+        try {
+            var run = rt.chat(agent, msg, chatId).orElseThrow(() -> new Http(404, "No such agent"));
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("agent", agent);
+            out.put("chatId", chatId);
+            out.put("runId", run.id());
+            out.put("status", run.status());
+            Object reply = replyOf(run.variables());
+            if (reply instanceof String) {
+                out.put("reply", reply);
+            }
+            if (run.error() != null) {
+                out.put("error", run.error());
+            }
+            send(ex, run.error() != null ? 502 : 200, out);
+        } catch (ReleaseEngine.Unavailable e) {
+            throw e;
+        } catch (IllegalStateException e) {
+            throw new Http(429, "Too many parked runs");
+        }
+    }
+
     private void v1(HttpExchange ex, String m, String[] p) throws IOException {
         if (p.length == 1 && p[0].equals("release")) {
             only(ex, m, "GET");
@@ -210,6 +258,12 @@ public final class HttpService implements AutoCloseable {
         } else if (p.length == 1 && p[0].equals("ratings")) {
             only(ex, m, "GET");
             send(ex, 200, triggers == null ? Map.of("up", 0, "down", 0, "triggers", Map.of()) : triggers.ratings());
+        } else if (p.length == 1 && p[0].equals("agents")) {
+            only(ex, m, "GET");
+            send(ex, 200, Map.of("agents", new java.util.ArrayList<>(rt.agentIds())));
+        } else if (p.length == 3 && p[0].equals("agents") && p[2].equals("chat")) {
+            only(ex, m, "POST");
+            chat(ex, id(p[1]));
         } else if (p.length == 3 && p[0].equals("processes") && p[2].equals("runs")) {
             only(ex, m, "POST");
             String id = id(p[1]);

@@ -159,6 +159,26 @@ public final class WorkspaceBundle {
         }
     }
 
+    /** HMAC-SHA256 (hex) of a release archive, bound to its SHA-256 and a fixed label so it can never double as a bundle signature. */
+    public static String releaseSignature(byte[] zip, byte[] key) {
+        try {
+            String label = "wayang-release-v1:" + hex(MessageDigest.getInstance("SHA-256").digest(zip));
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new javax.crypto.spec.SecretKeySpec(key, "HmacSHA256"));
+            return hex(mac.doFinal(label.getBytes(StandardCharsets.UTF_8)));
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    public static String sha256Hex(byte[] data) {
+        try {
+            return hex(MessageDigest.getInstance("SHA-256").digest(data));
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     static boolean constantTimeEquals(String a, String b) {
         return a != null && b != null
                 && MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));

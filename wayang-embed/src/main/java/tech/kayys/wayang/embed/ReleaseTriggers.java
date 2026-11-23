@@ -461,7 +461,9 @@ public final class ReleaseTriggers implements AutoCloseable {
     private int pollOne(ReleaseBundle.Trigger t, PollState s, Instant now) {
         Set<String> used = new HashSet<>();
         try {
-            Poller.Result res = pollers.get(String.valueOf(t.config().get("source"))).poll(resolve(t.config(), used), s.cursor);
+            Map<String, Object> pollConfig = new java.util.LinkedHashMap<>(resolve(t.config(), used));
+            pollConfig.put("wayang.tenant", ReleaseEngine.TENANT); // tenant-aware sources (fs) use the release's own, never a value from the config
+            Poller.Result res = pollers.get(String.valueOf(t.config().get("source"))).poll(pollConfig, s.cursor);
             int n = 0;
             for (Map<String, Object> ev : res.events()) {
                 if (Boolean.TRUE.equals(t.config().get("ratings")) && "feedback".equals(ev.get("kind"))) {
