@@ -168,6 +168,12 @@ class JdbcDeploymentLifecycleReconciliationIntegrationTest {
                       FOREIGN KEY (deployment_id, operation_key)
                         REFERENCES wayang_deployment_operation_receipt(deployment_id, operation_key))
                     """);
+            statement.execute("""
+                    INSERT INTO wayang_deployment_snapshot
+                    (deployment_id, tenant_id, environment, target_id, release_id, state, version, updated_at, last_reason)
+                    VALUES ('dep-jdbc', 'tenant-a', 'prod', 'target-a', 'release-7',
+                            'INSTALLED', 0, CURRENT_TIMESTAMP, 'installed')
+                    """);
         }
     }
 
