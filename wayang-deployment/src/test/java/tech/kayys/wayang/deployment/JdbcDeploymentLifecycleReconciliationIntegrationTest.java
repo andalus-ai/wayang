@@ -25,8 +25,8 @@ import org.junit.jupiter.api.Test;
 /**
  * Exercises the persisted receipt, encrypted context and work queue together.
  *
- * The lifecycle ledger remains the in-memory reference implementation here; this test focuses on
- * the durable recovery stores and proves that a restarted worker does not redispatch or reapply work.
+ * The JDBC lifecycle ledger, receipt, encrypted context and work queue share one database.
+ * This test proves that a restarted worker does not redispatch or reapply completed work.
  */
 class JdbcDeploymentLifecycleReconciliationIntegrationTest {
     private static final Instant NOW = Instant.parse("2026-11-22T12:00:00Z");
@@ -41,7 +41,7 @@ class JdbcDeploymentLifecycleReconciliationIntegrationTest {
         var contextStore = new JdbcDeploymentLifecycleReconciliationContextStore(dataSource, codec, clock);
         var workStore = new JdbcDeploymentLifecycleReconciliationWorkStore(dataSource);
 
-        var ledger = new InMemoryDeploymentLedger();
+        var ledger = new JdbcDeploymentLedger(dataSource);
         var lifecycle = new DeploymentLifecycleService(ledger, clock);
         lifecycle.registerInstalled("dep-jdbc", "tenant-a", "prod", "target-a", "release-7",
                 "publisher", "installed", "corr-install", "install");
@@ -99,14 +99,18 @@ class JdbcDeploymentLifecycleReconciliationIntegrationTest {
         var restartedReceiptStore = new JdbcDeploymentOperationReceiptStore(dataSource);
         var restartedContextStore = new JdbcDeploymentLifecycleReconciliationContextStore(dataSource, codec, clock);
         var restartedWorkStore = new JdbcDeploymentLifecycleReconciliationWorkStore(dataSource);
+        var restartedLedger = new JdbcDeploymentLedger(dataSource);
+        var restartedLifecycle = new DeploymentLifecycleService(restartedLedger, clock);
         var restartedWorker = worker(restartedReceiptStore, restartedContextStore, restartedWorkStore,
-                ledger, lifecycle, targets, clock);
+                restartedLedger, restartedLifecycle, targets, clock);
         var afterRestart = restartedWorker.runOnce(10);
 
         assertEquals(0, afterRestart.scanned());
         assertEquals(0, afterRestart.claimed());
         assertEquals(0, afterRestart.reconciled());
-        assertEquals(DeploymentState.ACTIVE, ledger.find("dep-jdbc").orElseThrow().state());
+        assertEquals(DeploymentState.ACTIVE, restartedLedger.find("dep-jdbc").orElseThrow().state());
+        assertEquals(3, restartedLedger.events("dep-jdbc").size(),
+                "registration, activation start, and reconciliation result survive the worker restart");
         assertEquals(0, targetOperationCalls.get());
         assertEquals(1, healthCalls.get());
         assertEquals(terminal, restartedReceiptStore.find(command.deploymentId(), command.idempotencyKey()).orElseThrow());
@@ -139,6 +143,15 @@ class JdbcDeploymentLifecycleReconciliationIntegrationTest {
                       last_reason VARCHAR(2048))
                     """);
             statement.execute("""
+                    CREATE TABLE wayang_deployment_event (
+                      deployment_id VARCHAR(160) NOT NULL REFERENCES wayang_deployment_snapshot(deployment_id),
+                      sequence BIGINT NOT NULL, from_state VARCHAR(32), to_state VARCHAR(32) NOT NULL,
+                      actor VARCHAR(200) NOT NULL, reason VARCHAR(2048) NOT NULL,
+                      correlation_id VARCHAR(200) NOT NULL, idempotency_key VARCHAR(200) NOT NULL,
+                      occurred_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                      PRIMARY KEY (deployment_id, sequence), UNIQUE (deployment_id, idempotency_key))
+                    """);
+            statement.execute("""
                     CREATE TABLE wayang_deployment_operation_receipt (
                       deployment_id VARCHAR(160) NOT NULL REFERENCES wayang_deployment_snapshot(deployment_id),
                       operation_key VARCHAR(200) NOT NULL, command_fingerprint CHAR(64) NOT NULL,
@@ -167,12 +180,6 @@ class JdbcDeploymentLifecycleReconciliationIntegrationTest {
                       PRIMARY KEY (deployment_id, operation_key),
                       FOREIGN KEY (deployment_id, operation_key)
                         REFERENCES wayang_deployment_operation_receipt(deployment_id, operation_key))
-                    """);
-            statement.execute("""
-                    INSERT INTO wayang_deployment_snapshot
-                    (deployment_id, tenant_id, environment, target_id, release_id, state, version, updated_at, last_reason)
-                    VALUES ('dep-jdbc', 'tenant-a', 'prod', 'target-a', 'release-7',
-                            'INSTALLED', 0, CURRENT_TIMESTAMP, 'installed')
                     """);
         }
     }

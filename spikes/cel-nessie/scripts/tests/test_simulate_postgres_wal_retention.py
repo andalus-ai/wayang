@@ -40,6 +40,7 @@ class WalRetentionSimulationTest(unittest.TestCase):
             "eligible_wal_files": [CANDIDATE],
             "required_wal_files": [REQUIRED],
             "missing_required_files": [],
+            "archive_snapshot_sha256": MODULE.inventory_fingerprint(MODULE.inventory(self.archive)),
         }
         plan.update(overrides)
         self.plan.write_text(json.dumps(plan), encoding="utf-8")
@@ -56,6 +57,20 @@ class WalRetentionSimulationTest(unittest.TestCase):
         self.assertTrue(report["source_archive_unchanged"])
         self.assertFalse(report["deletion_performed_on_source"])
         self.assertEqual(report["removed_candidate_files"], [CANDIDATE])
+
+    def test_archive_content_change_since_planning_fails_closed(self):
+        (self.archive / CANDIDATE).write_bytes(b"changed after planning")
+
+        with self.assertRaisesRegex(SimulationError, "archive snapshot changed since planning"):
+            simulate(self.archive, self.plan, self.root / "stale-plan")
+        self.assertFalse((self.root / "stale-plan").exists())
+
+    def test_archive_membership_change_since_planning_fails_closed(self):
+        (self.archive / "000000010000000000000003").write_bytes(b"late arrival")
+
+        with self.assertRaisesRegex(SimulationError, "archive snapshot changed since planning"):
+            simulate(self.archive, self.plan, self.root / "stale-membership")
+        self.assertFalse((self.root / "stale-membership").exists())
 
     def test_copy_adds_read_access_for_restore_user_without_changing_source(self):
         source = self.archive / REQUIRED

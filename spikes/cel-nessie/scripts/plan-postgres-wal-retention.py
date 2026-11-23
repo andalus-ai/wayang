@@ -36,6 +36,7 @@ class RetentionPlan:
     protected_other_files: tuple[str, ...]
     missing_required_files: tuple[str, ...]
     catalog_snapshot_sha256: str
+    archive_snapshot_sha256: str
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -47,6 +48,7 @@ class RetentionPlan:
             "protected_other_files": list(self.protected_other_files),
             "missing_required_files": list(self.missing_required_files),
             "catalog_snapshot_sha256": self.catalog_snapshot_sha256,
+            "archive_snapshot_sha256": self.archive_snapshot_sha256,
             "deletion_performed": False,
         }
 
@@ -230,6 +232,21 @@ def validate_recovery_timeline_chain(backup_id: str, ranges: list[dict[str, Any]
             if not any(start <= fork_lsn <= end for start, end in child_ranges):
                 raise CatalogError(f"backup {backup_id}: timeline {child} recovery range does not cover fork point {fork_lsn:X}")
 
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def archive_inventory_fingerprint(files: dict[str, Path]) -> str:
+    """Hash the complete archive inventory, including each file's content."""
+    inventory = {name: _file_sha256(path) for name, path in sorted(files.items())}
+    encoded = json.dumps(inventory, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def build_plan(archive_dir: Path, catalog_path: Path, cutoff_epoch: float) -> RetentionPlan:
     retained, segment_size, snapshot_sha256 = _load_catalog(catalog_path)
     if not archive_dir.is_dir():
@@ -320,6 +337,7 @@ def build_plan(archive_dir: Path, catalog_path: Path, cutoff_epoch: float) -> Re
         protected_other_files=tuple(sorted(other)),
         missing_required_files=tuple(missing),
         catalog_snapshot_sha256=snapshot_sha256,
+        archive_snapshot_sha256=archive_inventory_fingerprint(files),
     )
 
 
