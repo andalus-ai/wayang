@@ -273,6 +273,7 @@ class KafkaTest {
     @Test
     void theExtensionExposesBothEndpointsAndDescribesThem() {
         var e = new KafkaExtension(kafka(new Fake()));
+        assertEquals("wayang-endpoints-kafka", e.id());
         assertEquals(Set.of("kafka-publish"), e.connectors().keySet());
         assertEquals(Set.of("kafka"), e.pollers().keySet());
         assertEquals(1, e.components().size());
