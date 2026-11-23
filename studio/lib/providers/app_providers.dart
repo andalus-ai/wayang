@@ -23,6 +23,9 @@ final nodeCatalogProvider = FutureProvider<List<NodeCatalogEntry>>((ref) {
   return ref.watch(repositoryProvider).nodeCatalog();
 });
 
+/// False on a design-only server: Studio then hides the run, task and timer screens (the server would refuse them with 409).
+final executesProvider = FutureProvider<bool>((ref) => ref.watch(repositoryProvider).executes());
+
 /// Optional project filter for the explorers (null = all).
 final activeProjectIdProvider = StateProvider<String?>((ref) => null);
 

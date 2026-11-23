@@ -66,6 +66,24 @@ public final class WayangApi {
 
     private volatile tech.kayys.wayang.runtime.Profile profile = tech.kayys.wayang.runtime.Profile.fromEnvironment();
     private volatile ComponentRegistry componentRegistry;
+    private volatile Mode mode = Mode.fromEnvironment();
+
+    /** Design-only servers refuse to execute (see {@link Mode}). */
+    public WayangApi withMode(Mode mode) {
+        this.mode = java.util.Objects.requireNonNull(mode);
+        return this;
+    }
+
+    public Mode mode() {
+        return mode;
+    }
+
+    private void requireExecution() {
+        if (!mode.executes()) {
+            throw new ApiException(ApiException.Code.CONFLICT,
+                    "this server runs in design mode: runs are executed by generated runtimes, not here");
+        }
+    }
 
     /** Which features this deployment serves: hides the rest from the palette and refuses to save them. */
     public WayangApi withProfile(tech.kayys.wayang.runtime.Profile profile) {
@@ -423,6 +441,7 @@ public final class WayangApi {
     // -------------------------------------------------------------------- runs
 
     public RunView startRun(Principal p, String processId, Integer version, Map<String, Object> input) {
+        requireExecution();
         requireAnywhere(p, Permission.RUN_START);
         StoredDefinition d = getVersionNoPerm(p, processId, version);
         if (!p.can(Permission.RUN_START, Studio.projectId(d.document()))) {
@@ -516,6 +535,7 @@ public final class WayangApi {
     }
 
     public void completeTask(Principal p, String token, Map<String, Object> outputs) {
+        requireExecution();
         requireAnywhere(p, Permission.TASK_COMPLETE);
         var reg = waits.find(token);
         if (reg.isEmpty() || !"human".equals(reg.get().ticket().kind())
@@ -536,6 +556,7 @@ public final class WayangApi {
      * deliver to a run of its own project and cannot buffer (a buffered message is not tied to any project).
      */
     public String sendMessage(Principal p, String name, String correlationKey, Map<String, Object> payload) {
+        requireExecution();
         requireAnywhere(p, Permission.MESSAGE_SEND);
         if (name == null || name.isBlank() || correlationKey == null) {
             throw ApiException.badRequest("name and correlationKey are required");
@@ -558,6 +579,7 @@ public final class WayangApi {
 
     /** Fires due timers; normally called by a scheduler, exposed for admins and tests. */
     public int fireTimers(Principal p) {
+        requireExecution();
         require(p, Permission.ADMIN);
         return engine.fireDueTimers();
     }

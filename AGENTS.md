@@ -17,7 +17,7 @@ Wayang runs in two modes from one codebase (`docs/EDITIONS.md` is the reference)
 - **Community / development (all-in-one):** Studio, design server and execution in one runtime, with no required external service.
 - **Pro / Enterprise (separated):** a design-time Studio for production that never serves production traffic; **generated runtimes** as standalone services (agent runtime, or workflow runtime from BPMN, DMN, EIP or common workflows; targets in `docs/RELEASE.md`); and **Wayang Console** (separate repository) to manage all services.
 
-Rules for contributors: a definition means the same in both modes; a generated runtime never depends on Studio or the Console to execute and carries only what its workflows use; the all-in-one mode stays usable with no external service; the design service is never a production execution path in the separated mode; do not put workflow semantics in the Console or fleet management in this repository. Mark anything not yet built (a mode switch, the all-in-one distribution, an agent-runtime generator, edition entitlements) as proposed, as `docs/EDITIONS.md` does.
+Rules for contributors: a definition means the same in both modes; a generated runtime never depends on Studio or the Console to execute and carries only what its workflows use; the all-in-one mode stays usable with no external service; the design service is never a production execution path in the separated mode; do not put workflow semantics in the Console or fleet management in this repository. `WAYANG_MODE=design` (design-only server) exists; mark anything not yet built (the all-in-one distribution, an agent-runtime generator, edition entitlements) as proposed, as `docs/EDITIONS.md` does.
 
 ## Architecture principles
 
@@ -73,6 +73,7 @@ Rules for contributors: a definition means the same in both modes; a generated r
 - Mark planned behavior as proposed/planned and implemented behavior as implemented, with verification status.
 - Keep examples consistent with actual supported schemas and APIs. Label illustrative manifests and pseudocode as examples.
 - When changing a public contract, update its documentation and compatibility/conformance fixtures.
+- Keep `docs/guide/` (architecture, sequences, features, developer guide; Mermaid diagrams) in step with the code: a change to node types, execution flow, extension points or release behavior updates the matching guide page.
 - Keep root README concise and link to focused documents such as `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, and `docs/PROFILES.md`.
 
 

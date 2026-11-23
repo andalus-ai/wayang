@@ -6,6 +6,8 @@ Low-code **agentic factory, BPMN, EIP and DMN** platform, built on top of
 Wayang owns *definitions* and the user-facing model; it never implements a second
 persistent workflow engine.
 
+**Architecture and developer guide with diagrams:** [`docs/guide/`](docs/guide/README.md).
+
 **Two ways to run it** (details and status in [`docs/EDITIONS.md`](docs/EDITIONS.md)): *Community/development*, one all-in-one runtime that is Studio, design server and execution together; and *Pro/Enterprise*, a production Studio kept separate from **generated runtimes** (an agent service, or a BPMN/DMN/workflow service) and managed by **Wayang Console** (separate repository). Definitions are the same in both.
 
 | Concern | Owned by |
@@ -21,6 +23,7 @@ persistent workflow engine.
 | `wayang-expression` | Bounded FEEL-style expression language shared by everything below | none |
 | `wayang-cel` | Additive, engine-neutral CEL contracts and deterministic typed test primitives; does not replace FEEL (see `docs/CEL.md`) | JDK only |
 | `wayang-rag` | Knowledge foundation for RAG agents: text extraction from txt/md/html/json/csv/docx/xlsx/pptx, selectable chunkers (fixed, paragraph, heading, clause, parent-child) and retrieval (BM25, vector, hybrid RRF, optional MMR and parent expansion) over a bounded knowledge base (see `docs/RAG.md`) | JDK only |
+| `wayang-endpoints` | Optional extension (ENDPOINTS feature): ESB-style endpoints; file system steps (`fs-read/write/list/move/delete`, `fs` trigger source; confined to `WAYANG_ENDPOINTS_FS_ROOT` per tenant) and SQL (`sql`, `jdbc` trigger source; only databases in `WAYANG_ENDPOINTS_JDBC_URLS`) (see `docs/ENDPOINTS.md`) | JDK only |
 | `wayang-knowledge` | Optional extension (KNOWLEDGE feature): `rag-ingest`, `rag-search`, `rag-forget`, `rag-list` and file storage steps (`file-put/fetch/get/list/delete/purge`, retention) over `wayang-rag`, usable as workflow nodes or agent tools; per-tenant named knowledge bases, persisted when a storage directory is set (see `docs/RAG.md`) | JDK only |
 | `wayang-dmn` | Decision tables (UNIQUE/FIRST/ANY/COLLECT/RULE ORDER, aggregators), decision graphs with inferred dependencies, Map loader | none |
 | `wayang-business-process` | BPMN subset (events, XOR/AND/OR gateways, service/rule/agent/EIP/user tasks, timers, message waits): model, validation, compiler to an acyclic plan, dead-path-elimination runtime, BPMN 2.0 XML import/export (supported subset; unsupported elements are rejected, not ignored) | none |

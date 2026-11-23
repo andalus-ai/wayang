@@ -37,6 +37,7 @@ All transports are thin shells over `WayangApi` (`wayang-api-core`). They authen
 | `GET /projects/{id}/export`, `POST /workspace/import` `{bundle, options}` | workspace bundle, dry run by default |
 | `GET /templates`, `POST /templates/{id}/instantiate` `{params, dryRun}` | starter projects (`assistant-telegram`, `knowledge-assistant` and others, see `GET /templates`); a dry run unless `dryRun` is false; triggers are created disabled |
 | `POST /projects/{id}/release/plan`, `POST /projects/{id}/release` `{target, groupId, artifactId, version, package, port, profile}` | release preview includes resolved component IDs; generated archive includes `wayang/component-lock.json` and its digest in `wayang/release.json` (`docs/RELEASE.md`) |
+| `GET /mode` | `{mode, executes}`: `executes` is false on a design-only server (`WAYANG_MODE=design`) |
 | `POST /admin/timers/fire` | ADMIN; a ticker also does it every 5s |
 
 ## WebSocket `/ws/events`
@@ -77,6 +78,7 @@ Configuration (`application.properties`):
 |---|---|---|
 | `wayang.store` | `memory` (default), `jdbc` | definitions + wait tickets; `jdbc` uses the default Quarkus datasource and creates tables unless `wayang.jdbc.init-schema=false` |
 | `wayang.engine` | `reference` (default), `gamelan` | in-memory demo engine, or durable runs on Gamelan (`wayang.gamelan.endpoint`, `wayang.gamelan.api-key`) |
+| `WAYANG_MODE` (env) | `community` (default), `design` | design only: run, task, message and timer calls answer 409 (`docs/EDITIONS.md`); anything else fails at start-up |
 | `wayang.auth.tenant-claim` | default `tenant_id` | JWT claim carrying the tenant |
 
 `memory` + `reference` lose everything on restart. Production = `jdbc` + `gamelan` + OIDC. In `gamelan` mode, definitions are deployed

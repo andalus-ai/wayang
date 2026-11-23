@@ -390,6 +390,82 @@ class PublishTest {
                 List.of(trigger("t", "WEBHOOK", Map.of("auth", "nosuch"))), List.of())), "an unknown provider is refused at generation");
     }
 
+    @Test
+    void anFsOrJdbcPollTriggerBringsTheEndpointsModuleAndIsAcceptedAsASource() {
+        for (String src : List.of("fs", "jdbc")) {
+            var b = withTriggers(bundle(false, false, "x"),
+                    List.of(trigger("t", "POLL", Map.of("source", src))), List.of());
+            var p = Publisher.generate(b, OPTS);
+            assertTrue(text(p, "pom.xml").contains("wayang-endpoints"), src + " needs the endpoints module");
+            assertTrue(text(p, "src/main/java/com/acme/release/Processes.java").contains("\"" + src + "\""), src);
+            assertTrue(text(p, "src/main/java/com/acme/release/Wiring.java").contains("Extensions.load"), "extension pollers are wired");
+        }
+    }
+
+    private static String agentOnlyBundle() {
+        Map<String, Object> agent = new LinkedHashMap<>(Map.of("id", "bot", "name", "Bot", "model", "ollama/x", "systemPrompt", "Be brief.",
+                "inputTemplate", "{{ event.text }}", "maxSteps", 2, "timeoutSeconds", 20));
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("format", "wayang.workspace");
+        m.put("formatVersion", 1);
+        m.put("project", Map.of("name", "Solo"));
+        m.put("definitions", List.of(Map.of("kind", "AGENT", "id", "bot", "publishedVersion", 1, "document", agent)));
+        m.put("config", Map.of());
+        m.put("requires", Map.of("secrets", List.of(), "externalSecrets", List.of(), "oauthConnections", List.of(), "config", List.of()));
+        m.put("integrity", Map.of("sha256", "deadbeef"));
+        return Json.write(m);
+    }
+
+    @Test
+    void anAgentCanBeReleasedOnItsOwnWithoutAWorkflow() throws Exception {
+        var p = Publisher.generate(agentOnlyBundle(), OPTS);
+        assertTrue(p.usesAgents());
+        assertTrue(p.processes().isEmpty());
+        assertTrue(p.files().containsKey("src/main/java/com/acme/release/Agents.java"));
+        build(p); // the generated project compiles
+        assertThrows(IllegalArgumentException.class, () -> Publisher.generate(agentOnlyBundle(),
+                new ReleaseOptions(ReleaseOptions.Target.GAMELAN, "com.acme", "my-release", "1.2.3", "com.acme.release", "0.0.1", 8080)),
+                "a Gamelan release is made of processes");
+        assertThrows(IllegalArgumentException.class, () -> Publisher.generate(Json.write(Map.of("format", "wayang.workspace", "formatVersion", 1,
+                "project", Map.of("name", "x"), "definitions", List.of(), "config", Map.of(),
+                "requires", Map.of("secrets", List.of(), "externalSecrets", List.of(), "oauthConnections", List.of(), "config", List.of()),
+                "integrity", Map.of("sha256", "d"))), OPTS), "nothing to release");
+    }
+
+    /** The separated edition: a production release must not carry the design server, its stores, identity or the management host. */
+    @Test
+    void aReleaseCarriesNoCodeOrRouteBackToTheDesignServer() {
+        java.util.Set<String> design = java.util.Set.of("wayang-api-core", "wayang-api-rest", "wayang-adapter-core", "wayang-adapter-andalus", "wayang-adapter-numu",
+                "wayang-store-jdbc", "wayang-management-client", "wayang-publish", "wayang-deployment", "wayang-deployment-quarkus", "wayang-rag-pdf");
+        for (var target : ReleaseOptions.Target.values()) {
+            var p = Publisher.generate(withTriggers(bundle(true, true, "Prod"),
+                    List.of(trigger("plain", "WEBHOOK", Map.of()), trigger("feed", "POLL", Map.of("source", "rss", "url", "https://example.com/feed.xml"))),
+                    List.of("GH_SECRET")), new ReleaseOptions(target, "com.acme", "my-release", "1.2.3", "com.acme.release", "0.0.1", 8080));
+            String pom = text(p, "pom.xml");
+            String lock = text(p, "src/main/resources/wayang/artifact-lock.json");
+            for (String d : design) {
+                assertFalse(pom.contains("<artifactId>" + d + "</artifactId>"), target + ": pom must not depend on " + d);
+                assertFalse(lock.contains("\"artifactId\":\"" + d + "\""), target + ": artifact lock must not contain " + d);
+            }
+            assertFalse(pom.contains("quarkus-rest") || pom.contains("quarkus-oidc") || pom.contains("quarkus-agroal"), target + ": no REST shell, OIDC or database");
+            p.files().forEach((path, bytes) -> {
+                String content = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+                assertFalse(content.contains("tech.kayys.wayang.api."), target + ": " + path + " references the design API package");
+                assertFalse(content.contains("WAYANG_MODE") || content.contains("WAYANG_STUDIO"), target + ": " + path + " references design-server settings");
+                assertFalse(content.contains("/api/v1"), target + ": " + path + " calls the design server's API");
+            });
+        }
+    }
+
+    @Test
+    void aKafkaTriggerBringsTheKafkaModuleAndIsAcceptedAsASource() {
+        var b = withTriggers(bundle(false, false, "x"), List.of(trigger("t", "POLL", Map.of("source", "kafka"))), List.of());
+        var p = Publisher.generate(b, OPTS);
+        assertTrue(text(p, "pom.xml").contains("wayang-endpoints-kafka"));
+        assertFalse(text(p, "pom.xml").contains("<artifactId>wayang-endpoints</artifactId>"), "only the module that is used");
+        assertTrue(text(p, "src/main/java/com/acme/release/Processes.java").contains("\"kafka\""));
+    }
+
     private static Publisher.Project build0(String bundle) {
         return Publisher.generate(bundle, OPTS);
     }
@@ -453,6 +529,9 @@ class PublishTest {
                     runs = ((List<?>) ((Map<?, ?>) Json.read(l.body())).get("runs")).size();
                 }
                 assertEquals(3, runs, "one run from the webhook and two from the feed");
+                for (int i = 0; i < 40 && !Files.isRegularFile(state.resolve("cursor-feed")); i++) {
+                    Thread.sleep(100); // the cursor is saved just after the runs start
+                }
                 assertTrue(Files.isRegularFile(state.resolve("cursor-feed")), "the cursor was written to the state directory");
                 var trig = c.send(HttpRequest.newBuilder(URI.create(base + "/v1/triggers")).header("Authorization", "Bearer k-2").build(), HttpResponse.BodyHandlers.ofString());
                 assertTrue(trig.body().contains("\"feed\"") && !trig.body().contains("hook-s3cret"));
@@ -566,6 +645,21 @@ class PublishTest {
         // under a profile without the media feature the extension is not loaded, so its connector is unknown
         ReleaseOptions noMedia = ReleaseOptions.of(Map.of("profile", "agentic"), "my-release", "0.0.1");
         assertEquals(List.of("image-generate"), Publisher.generate(Json.write(m), noMedia).connectors(), "agentic has media");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aFileToolBringsTheEndpointsModuleOnlyWhenUsed() {
+        Map<String, Object> m = (Map<String, Object>) Json.read(bundle(false, true, "Inbox"));
+        ((List<Object>) m.get("definitions")).add(Map.of("kind", "AGENT", "id", "clerk", "publishedVersion", 1, "document", Map.of("id", "clerk", "model", "ollama/x",
+                "tools", List.of(Map.of("name", "read", "type", "fs-read", "config", Map.of("path", "in"))))));
+        for (ReleaseOptions o : List.of(OPTS, GAM)) {
+            var p = Publisher.generate(Json.write(m), o);
+            assertTrue(p.components().contains("wayang.endpoints.fs-read"), p.components().toString());
+            assertTrue(text(p, "pom.xml").contains("wayang-endpoints"), o.target().toString());
+            assertFalse(text(p, "pom.xml").contains("wayang-knowledge"));
+        }
+        assertFalse(text(Publisher.generate(bundle(true, false, "Plain"), OPTS), "pom.xml").contains("wayang-endpoints"));
     }
 
     @Test

@@ -1,0 +1,33 @@
+# Wayang Community all-in-one: Studio + API + execution in one container. NOT FOR SHARED DEPLOYMENTS (single operator key,
+# one tenant; see docs/IDENTITY.md "Local mode"). Production uses separated services (docs/EDITIONS.md).
+#
+#   docker build -f deploy/Dockerfile.all-in-one -t wayang:community .
+#   docker run --rm -p 127.0.0.1:8080:8080 -e WAYANG_AUTH_LOCAL_API_KEY="$(openssl rand -hex 24)" wayang:community
+#
+# UNBUILT: written without a Docker daemon, Flutter SDK or Maven Central access; the first real build may need fixes.
+
+FROM ghcr.io/cirruslabs/flutter:stable AS studio
+ARG WAYANG_API=http://localhost:8080
+WORKDIR /src/studio
+COPY studio/ ./
+RUN flutter pub get && flutter build web --release --dart-define=WAYANG_API=${WAYANG_API}
+
+FROM maven:3.9-eclipse-temurin-21 AS api
+WORKDIR /src
+COPY . .
+RUN mvn -B -q -DskipTests -pl wayang-api-rest -am package
+
+FROM eclipse-temurin:21-jre
+RUN useradd --system --uid 10001 --home /opt/wayang wayang
+WORKDIR /opt/wayang
+COPY --from=api /src/wayang-api-rest/target/quarkus-app/ ./app/
+COPY --from=studio /src/studio/build/web/ ./studio/
+# the key is mandatory (no default): the container refuses to start without WAYANG_AUTH_LOCAL_API_KEY
+ENV WAYANG_AUTH_MODE=local \
+    QUARKUS_OIDC_ENABLED=false \
+    QUARKUS_HTTP_AUTH_PERMISSION_API_POLICY=permit \
+    WAYANG_STUDIO_DIR=/opt/wayang/studio \
+    QUARKUS_HTTP_HOST=0.0.0.0
+USER wayang
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "/opt/wayang/app/quarkus-run.jar"]

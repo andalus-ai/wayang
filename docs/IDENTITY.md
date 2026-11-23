@@ -40,6 +40,18 @@ quarkus.grpc.clients.numu.port=9000
 wayang.auth.numu.cache-seconds=30
 ```
 
+### Local mode (Community all-in-one, no identity service)
+
+```
+wayang.auth.mode=local
+wayang.auth.local.api-key=<at least 24 random characters>   # or env WAYANG_AUTH_LOCAL_API_KEY
+wayang.auth.local.tenant=local                              # default
+quarkus.oidc.enabled=false
+quarkus.http.auth.permission.api.policy=permit              # the key is checked by Wayang itself
+```
+
+One operator key, sent as `Authorization: Bearer <key>`, is a full administrator of one tenant. For a developer machine or a private network, not for a shared deployment (use `jwt` or `numu`). A missing or short key stops the server at start-up; a wrong key is a 401 that never echoes the key. Because the HTTP layer is set to `permit`, every endpoint must resolve the caller itself (all `/api` resources do); keep the port on a private interface. The comparison is constant time (digest compare). Implemented in `LocalAuth` (unit-tested) and `Principals` (HTTP, WebSocket tickets, gRPC); the Quarkus wiring compiles against stubs only and has not been started.
+
 `wayang-api-rest/src/main/proto/auth_check.proto` is a verbatim copy of Numu's contract (commit `2c7e951`); keep it identical.
 
 ## Verification and gaps

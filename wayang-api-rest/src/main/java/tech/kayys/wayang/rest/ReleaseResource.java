@@ -40,7 +40,14 @@ public class ReleaseResource {
     @Produces("application/zip")
     public Response release(@PathParam("id") String id, Map<String, Object> options) {
         ReleaseService.Release r = releases.service().release(principals.current(), id, options);
-        return Response.ok(r.zip()).header("Content-Disposition", "attachment; filename=\"" + r.filename() + "\"")
-                .header("Cache-Control", "no-store").build();
+        Response.ResponseBuilder out = Response.ok(r.zip()).header("Content-Disposition", "attachment; filename=\"" + r.filename() + "\"")
+                .header("Cache-Control", "no-store").header("X-Wayang-Release-Sha256", r.sha256());
+        if (r.signature() != null) {
+            out.header("X-Wayang-Release-Signature", r.signature());
+        }
+        if (r.publicSignature() != null) {
+            out.header("X-Wayang-Release-Signature-Ed25519", r.publicSignature()).header("X-Wayang-Release-Key-Id", r.keyId());
+        }
+        return out.build();
     }
 }

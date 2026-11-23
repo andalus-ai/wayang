@@ -22,7 +22,7 @@
 
 ## Deployment modes
 
-The layers above are assembled in two ways (`docs/EDITIONS.md`): all-in-one for Community and development (Studio, design server and execution in one runtime), or separated for Pro and Enterprise (a design-time Studio, generated standalone runtimes for agents and workflows, and the separate Wayang Console for fleet management). Only the assembly differs; plans, handlers and the release pipeline are shared. The mode switch and the all-in-one distribution are proposed, not built.
+The layers above are assembled in two ways (`docs/EDITIONS.md`): all-in-one for Community and development (Studio, design server and execution in one runtime), or separated for Pro and Enterprise (a design-time Studio, generated standalone runtimes for agents and workflows, and the separate Wayang Console for fleet management). Only the assembly differs; plans, handlers and the release pipeline are shared. `WAYANG_MODE=design` makes the design server refuse to execute; the all-in-one distribution is proposed, not built.
 
 ## Process semantics
 

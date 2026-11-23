@@ -5,11 +5,11 @@ runtime serves. BPMN control flow (events, gateways, timers, messages) is always
 
 | Profile | Features | Use it as |
 |---|---|---|
-| `full` (default) | service, dmn, eip, agent, human, media | the whole assistant / agent-builder platform |
+| `full` (default) | service, dmn, eip, agent, human, media, knowledge, endpoints | the whole assistant / agent-builder platform |
 | `automation` | service, dmn, human | business-automation / BPM platform |
-| `integration` | service, eip | integration platform (pipelines, connectors, triggers) |
-| `agentic` | service, agent, human, eip, media | personal assistant / agent builder |
-| custom | e.g. `dmn,service` | any comma list of `service,dmn,eip,agent,human,media` |
+| `integration` | service, eip, endpoints | integration platform (pipelines, connectors, file endpoints, triggers) |
+| `agentic` | service, agent, human, eip, media, knowledge | personal assistant / agent builder |
+| custom | e.g. `dmn,service` | any comma list of `service,dmn,eip,agent,human,media,knowledge,endpoints` |
 
 A typo is an error, never "everything enabled".
 
