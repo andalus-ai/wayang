@@ -57,8 +57,15 @@ public final class Publisher {
                 }
             }
         }
-        if (processes.isEmpty()) {
-            throw new IllegalArgumentException("The bundle has no process to release");
+        boolean agentOnly = processes.isEmpty() && bundle.definitions().stream().anyMatch(d -> d.kind().equals("AGENT"));
+        if (agentOnly) {
+            agents = true; // an agent released on its own: POST /v1/agents/{id}/chat, no workflow around it
+            if (o.target() == ReleaseOptions.Target.GAMELAN) {
+                throw new IllegalArgumentException("An agent-only release runs as a STANDALONE or SERVICE target; the Gamelan target needs a process");
+            }
+        }
+        if (processes.isEmpty() && !agentOnly) {
+            throw new IllegalArgumentException("The bundle has no process (or agent) to release");
         }
         tech.kayys.wayang.runtime.Profile profile = tech.kayys.wayang.runtime.Profile.parse(o.profile());
         for (var plan : profile == tech.kayys.wayang.runtime.Profile.FULL ? List.<tech.kayys.wayang.bpmn.ExecutionPlan>of()
@@ -98,7 +105,8 @@ public final class Publisher {
             }
         }
         List<String> unknownTriggers = new ArrayList<>();
-        pollSources.stream().filter(x -> !Connectors.pollers(new tech.kayys.wayang.connectors.UrlGuard(false, Set.of())).containsKey(x))
+        pollSources.stream().filter(x -> !ENDPOINTS_POLL_SOURCES.contains(x) && !KAFKA_POLL_SOURCES.contains(x))
+                .filter(x -> !Connectors.pollers(new tech.kayys.wayang.connectors.UrlGuard(false, Set.of())).containsKey(x))
                 .forEach(x -> unknownTriggers.add("poll source " + x));
         providers.stream().filter(x -> !Connectors.webhookProviders().containsKey(x)).forEach(x -> unknownTriggers.add("webhook provider " + x));
         if (!unknownTriggers.isEmpty()) {
@@ -107,8 +115,11 @@ public final class Publisher {
         boolean multimodal = used.stream().anyMatch(MULTIMODAL_CONNECTORS::contains);
         String knowledge = used.stream().anyMatch(KNOWLEDGE_CONNECTORS::contains)
                 ? KNOWLEDGE_DEP + (used.contains("rag-ingest") ? PDF_DEP : "") : "";
-        if (used.stream().anyMatch(ENDPOINTS_CONNECTORS::contains)) {
+        if (used.stream().anyMatch(ENDPOINTS_CONNECTORS::contains) || pollSources.stream().anyMatch(ENDPOINTS_POLL_SOURCES::contains)) {
             knowledge += ENDPOINTS_DEP; // same mechanism: an extension found through ServiceLoader
+        }
+        if (used.stream().anyMatch(KAFKA_CONNECTORS::contains) || pollSources.stream().anyMatch(KAFKA_POLL_SOURCES::contains)) {
+            knowledge += KAFKA_DEP; // brings kafka-clients; the operator sets the permitted brokers and topic prefixes
         }
         boolean mcp = used.stream().anyMatch(MCP_CONNECTORS::contains);
         boolean needsConnectors = !used.isEmpty() || !pollSources.isEmpty() || !providers.isEmpty();
@@ -333,6 +344,19 @@ public final class Publisher {
                                     <version>${wayang.version}</version>
                                 </dependency>
                         """;
+    /** Needed only for the {@code kafka-publish} connector or a {@code kafka} trigger; its own module because it needs kafka-clients. */
+    static final String KAFKA_DEP = """
+                                <dependency>
+                                    <groupId>tech.kayys.wayang</groupId>
+                                    <artifactId>wayang-endpoints-kafka</artifactId>
+                                    <version>${wayang.version}</version>
+                                </dependency>
+                        """;
+    static final Set<String> KAFKA_POLL_SOURCES = Set.of("kafka");
+    static final Set<String> KAFKA_CONNECTORS = Set.of("kafka-publish");
+    /** Trigger sources served by the endpoints extension (found through ServiceLoader, like its connectors). */
+    static final Set<String> ENDPOINTS_POLL_SOURCES = Set.of("fs", "jdbc");
+    static final Set<String> ENDPOINTS_CONNECTORS = Set.of("sql", "camel", "fs-read", "fs-write", "fs-list", "fs-move", "fs-delete");
     static final Set<String> ENDPOINTS_CONNECTORS = Set.of("sql", "fs-read", "fs-write", "fs-list", "fs-move", "fs-delete");
     static final Set<String> KNOWLEDGE_CONNECTORS = Set.of("rag-ingest", "rag-search", "rag-forget", "rag-list", "file-put", "file-fetch", "file-get", "file-list", "file-delete", "file-purge");
     /** Needed only when the {@code openapi} connector is used; the runtime finds the extension through ServiceLoader. */
@@ -357,7 +381,7 @@ public final class Publisher {
             sb.append("import tech.kayys.wayang.connectors.Connectors;\n");
         }
         if (!pollSources.isEmpty()) {
-            sb.append("import tech.kayys.wayang.connectors.UrlGuard;\n");
+            sb.append("import tech.kayys.wayang.connectors.UrlGuard;\nimport tech.kayys.wayang.runtime.Extensions;\nimport tech.kayys.wayang.runtime.Profile;\n");
         }
         sb.append("import tech.kayys.wayang.runtime.Poller;\nimport tech.kayys.wayang.runtime.ServiceHandler;\nimport tech.kayys.wayang.runtime.WebhookProvider;\n\n");
         sb.append("/** Generated by Wayang. Only the connectors, poll sources and webhook providers this release uses are wired. */\n");
@@ -405,7 +429,8 @@ public final class Publisher {
             sb.append("""
                         static Map<String, Poller> pollers(Function<String, String> env) {
                             Map<String, Poller> pollers = new LinkedHashMap<>();
-                            Connectors.pollers(new UrlGuard(allowPrivate(env), hosts(env))).forEach((name, p) -> {
+                            Connectors.pollers(new UrlGuard(allowPrivate(env), hosts(env)),
+                                    Extensions.load(Profile.fromEnvironment())).forEach((name, p) -> { // built-in sources plus those of extensions (fs, jdbc)
                                 if (Processes.POLL_SOURCES.contains(name)) {
                                     pollers.put(name, p); // only the sources the triggers poll
                                 }
@@ -689,7 +714,9 @@ public final class Publisher {
             sb.append("Start runs with `POST /v1/processes/{id}/runs` (below). `GET /readyz` tells whether the workflows are deployed and the secrets present.\n\n");
         } else {
             sb.append("## Build and run\n\n```\nmvn -q package\njava -jar target/app.jar check        # what is missing?\n");
-            sb.append("java -jar target/app.jar run ").append(processes.get(0)).append(" --input input.json\n");
+            if (!processes.isEmpty()) {
+                sb.append("java -jar target/app.jar run ").append(processes.get(0)).append(" --input input.json\n");
+            }
             if (o.target() == ReleaseOptions.Target.SERVICE) {
                 sb.append("java -jar target/app.jar serve        # HTTP on WAYANG_PORT (default ").append(o.port()).append(")\n");
             }
@@ -697,6 +724,9 @@ public final class Publisher {
         }
         if (o.target() != ReleaseOptions.Target.STANDALONE) {
             sb.append("## HTTP\n\nSend `Authorization: Bearer $WAYANG_API_KEY` on everything under `/v1`. `/healthz` and `/readyz` need no key (use them as probes).\n\n");
+            if (agents) {
+                sb.append("Agents are reachable directly: `GET /v1/agents`, and `POST /v1/agents/{id}/chat` with `{\"message\": \"...\", \"chatId\": \"...\"}` (the answer is `reply`). The agent's memory, persona and guardrails apply; templates see the message as `event.text` and the chat as `event.chatId`.\n\n");
+            }
             sb.append("```\nPOST /v1/processes/{id}/runs   {\"input\": {...}}\nGET  /v1/runs/{id}   GET /v1/runs\nPOST /v1/runs/{id}/cancel\nPOST /v1/tasks/{token}/complete   {\"outputs\": {...}}\nGET  /v1/release\n```\n\n");
         }
         sb.append("## Configuration\n\nSee `.env.example`. Secrets are read from `WAYANG_SECRET_<NAME>` or from files in `WAYANG_SECRETS_DIR`; settings from ");

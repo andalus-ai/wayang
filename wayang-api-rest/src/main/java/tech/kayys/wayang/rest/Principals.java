@@ -17,7 +17,7 @@ import tech.kayys.wayang.api.Role;
 import tech.kayys.wayang.numu.NumuPrincipalResolver;
 
 /**
- * Establishes the {@link Principal} of the current request. Two modes ({@code wayang.auth.mode}):
+ * Establishes the {@link Principal} of the current request. Three modes ({@code wayang.auth.mode}):
  *
  * <ul>
  * <li>{@code jwt} (default): tenant from the configurable claim (default {@code tenant_id}), user from {@code sub},
@@ -25,6 +25,9 @@ import tech.kayys.wayang.numu.NumuPrincipalResolver;
  * <li>{@code numu}: the bearer credential (JWT or personal access token) is validated by Numu identity and the
  * permissions are Numu's, resolved for the tenant named in the {@code X-Tenant} header (never trusted without a
  * membership check). Set {@code quarkus.oidc.enabled=false} in this mode, or OIDC rejects PATs first.</li>
+ * <li>{@code local}: the Community all-in-one server: one operator key ({@code wayang.auth.local.api-key}) is a full administrator
+ * of one tenant. For a developer machine or private network; see {@link tech.kayys.wayang.api.LocalAuth}. Set
+ * {@code quarkus.oidc.enabled=false} and {@code quarkus.http.auth.permission.api.policy=permit} in this mode (the key is checked here).</li>
  * </ul>
  */
 @RequestScoped
@@ -48,11 +51,14 @@ public class Principals {
     @Inject
     TenantGateConfig tenantGate;
 
+    @Inject
+    LocalAuthConfig local;
+
     private Principal cached;
 
     public Principal current() {
         if (cached == null) {
-            Principal p = "numu".equalsIgnoreCase(mode) ? fromNumu() : fromJwt();
+            Principal p = "numu".equalsIgnoreCase(mode) ? fromNumu() : "local".equalsIgnoreCase(mode) ? fromLocal() : fromJwt();
             tenantGate.gate().require(p.tenantId()); // suspended tenants are refused before anything else runs
             cached = p;
         }
@@ -62,6 +68,17 @@ public class Principals {
     /** The principal if this request already resolved one; never calls the identity service (used by the audit filter). */
     public Principal peek() {
         return cached;
+    }
+
+    private Principal fromLocal() {
+        String grpcAuth = GrpcAuthInterceptor.AUTHORIZATION.get(); // non-null only inside a gRPC call
+        if (grpcAuth != null) {
+            return local.auth().resolve(grpcAuth);
+        }
+        if (!headers.isResolvable()) {
+            throw new ApiException(ApiException.Code.UNAUTHORIZED, "Not authenticated");
+        }
+        return local.auth().resolve(headers.get().getHeaderString("Authorization"));
     }
 
     private Principal fromNumu() {

@@ -78,6 +78,10 @@ final class ComponentLockfile {
                 if (!matches.isEmpty()) roots.add(matches.get(0).id());
             }
         }
+        if (roots.isEmpty() && bundle.definitions().stream().anyMatch(d -> d.kind().equals("AGENT"))) {
+            // an agent released on its own runs as a one-node plan: it needs what an agent task needs
+            roots.addAll(ComponentRequirements.componentIds(List.of(ElementType.AGENT_TASK), List.of()));
+        }
         if (roots.isEmpty()) {
             throw new IllegalArgumentException("The release has no process component requirements");
         }

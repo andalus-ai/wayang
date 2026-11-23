@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import tech.kayys.wayang.connectors.UrlGuard;
 import tech.kayys.wayang.runtime.ComponentDescriptor;
 import tech.kayys.wayang.runtime.ConnectorInput;
 import tech.kayys.wayang.runtime.Poller;
