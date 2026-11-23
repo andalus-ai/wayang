@@ -12,7 +12,6 @@ import java.util.Set;
 
 /** Bounded process-local reference implementation of {@link GraphStore}. */
 public final class InMemoryGraphStore implements GraphStore {
-
     public static final int DEFAULT_MAX_ENTITIES = 20_000;
     public static final int DEFAULT_MAX_RELATIONSHIPS = 100_000;
 
@@ -26,9 +25,7 @@ public final class InMemoryGraphStore implements GraphStore {
     private final Map<EntityKey, KnowledgeEntity> entities = new LinkedHashMap<>();
     private final Map<RelationshipKey, KnowledgeRelationship> relationships = new LinkedHashMap<>();
 
-    public InMemoryGraphStore() {
-        this(DEFAULT_MAX_ENTITIES, DEFAULT_MAX_RELATIONSHIPS);
-    }
+    public InMemoryGraphStore() { this(DEFAULT_MAX_ENTITIES, DEFAULT_MAX_RELATIONSHIPS); }
 
     public InMemoryGraphStore(int maxEntities, int maxRelationships) {
         if (maxEntities < 1 || maxRelationships < 1) {
@@ -40,30 +37,53 @@ public final class InMemoryGraphStore implements GraphStore {
 
     @Override
     public synchronized void upsertEntity(KnowledgeEntity entity) {
-        if (entity == null) throw new RagException("entity is required");
-        EntityKey key = new EntityKey(scope(entity.tenantId(), entity.collectionId()), entity.id());
-        KnowledgeEntity existing = entities.get(key);
-        if (existing == null && entities.size() >= maxEntities) {
-            throw new RagException("the in-memory graph has reached its entity limit");
-        }
-        entities.put(key, existing == null ? entity : merge(existing, entity));
+        upsertGraph(List.of(entity), List.of());
     }
 
     @Override
     public synchronized void upsertRelationship(KnowledgeRelationship relationship) {
-        if (relationship == null) throw new RagException("relationship is required");
-        Scope scope = scope(relationship.tenantId(), relationship.collectionId());
-        EntityKey from = new EntityKey(scope, relationship.fromEntityId());
-        EntityKey to = new EntityKey(scope, relationship.toEntityId());
-        if (!entities.containsKey(from) || !entities.containsKey(to)) {
-            throw new RagException("both relationship endpoints must exist in the same tenant and collection");
+        upsertGraph(List.of(), List.of(relationship));
+    }
+
+    @Override
+    public synchronized void upsertGraph(
+            List<KnowledgeEntity> entityBatch, List<KnowledgeRelationship> relationshipBatch) {
+        if (entityBatch == null || relationshipBatch == null) {
+            throw new RagException("graph mutation entity and relationship lists are required");
         }
-        RelationshipKey key = new RelationshipKey(scope, relationship.id());
-        KnowledgeRelationship existing = relationships.get(key);
-        if (existing == null && relationships.size() >= maxRelationships) {
+        Map<EntityKey, KnowledgeEntity> stagedEntities = new LinkedHashMap<>(entities);
+        Map<RelationshipKey, KnowledgeRelationship> stagedRelationships = new LinkedHashMap<>(relationships);
+
+        for (KnowledgeEntity entity : entityBatch) {
+            if (entity == null) throw new RagException("entity is required");
+            EntityKey key = new EntityKey(scope(entity.tenantId(), entity.collectionId()), entity.id());
+            KnowledgeEntity existing = stagedEntities.get(key);
+            stagedEntities.put(key, existing == null ? entity : merge(existing, entity));
+        }
+
+        for (KnowledgeRelationship relationship : relationshipBatch) {
+            if (relationship == null) throw new RagException("relationship is required");
+            Scope scope = scope(relationship.tenantId(), relationship.collectionId());
+            EntityKey from = new EntityKey(scope, relationship.fromEntityId());
+            EntityKey to = new EntityKey(scope, relationship.toEntityId());
+            if (!stagedEntities.containsKey(from) || !stagedEntities.containsKey(to)) {
+                throw new RagException("both relationship endpoints must exist in the same tenant and collection");
+            }
+            RelationshipKey key = new RelationshipKey(scope, relationship.id());
+            KnowledgeRelationship existing = stagedRelationships.get(key);
+            stagedRelationships.put(key, existing == null ? relationship : merge(existing, relationship));
+        }
+
+        if (stagedEntities.size() > maxEntities) {
+            throw new RagException("the in-memory graph has reached its entity limit");
+        }
+        if (stagedRelationships.size() > maxRelationships) {
             throw new RagException("the in-memory graph has reached its relationship limit");
         }
-        relationships.put(key, existing == null ? relationship : merge(existing, relationship));
+        entities.clear();
+        entities.putAll(stagedEntities);
+        relationships.clear();
+        relationships.putAll(stagedRelationships);
     }
 
     @Override
@@ -91,7 +111,6 @@ public final class InMemoryGraphStore implements GraphStore {
                         entity.type(), entity.canonicalName(), entity.aliases(), entity.properties(), retained));
             }
         }
-
         int relationshipEvidenceRemoved = 0;
         int relationshipsRemoved = 0;
         var iterator = relationships.entrySet().iterator();
@@ -125,19 +144,14 @@ public final class InMemoryGraphStore implements GraphStore {
         Set<String> visited = new LinkedHashSet<>();
         ArrayDeque<Visit> queue = new ArrayDeque<>();
         boolean truncated = false;
-
         for (String seed : query.seedEntityIds()) {
             if (entities.containsKey(new EntityKey(scope, seed))) {
-                if (foundEntities.size() >= query.maxNodes()) {
-                    truncated = true;
-                    break;
-                }
+                if (foundEntities.size() >= query.maxNodes()) { truncated = true; break; }
                 visited.add(seed);
                 foundEntities.put(seed, entities.get(new EntityKey(scope, seed)));
                 queue.add(new Visit(seed, 0));
             }
         }
-
         while (!queue.isEmpty()) {
             Visit current = queue.removeFirst();
             if (current.depth() >= query.maxDepth()) continue;
@@ -146,21 +160,16 @@ public final class InMemoryGraphStore implements GraphStore {
                     .filter(r -> query.predicates().isEmpty() || query.predicates().contains(r.predicate()))
                     .filter(r -> touches(r, current.entityId(), query.direction()))
                     .sorted(Comparator.comparing(KnowledgeRelationship::id)).toList();
-
             for (KnowledgeRelationship edge : adjacent) {
                 String next = nextEntity(edge, current.entityId(), query.direction());
                 if (next == null) continue;
                 KnowledgeEntity nextEntity = entities.get(new EntityKey(scope, next));
                 if (nextEntity == null) continue;
                 if (!visited.contains(next) && foundEntities.size() >= query.maxNodes()) {
-                    truncated = true;
-                    break;
+                    truncated = true; break;
                 }
                 if (!foundRelationships.containsKey(edge.id())) {
-                    if (foundRelationships.size() >= query.maxEdges()) {
-                        truncated = true;
-                        break;
-                    }
+                    if (foundRelationships.size() >= query.maxEdges()) { truncated = true; break; }
                     foundRelationships.put(edge.id(), edge);
                 }
                 if (visited.add(next)) {
@@ -188,8 +197,7 @@ public final class InMemoryGraphStore implements GraphStore {
                 existing.type(), existing.canonicalName(), new ArrayList<>(aliases), properties, new ArrayList<>(evidence));
     }
 
-    private static KnowledgeRelationship merge(
-            KnowledgeRelationship existing, KnowledgeRelationship incoming) {
+    private static KnowledgeRelationship merge(KnowledgeRelationship existing, KnowledgeRelationship incoming) {
         if (!existing.fromEntityId().equals(incoming.fromEntityId())
                 || !existing.toEntityId().equals(incoming.toEntityId())
                 || !existing.predicate().equals(incoming.predicate())) {
