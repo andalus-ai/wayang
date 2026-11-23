@@ -58,8 +58,10 @@ public final class RegexRelationshipExtractor implements RelationshipExtractor {
             while (matcher.find()) {
                 String fromText = RegexEntityExtractor.normalize(matcher.group(rule.fromGroup()));
                 String toText = RegexEntityExtractor.normalize(matcher.group(rule.toGroup()));
-                EntityCandidate from = uniqueMatch(safeEntities, fromText);
-                EntityCandidate to = uniqueMatch(safeEntities, toText);
+                EntityCandidate from = uniqueMatch(safeEntities, fromText,
+                        matcher.start(rule.fromGroup()), matcher.end(rule.fromGroup()));
+                EntityCandidate to = uniqueMatch(safeEntities, toText,
+                        matcher.start(rule.toGroup()), matcher.end(rule.toGroup()));
                 if (from == null || to == null || from.candidateId().equals(to.candidateId())) continue;
                 int start = matcher.start();
                 int end = matcher.end();
@@ -72,14 +74,12 @@ public final class RegexRelationshipExtractor implements RelationshipExtractor {
         return List.copyOf(result);
     }
 
-    private static EntityCandidate uniqueMatch(List<EntityCandidate> entities, String normalizedText) {
-        EntityCandidate found = null;
+    private static EntityCandidate uniqueMatch(List<EntityCandidate> entities, String normalizedText, int start, int end) {
         for (EntityCandidate entity : entities) {
-            if (!entity.normalizedName().equals(normalizedText)) continue;
-            if (found != null) return null;
-            found = entity;
+            if (entity.startOffset() == start && entity.endOffset() == end
+                    && entity.normalizedName().equals(normalizedText)) return entity;
         }
-        return found;
+        return null;
     }
 
     private static String candidateId(KnowledgeExtractionInput input, String predicate,
