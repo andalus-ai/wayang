@@ -81,6 +81,10 @@ public final class AgentDependencyResolver {
                 throw new ResolutionException("No available version of '" + dependency.id()
                         + "' satisfies '" + dependency.versionRange() + "'");
             }
+            if (visiting.contains(dependency.id())) {
+                throw new ResolutionException("Agent dependency cycle detected: "
+                        + String.join(" -> ", visiting) + " -> " + dependency.id());
+            }
             PackageArtifact previous = selected.get(dependency.id());
             if (previous != null) {
                 if (!previous.sha256().equalsIgnoreCase(match.sha256())) {
@@ -90,10 +94,6 @@ public final class AgentDependencyResolver {
                     match = previous;
                 }
                 continue;
-            }
-            if (visiting.contains(dependency.id())) {
-                throw new ResolutionException("Agent dependency cycle detected: "
-                        + String.join(" -> ", visiting) + " -> " + dependency.id());
             }
             selected.put(dependency.id(), match);
             visit(match, catalog, selected, visiting, locked);
