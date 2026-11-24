@@ -43,6 +43,7 @@ public final class JdbcInstalledAgentStore implements InstalledAgentStore {
                     installed_ms = EXCLUDED.installed_ms,
                     updated_ms = EXCLUDED.updated_ms
                 WHERE wayang_installed_agent.updated_ms <= EXCLUDED.updated_ms
+                  AND wayang_installed_agent.package_id = EXCLUDED.package_id
                 """;
         try (Connection connection = dataSource.getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, installedAgent.tenantId());
