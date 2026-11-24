@@ -93,7 +93,7 @@ class WalRetentionSimulationTest(unittest.TestCase):
         (self.archive / "000000010000000000000003").write_bytes(b"late arrival")
 
         with self.assertRaisesRegex(SimulationError, "archive snapshot changed since planning"):
-            simulate(self.archive, self.plan, self.root / "stale-membership")
+            simulate(self.archive, self.plan, self.catalog, self.root / "stale-membership")
         self.assertFalse((self.root / "stale-membership").exists())
 
     def test_copy_adds_read_access_for_restore_user_without_changing_source(self):
@@ -101,7 +101,7 @@ class WalRetentionSimulationTest(unittest.TestCase):
         source.chmod(0o600)
         destination = self.root / "readable-copy"
 
-        simulate(self.archive, self.plan, destination)
+        simulate(self.archive, self.plan, self.catalog, destination)
 
         source_mode = stat.S_IMODE(source.stat().st_mode)
         copy_mode = stat.S_IMODE((destination / REQUIRED).stat().st_mode)
@@ -111,7 +111,7 @@ class WalRetentionSimulationTest(unittest.TestCase):
 
     def test_negative_control_can_remove_required_wal_from_copy(self):
         destination = self.root / "negative"
-        report = simulate(self.archive, self.plan, destination, remove_required_wal=True)
+        report = simulate(self.archive, self.plan, self.catalog, destination, remove_required_wal=True)
 
         self.assertFalse((destination / REQUIRED).exists())
         self.assertTrue((self.archive / REQUIRED).is_file())
@@ -125,34 +125,34 @@ class WalRetentionSimulationTest(unittest.TestCase):
         marker.write_text("keep", encoding="utf-8")
 
         with self.assertRaisesRegex(SimulationError, "must not already exist"):
-            simulate(self.archive, self.plan, destination)
+            simulate(self.archive, self.plan, self.catalog, destination)
         self.assertEqual(marker.read_text(encoding="utf-8"), "keep")
 
     def test_missing_required_archive_file_fails_closed(self):
         (self.archive / REQUIRED).unlink()
         with self.assertRaisesRegex(SimulationError, "absent archive files"):
-            simulate(self.archive, self.plan, self.root / "missing")
+            simulate(self.archive, self.plan, self.catalog, self.root / "missing")
 
     def test_plan_that_reports_missing_dependencies_fails_closed(self):
         self.write_plan(missing_required_files=[REQUIRED])
         with self.assertRaisesRegex(SimulationError, "missing required"):
-            simulate(self.archive, self.plan, self.root / "missing-plan")
+            simulate(self.archive, self.plan, self.catalog, self.root / "missing-plan")
 
     def test_plan_cannot_mark_required_segment_as_candidate(self):
         self.write_plan(eligible_wal_files=[REQUIRED])
         with self.assertRaisesRegex(SimulationError, "required WAL segment as eligible"):
-            simulate(self.archive, self.plan, self.root / "overlap")
+            simulate(self.archive, self.plan, self.catalog, self.root / "overlap")
 
     def test_symlink_in_archive_fails_closed(self):
         link = self.archive / "000000010000000000000003"
         link.symlink_to(self.archive / REQUIRED)
         with self.assertRaisesRegex(SimulationError, "regular files only"):
-            simulate(self.archive, self.plan, self.root / "symlink")
+            simulate(self.archive, self.plan, self.catalog, self.root / "symlink")
 
     def test_non_dry_run_plan_fails_closed(self):
         self.write_plan(deletion_performed=True)
         with self.assertRaisesRegex(SimulationError, "explicit dry-run"):
-            simulate(self.archive, self.plan, self.root / "not-dry-run")
+            simulate(self.archive, self.plan, self.catalog, self.root / "not-dry-run")
 
 
 if __name__ == "__main__":
