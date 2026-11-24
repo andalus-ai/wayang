@@ -14,6 +14,7 @@ public record AgentPackageLock(String packageId, String version, String artifact
         requireText(packageId, "packageId");
         requireText(version, "version");
         requireDigest(artifactSha256, "artifactSha256");
+        artifactSha256 = artifactSha256.toLowerCase(java.util.Locale.ROOT);
         dependencies = (dependencies == null ? List.<LockedDependency>of() : dependencies).stream().sorted().toList();
         for (int i = 1; i < dependencies.size(); i++) {
             if (dependencies.get(i - 1).kind().equals(dependencies.get(i).kind())
@@ -26,6 +27,8 @@ public record AgentPackageLock(String packageId, String version, String artifact
             sha256 = expected;
         } else if (!expected.equalsIgnoreCase(sha256)) {
             throw new IllegalArgumentException("Agent package lock digest does not match its contents");
+        } else {
+            sha256 = expected;
         }
     }
 
@@ -66,6 +69,7 @@ public record AgentPackageLock(String packageId, String version, String artifact
             requireText(packageId, "dependency.packageId");
             requireText(version, "dependency.version");
             requireDigest(artifactSha256, "dependency.artifactSha256");
+            artifactSha256 = artifactSha256.toLowerCase(java.util.Locale.ROOT);
         }
 
         @Override
