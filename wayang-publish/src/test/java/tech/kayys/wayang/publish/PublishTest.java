@@ -475,6 +475,13 @@ class PublishTest {
         assertTrue(text(p, "src/main/java/com/acme/release/Processes.java").contains("\"sftp\""));
     }
 
+    @Test
+    void theAmqpModuleIsKnownToTheCatalogAndTheProfiles() {
+        assertTrue(Publisher.AMQP_CONNECTORS.contains("amqp-publish"));
+        assertTrue(tech.kayys.wayang.runtime.Profile.INTEGRATION.features().contains(tech.kayys.wayang.runtime.Profile.Feature.ENDPOINTS_AMQP));
+        assertFalse(tech.kayys.wayang.runtime.Profile.AGENTIC.features().contains(tech.kayys.wayang.runtime.Profile.Feature.ENDPOINTS_AMQP));
+    }
+
     private static Publisher.Project build0(String bundle) {
         return Publisher.generate(bundle, OPTS);
     }

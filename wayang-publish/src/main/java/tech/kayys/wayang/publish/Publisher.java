@@ -124,6 +124,9 @@ public final class Publisher {
         if (used.stream().anyMatch(SFTP_CONNECTORS::contains) || pollSources.stream().anyMatch(SFTP_POLL_SOURCES::contains)) {
             knowledge += SFTP_DEP; // brings sshj; the operator sets the permitted servers
         }
+        if (used.stream().anyMatch(AMQP_CONNECTORS::contains)) {
+            knowledge += AMQP_DEP; // brings amqp-client; the operator sets the permitted brokers and exchange prefixes
+        }
         boolean mcp = used.stream().anyMatch(MCP_CONNECTORS::contains);
         boolean needsConnectors = !used.isEmpty() || !pollSources.isEmpty() || !providers.isEmpty();
         List<String> notes = new ArrayList<>();
@@ -363,6 +366,15 @@ public final class Publisher {
                                     <version>${wayang.version}</version>
                                 </dependency>
                         """;
+    /** Needed only for the {@code amqp-publish} connector; its own module because it needs the RabbitMQ client. */
+    static final String AMQP_DEP = """
+                                <dependency>
+                                    <groupId>tech.kayys.wayang</groupId>
+                                    <artifactId>wayang-endpoints-amqp</artifactId>
+                                    <version>${wayang.version}</version>
+                                </dependency>
+                        """;
+    static final Set<String> AMQP_CONNECTORS = Set.of("amqp-publish");
     static final Set<String> SFTP_POLL_SOURCES = Set.of("sftp");
     static final Set<String> SFTP_CONNECTORS = Set.of("sftp-list", "sftp-read", "sftp-write", "sftp-delete");
     static final Set<String> KAFKA_POLL_SOURCES = Set.of("kafka");

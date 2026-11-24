@@ -7,14 +7,14 @@ flowchart LR
   subgraph in[Consume: pollers and webhooks]
     fsin[fs: new files]
     jdbcin[jdbc: new rows]
-    other[sftp, kafka, amqp: planned]
+    other[sftp, kafka, amqp: optional modules]
   end
   in -->|one run per event| wf[Workflow / EIP pipeline]
   wf --> out
   subgraph out[Produce: connectors]
     fsout[fs-write, fs-move]
     sqlout[sql]
-    otherout[sftp, kafka, amqp: planned]
+    otherout[sftp, kafka, amqp: optional modules]
   end
   camel[camel connector: planned, optional] -.-> wf
 ```
@@ -25,7 +25,7 @@ flowchart LR
 |---|---|---|
 | 1 | `wayang-endpoints`: file system connectors and the `fs` trigger source (JDK only) | implemented (this document) |
 | 2 | `sql` connector and `jdbc` trigger source over JDBC (driver supplied by the deployment, parameterized queries only) | implemented (below) |
-| 3 | SFTP/FTP, Kafka and AMQP/JMS as separate optional modules (each needs a client library) | Kafka **implemented** (`wayang-endpoints-kafka`, below); SFTP/FTP and AMQP/JMS **proposed** |
+| 3 | SFTP/FTP, Kafka and AMQP/JMS as separate optional modules (each needs a client library) | Kafka, SFTP and AMQP (publish) **implemented** (`wayang-endpoints-kafka`, `-sftp`, `-amqp`, below); FTP/FTPS and JMS **proposed** |
 | 4 | `camel` connector: send a message to an Apache Camel route (DSL, Kamelet) exposed over HTTP; Camel runs in its own process, nothing of Camel is embedded | **implemented** (JDK only; tested against a local HTTP server, never a real Camel runtime) |
 | 5 | Releases that serve poll sources from extensions: an `fs` or `jdbc` POLL trigger now generates a release with `wayang-endpoints` and wires `Extensions.load` (tenant `release`) | **implemented** (CI-verified only; not run in a deployed release) |
 
@@ -103,3 +103,11 @@ A separate module because it needs `kafka-clients` (version managed by the Quark
 `kafka` trigger: Wayang keeps the position, not a consumer group. The cursor is the next offset per partition (`0:120,1:98`), so it is at-least-once, resumes exactly, needs no group coordination and commits nothing on the broker. `latest` pins the end the first time, so records arriving between polls are not missed. If the broker has deleted data the cursor points at, the poll fails with a clear message rather than skipping silently; reset the trigger. Events carry `topic`, `partition`, `offset`, `key`, `value`, `timestamp`, `headers`. Limits: text keys and values only (no Avro or schema registry), one replica should consume a topic, no transactions, no consumer-group scaling.
 
 Verified only against fake clients (no broker): see `KafkaTest`. Never run against a real Kafka.
+
+## SFTP (`wayang-endpoints-sftp`)
+
+Connectors `sftp-list`, `sftp-read`, `sftp-write`, `sftp-delete` and the `sftp` trigger source, over sshj. Off until the operator sets `WAYANG_ENDPOINTS_SFTP_HOSTS` (comma-separated `host:port`). The server's host-key fingerprint (`SHA256:...`) is mandatory in the node config: there is no trust-on-first-use. Credentials (`password` or a private key) are `${secret:NAME}` references and never appear in errors. Writes go to a temporary name and are renamed, so a reader never sees a partial file. The trigger keeps its position as a cursor `<mtime>|<name>` and ignores files younger than `settleSeconds`, so a file still being uploaded is not picked up half-written; delivery is at least once. Limit: sshj was never connected to a real server here; the logic is tested against a fake session.
+
+## AMQP / RabbitMQ (`wayang-endpoints-amqp`)
+
+Connector `amqp-publish` (AMQP 0-9-1, `amqp-client`). Off until the operator sets `WAYANG_ENDPOINTS_AMQP_HOSTS` (`host:port`, comma-separated) and `WAYANG_ENDPOINTS_AMQP_EXCHANGE_PREFIXES`. The default exchange is refused (it would reach any queue by name). TLS is on by default (port 5671) with certificate and host-name verification; `tls: false` uses 5672. Messages are persistent, published with publisher confirms and `mandatory`: a message no queue receives is an error, not a silent loss. Inputs: `body` (text, or an object sent as JSON, at most 1 MiB), `routingKey`, `headers`, `messageId` (default random, for consumer de-duplication). Timeouts and connection failures are retryable and a retry can duplicate. No trigger source yet (consuming needs acknowledgement semantics against Gamelan's at-least-once polling; JMS is likewise not done). Limit: never run against a real broker; tested against a fake publisher.
