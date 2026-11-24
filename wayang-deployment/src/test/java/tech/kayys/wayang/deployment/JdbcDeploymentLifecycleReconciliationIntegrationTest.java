@@ -19,8 +19,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import javax.sql.DataSource;
 import org.h2.jdbcx.JdbcDataSource;
+import org.postgresql.ds.PGSimpleDataSource;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Assumptions;
 
 /**
  * Exercises the persisted receipt, encrypted context and work queue together.
@@ -33,7 +36,33 @@ class JdbcDeploymentLifecycleReconciliationIntegrationTest {
 
     @Test
     void terminalReceiptAndEncryptedContextAreReconciledAfterWorkerRestart() throws Exception {
-        JdbcDataSource dataSource = dataSource();
+        runRecoveryScenario(dataSource());
+    }
+
+    @Test
+    void postgresPersistsLifecycleAndReconciliationAcrossWorkerRestart() throws Exception {
+        String jdbcUrl = System.getenv("WAYANG_TEST_JDBC_URL");
+        Assumptions.assumeTrue(jdbcUrl != null && !jdbcUrl.isBlank(),
+                "PostgreSQL integration is enabled by WAYANG_TEST_JDBC_URL in CI");
+        String schema = "wayang_recovery_" + UUID.randomUUID().toString().replace("-", "");
+        try (var connection = java.sql.DriverManager.getConnection(jdbcUrl);
+             var statement = connection.createStatement()) {
+            statement.execute("CREATE SCHEMA " + schema);
+        }
+        String scopedUrl = jdbcUrl + (jdbcUrl.contains("?") ? "&" : "?") + "currentSchema=" + schema;
+        var postgres = new PGSimpleDataSource();
+        postgres.setUrl(scopedUrl);
+        try {
+            runRecoveryScenario(postgres);
+        } finally {
+            try (var connection = java.sql.DriverManager.getConnection(jdbcUrl);
+                 var statement = connection.createStatement()) {
+                statement.execute("DROP SCHEMA " + schema + " CASCADE");
+            }
+        }
+    }
+
+    private void runRecoveryScenario(DataSource dataSource) throws Exception {
         createSchema(dataSource);
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         var receiptStore = new JdbcDeploymentOperationReceiptStore(dataSource);
@@ -132,7 +161,7 @@ class JdbcDeploymentLifecycleReconciliationIntegrationTest {
         return source;
     }
 
-    private static void createSchema(JdbcDataSource source) throws Exception {
+    private static void createSchema(DataSource source) throws Exception {
         try (var connection = source.getConnection(); var statement = connection.createStatement()) {
             statement.execute("""
                     CREATE TABLE wayang_deployment_snapshot (
@@ -184,7 +213,7 @@ class JdbcDeploymentLifecycleReconciliationIntegrationTest {
         }
     }
 
-    private static String workStatus(JdbcDataSource source, DeploymentCommand command) throws Exception {
+    private static String workStatus(DataSource source, DeploymentCommand command) throws Exception {
         try (var connection = source.getConnection();
              var statement = connection.prepareStatement("""
                      SELECT status FROM wayang_deployment_reconciliation_work
