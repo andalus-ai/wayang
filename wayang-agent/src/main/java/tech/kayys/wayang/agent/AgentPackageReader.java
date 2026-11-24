@@ -178,7 +178,11 @@ public final class AgentPackageReader {
         values.forEach((key, value) -> {
             String normalized = key.replaceAll("[^A-Za-z0-9]", "").toLowerCase();
             boolean reference = normalized.endsWith("ref") || normalized.endsWith("reference");
-            if (!reference && SENSITIVE_KEY.contains(normalized)) {
+            boolean secretLike = SENSITIVE_KEY.stream().anyMatch(normalized::endsWith)
+                    || normalized.startsWith("secret") || normalized.startsWith("password")
+                    || normalized.startsWith("passwd") || normalized.startsWith("credential")
+                    || normalized.startsWith("privatekey") || normalized.startsWith("authorization");
+            if (!reference && secretLike) {
                 throw invalid("Secret-like field '" + path + "." + key
                         + "' is not allowed; use an approved secret reference");
             }
@@ -378,7 +382,21 @@ public final class AgentPackageReader {
     }
 
     private static Map<String, Object> immutable(Map<String, Object> map) {
-        return Collections.unmodifiableMap(new LinkedHashMap<>(map));
+        Map<String, Object> copy = new LinkedHashMap<>();
+        map.forEach((key, value) -> copy.put(key, immutableValue(value)));
+        return Collections.unmodifiableMap(copy);
+    }
+
+    private static Object immutableValue(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> copy = new LinkedHashMap<>();
+            map.forEach((key, item) -> copy.put(String.valueOf(key), immutableValue(item)));
+            return Collections.unmodifiableMap(copy);
+        }
+        if (value instanceof List<?> list) {
+            return Collections.unmodifiableList(list.stream().map(AgentPackageReader::immutableValue).toList());
+        }
+        return value;
     }
 
     public record AgentPackage(
