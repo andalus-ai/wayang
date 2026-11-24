@@ -98,12 +98,14 @@ public final class InMemoryGraphStore implements GraphStore, GraphEntityLookup {
         Scope requested = scope(tenantId, collectionId);
         if (entityTypes == null || entityTypes.isEmpty()) return List.of();
         if (limit < 1 || limit > 2_000) throw new RagException("graph candidate limit must be 1..2000");
-        return entities.values().stream()
+        List<KnowledgeEntity> matches = entities.values().stream()
                 .filter(entity -> entity.tenantId().equals(requested.tenantId())
                         && entity.collectionId().equals(requested.collectionId()))
                 .filter(entity -> entityTypes.contains(entity.type()))
                 .sorted(Comparator.comparing(KnowledgeEntity::id))
-                .limit(limit).toList();
+                .limit((long) limit + 1).toList();
+        if (matches.size() > limit)
+            throw new RagException("graph entity candidate set exceeds the configured lookup limit");
     }
 
     @Override
