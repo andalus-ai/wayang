@@ -12,16 +12,19 @@ candidate list to a disposable copy of the archive, then run PostgreSQL's
 
 `scripts/simulate-postgres-wal-retention.py` accepts a dry-run plan and:
 
-1. Requires `deletion_performed: false`, no missing dependencies, valid
+1. Requires the current backup catalog (`--catalog`) and verifies its exact
+   catalog/retained-manifest fingerprint against `catalog_snapshot_sha256` in
+   the approved plan before touching the destination.
+2. Requires `deletion_performed: false`, no missing dependencies, valid
    24-character WAL filenames, and disjoint candidate/required sets.
-2. Requires every candidate and required segment to exist in the source archive.
-3. Rejects symlinks, non-regular files, an existing destination, and a
+3. Requires every candidate and required segment to exist in the source archive.
+4. Rejects symlinks, non-regular files, an existing destination, and a
    destination nested inside or containing the source archive.
-4. Copies the flat archive to a new destination and removes candidate WAL only
+5. Copies the flat archive to a new destination and removes candidate WAL only
    from that copy.
-5. Re-hashes the source archive after copying and refuses if its inventory
+6. Re-hashes the source archive after copying and refuses if its inventory
    changed during the simulation.
-6. Emits a JSON report with the source inventory digest, simulated location,
+7. Emits a JSON report with the source inventory digest, simulated location,
    removed candidates, remaining file count, and an explicit
    `deletion_performed_on_source: false` field.
 
@@ -52,7 +55,9 @@ The qualification then:
   operation is implemented.
 - The destination must not exist before simulation.
 - The helper is a simulation utility, not a transactional snapshot facility.
-  Production callers must quiesce archive writers or use a filesystem/object
+  Production callers must also supply the live catalog at simulation time; a
+catalog or retained-manifest change invalidates the plan before the copy starts.
+Production callers must quiesce archive writers or use a filesystem/object
   store snapshot while copying; the before/after inventory check detects
   ordinary concurrent changes but is not a distributed lock.
 - `pg_verifybackup` proves the tested backup and WAL set are internally

@@ -24,7 +24,7 @@ import tech.kayys.wayang.rag.KnowledgeRelationship;
  * PostgreSQL integration coverage for the durable graph adapter.
  * Runs when WAYANG_TEST_JDBC_URL is configured and a PostgreSQL driver is on the test classpath.
  */
-class JdbcGraphStoreIT {
+class JdbcGraphStoreTest {
 
     @Test
     void persistsAtomicTenantScopedGraphAndRetractsExactSourceVersion() throws Exception {
@@ -42,8 +42,10 @@ class JdbcGraphStoreIT {
                 List.of(evidence("handbook", "v1")));
         KnowledgeRelationship relation = relation("tenant-a", "company-policy", "company", "policy",
                 evidence("handbook", "v1"));
+        KnowledgeRelationship curated = new KnowledgeRelationship("tenant-a", "default", "curated-edge",
+                "policy", "REFERENCES", "company", Map.of(), List.of(), 1.0);
 
-        store.upsertGraph(List.of(company, policy), List.of(relation));
+        store.upsertGraph(List.of(company, policy), List.of(relation, curated));
 
         // A fresh adapter instance proves that data is stored in the database, not in process memory.
         JdbcGraphStore restarted = new JdbcGraphStore(dataSource);
@@ -65,9 +67,13 @@ class JdbcGraphStoreIT {
 
         KnowledgeEntity retained = restarted.findEntity("tenant-a", "default", "company").orElseThrow();
         assertEquals(List.of("v2"), retained.evidence().stream().map(KnowledgeEvidence::sourceVersion).toList());
-        assertFalse(restarted.traverse(new GraphQuery("tenant-a", "default",
-                Set.of("company"), GraphQuery.Direction.OUTGOING, Set.of(), 1, 10, 10))
-                .relationships().stream().anyMatch(edge -> edge.id().equals("company-policy")));
+        var remainingGraph = restarted.traverse(new GraphQuery("tenant-a", "default",
+                Set.of("company"), GraphQuery.Direction.OUTGOING, Set.of(), 1, 10, 10));
+        assertFalse(remainingGraph.relationships().stream().anyMatch(edge -> edge.id().equals("company-policy")));
+        assertTrue(restarted.findEntity("tenant-a", "default", "policy").isPresent());
+        assertTrue(restarted.traverse(new GraphQuery("tenant-a", "default",
+                Set.of("policy"), GraphQuery.Direction.OUTGOING, Set.of(), 1, 10, 10))
+                .relationships().stream().anyMatch(edge -> edge.id().equals("curated-edge")));
     }
 
     private static void clearGraph(DataSource dataSource) throws Exception {
