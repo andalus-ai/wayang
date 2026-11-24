@@ -120,6 +120,9 @@ def simulate(archive: Path, plan_path: Path, catalog_path: Path, destination: Pa
     removed = candidates | (required if remove_required_wal else set())
     try:
         shutil.copytree(archive, destination, copy_function=shutil.copy2)
+        copied = inventory(destination)
+        if copied != before:
+            raise SimulationError("source archive changed while creating simulation copy")
         # PostgreSQL recovery runs as the postgres OS user in the restore
         # container. Make the disposable copy readable by that user even when
         # the source archive was exported with owner-only permissions.
