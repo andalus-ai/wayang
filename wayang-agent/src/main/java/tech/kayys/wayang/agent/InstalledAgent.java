@@ -41,8 +41,10 @@ public record InstalledAgent(String tenantId, String projectId, String installat
                 throw new IllegalArgumentException("Secret configuration must use a secret:// reference");
             if ("connection-reference".equals(kind) && !reference.startsWith("connection://"))
                 throw new IllegalArgumentException("Connection configuration must use a connection:// reference");
-            if (!List.of("secret-reference", "connection-reference").contains(kind))
-                throw new IllegalArgumentException("Only secret and connection references can be bound here");
+            if ("value".equals(kind) && !reference.startsWith("config://"))
+                throw new IllegalArgumentException("Value configuration must use a config:// reference");
+            if (!List.of("secret-reference", "connection-reference", "value").contains(kind))
+                throw new IllegalArgumentException("Configuration must be an external config, secret, or connection reference");
             if (reference.length() > 512 || reference.contains("\n") || reference.contains("\r"))
                 throw new IllegalArgumentException("Invalid configuration reference");
         }
