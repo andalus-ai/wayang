@@ -458,3 +458,25 @@ See [Shared Core boundary](SHARED-CORE.md) and https://github.com/andalus-ai/way
 **Remaining:** durable transactional ledger, target adapter SPI and implementations, health-check execution/deadlines, secret/config binding, signed deployment attestation, approval policy, and Console orchestration. This increment records lifecycle facts only; it does not activate or roll back a real target.
 
 **Verification:** tests are committed but not yet executed locally. CI is the verification authority for this PR. The in-memory ledger is not suitable for production or multi-node deployments.
+
+## Agent Package lifecycle progress (2026-11-24)
+
+### M1.6 — Agent Package reader and validator
+
+- [x] Read JSON/YAML Agent Package manifests with bounded safe parsing.
+- [x] Validate package metadata, embedded `AgentSpec`, interface presence, triggers, dependencies, requested permissions, configuration requirements and package-relative resource paths.
+- [x] Preserve persona and guardrail validation through the existing `AgentSpecLoader`.
+- [x] Reject credential-shaped literal configuration; retain secret/connection references as metadata.
+
+### M1.7 — Agent Package installation and locking
+
+- [x] Add a deterministic lock with exact package/dependency versions, SHA-256 artifact digest pins and a canonical lock digest.
+- [x] Resolve transitive `agent` dependencies from an explicitly supplied local catalog; detect missing required dependencies and cycles; ignore missing optional dependencies.
+- [x] Add a project-scoped `InstalledAgent` record and reference-only configuration bindings.
+- [x] Add in-memory and JDBC store contracts keyed by tenant, project and installation ID.
+- [x] Add non-mutating upgrade preview and retain the previous exact lock as rollback metadata.
+- [x] Add unit tests for resolution, locking, configuration references, store scoping and upgrade previews.
+
+**Explicit limitations:** dependency resolution currently handles only dependencies of kind `agent`; required extension/skill/template dependencies fail closed. The resolver does not download artifacts. Artifact digests are supplied by the caller and pinned, but the artifact bytes are not verified in this increment. Signatures, publisher trust, permission grants, Studio import UI, REST endpoints, deployment/activation and execution rollback remain future work. The JDBC adapter targets PostgreSQL; an end-to-end database integration test is still required.
+
+See [Agent Package Installation and Locking](architecture/AGENT-PACKAGE-INSTALLATION.md) for the contract, flow and verification boundary.
