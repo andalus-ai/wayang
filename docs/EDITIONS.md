@@ -102,3 +102,22 @@ docker compose -f deploy/docker-compose.all-in-one.yml up --build
 ```
 
 The compose file publishes on `127.0.0.1` only, refuses to start without the key, and runs as a non-root user. The store is in memory by default: stopping the container loses everything; set `WAYANG_STORE=jdbc` and a datasource for durability. Studio is built with `WAYANG_API=http://localhost:8080`; build with `--build-arg WAYANG_API=...` if the server is reached under another address.
+
+
+## Agreed multi-mode packaging direction
+
+The multi-mode product architecture is defined in [MULTI-MODE-ARCHITECTURE.md](MULTI-MODE-ARCHITECTURE.md). The edition boundary is:
+
+| Edition | Authoring and execution shape | Deployment entitlement |
+|---|---|---|
+| **Community** | Studio, design server and execution together in one all-in-one runtime | Phase 1 authoring plus integrated local execution. No separated production runtime deployment, distributed scaling or HA orchestration. |
+| **Pro** | Studio/design environment separated from generated runtime artifacts | Phase 2 standalone/local runtimes and production microservice deployments, with the supported Pro operational capabilities. |
+| **Enterprise** | Separated Studio, runtime and management/control-plane deployment | Phase 2 distributed/cloud-native deployment, advanced service discovery, horizontal scaling, HA, governance and enterprise operations. |
+
+These are the agreed product and packaging constraints. They do not change the status table above: implementation and verification status must be assessed independently for each distribution, target and capability. In particular, a release generator or a design-only server existing in source does not by itself prove that the complete Pro/Enterprise distribution, service discovery, distributed execution, HA or edition enforcement is delivered.
+
+All editions share the same authoring definitions, schemas and core contracts. Community is not a reduced definition language; it is the all-in-one product shape. Pro and Enterprise add independent runtime deployment and operational scale. A Community project should be portable to compatible Pro/Enterprise runtimes without redesign.
+
+Phase 2 targets are standalone local runtime, microservice runtime, and cloud-native runtime. Service discovery is necessary for many distributed deployments but is not sufficient for HA: durable state where needed, health/heartbeats, idempotency/fencing, graceful drain, recovery, observability and explicit retry ownership are also required.
+
+The exact commercial licensing, entitlements and release packaging remain separate product decisions and must not be inferred from architecture documentation.
