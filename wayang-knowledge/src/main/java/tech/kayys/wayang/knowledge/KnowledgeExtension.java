@@ -22,7 +22,6 @@ public final class KnowledgeExtension implements WayangExtension {
 
     private final KnowledgeRegistry registry;
     private final FileStore files;
-    private final GraphStore graphStore;
     private final Map<String, ServiceHandler.Connector> connectors;
 
     public KnowledgeExtension() {
@@ -48,7 +47,7 @@ public final class KnowledgeExtension implements WayangExtension {
                 files == null ? null : new KnowledgePersistence(files.root().resolve("knowledge")),
                 files == null ? java.time.Clock.systemUTC() : files.clock());
         this.files = files;
-        this.graphStore = java.util.Objects.requireNonNull(graphStore, "graphStore");
+        java.util.Objects.requireNonNull(graphStore, "graphStore");
         this.connectors = Map.of(
                 "rag-ingest", new RagIngest(registry, files),
                 "rag-search", new RagSearch(registry),
@@ -101,7 +100,17 @@ public final class KnowledgeExtension implements WayangExtension {
                 component("file-get", "Read file", "Read a stored file by id", "files.get", "storage", Map.of(), List.of()),
                 component("file-list", "List files", "List the stored files of the tenant", "files.list", "storage", Map.of(), List.of()),
                 component("file-delete", "Delete file", "Delete a stored file by id", "files.delete", "storage", Map.of(), List.of()),
-                component("file-purge", "Purge expired files", "Remove the tenant's expired files (they are already unreadable); run it on a schedule", "files.purge", "storage", Map.of(), List.of()));
+                component("file-purge", "Purge expired files", "Remove the tenant's expired files (they are already unreadable); run it on a schedule", "files.purge", "storage", Map.of(), List.of()),
+                component("graph-query", "Traverse knowledge graph", "Expand canonical entity ids through a bounded, tenant-scoped knowledge graph traversal",
+                        "knowledge.graph.query", "knowledge-graph",
+                        Map.of("graphCollection", Map.of("type", "string", "minLength", 1, "maxLength", 200),
+                                "graphDirection", Map.of("type", "string", "enum", List.of("OUTGOING", "INCOMING", "BOTH")),
+                                "graphMaxDepth", Map.of("type", "integer", "minimum", 1, "maximum", 3),
+                                "graphMaxNodes", Map.of("type", "integer", "minimum", 1, "maximum", 1000),
+                                "graphMaxEdges", Map.of("type", "integer", "minimum", 1, "maximum", 2000)), List.of("graphCollection")),
+                component("graph-retract", "Retract graph evidence", "Remove evidence for an exact source version while preserving facts supported by other sources",
+                        "knowledge.graph.retract", "knowledge-graph",
+                        Map.of("graphCollection", Map.of("type", "string", "minLength", 1, "maxLength", 200)), List.of("graphCollection")));
     }
 
     private ComponentDescriptor component(String connector, String title, String description, String capability, String category,
