@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>tech.kayys.wayang</groupId>
+        <artifactId>wayang-parent</artifactId>
+        <version>0.0.1</version>
+    </parent>
+    <artifactId>wayang-endpoints-sftp</artifactId>
+    <name>wayang-endpoints-sftp</name>
+    <description>Optional extension: SFTP as connectors (sftp-list/read/write/delete) and a trigger source (sftp); needs sshj</description>
+    <properties>
+        <sshj.version>0.39.0</sshj.version>
+    </properties>
+    <dependencies>
+        <dependency>
+            <groupId>tech.kayys.wayang</groupId>
+            <artifactId>wayang-runtime</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- the only third-party library of this module (an SSH client; the JDK has none); not managed by the Quarkus BOM, so pinned here -->
+        <dependency>
+            <groupId>com.hierynomus</groupId>
+            <artifactId>sshj</artifactId>
+            <version>${sshj.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

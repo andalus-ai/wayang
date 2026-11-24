@@ -26,7 +26,8 @@ public final class Profile {
         KNOWLEDGE("wayang-knowledge"),
         /** ESB-style endpoints (file system today; more later); served by an extension. */
         ENDPOINTS("wayang-endpoints"),
-        ENDPOINTS_KAFKA("wayang-endpoints-kafka");
+        ENDPOINTS_KAFKA("wayang-endpoints-kafka"),
+        ENDPOINTS_SFTP("wayang-endpoints-sftp");
 
         private final String executorType;
 
@@ -44,7 +45,7 @@ public final class Profile {
     public static final Profile AUTOMATION = new Profile("automation",
             EnumSet.of(Feature.SERVICE, Feature.DMN, Feature.HUMAN));
     /** Integration platform: EIP pipelines and connectors. */
-    public static final Profile INTEGRATION = new Profile("integration", EnumSet.of(Feature.SERVICE, Feature.EIP, Feature.ENDPOINTS, Feature.ENDPOINTS_KAFKA));
+    public static final Profile INTEGRATION = new Profile("integration", EnumSet.of(Feature.SERVICE, Feature.EIP, Feature.ENDPOINTS, Feature.ENDPOINTS_KAFKA, Feature.ENDPOINTS_SFTP));
     /** Personal assistant / agent builder. */
     public static final Profile AGENTIC = new Profile("agentic",
             EnumSet.of(Feature.SERVICE, Feature.AGENT, Feature.HUMAN, Feature.EIP, Feature.MEDIA, Feature.KNOWLEDGE));
