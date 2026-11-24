@@ -302,6 +302,7 @@ missing_simulation_dir="/tmp/wayang-wal-retention-missing-simulation"
 python3 spikes/cel-nessie/scripts/simulate-postgres-wal-retention.py \
   --archive-dir "$catalog_dir/archive" \
   --plan-json /tmp/wayang-wal-retention-plan.json \
+  --catalog "$catalog_dir/catalog.json" \
   --destination "$missing_simulation_dir" \
   --remove-required-wal
 for backup in /base-backup /base-backup-2; do
@@ -346,6 +347,16 @@ if python3 spikes/cel-nessie/scripts/plan-postgres-wal-retention.py \
   exit 1
 fi
 grep -q "catalog snapshot changed since planning" /tmp/wayang-wal-retention-stale-plan.log
+if python3 spikes/cel-nessie/scripts/simulate-postgres-wal-retention.py \
+  --archive-dir "$catalog_dir/archive" \
+  --plan-json /tmp/wayang-wal-retention-plan.json \
+  --catalog "$catalog_dir/catalog.json" \
+  --destination /tmp/wayang-wal-retention-stale-catalog-simulation \
+  > /tmp/wayang-wal-retention-stale-simulation.json 2> /tmp/wayang-wal-retention-stale-simulation.log; then
+  echo "Simulator unexpectedly accepted a stale catalog snapshot" >&2
+  exit 1
+fi
+grep -q "catalog snapshot changed since planning" /tmp/wayang-wal-retention-stale-simulation.log
 mv "$catalog_dir/catalog.original.json" "$catalog_dir/catalog.json"
 
 echo "WAL_ARCHIVE_QUALIFICATION_SUCCESS wal_files=$wal_count"

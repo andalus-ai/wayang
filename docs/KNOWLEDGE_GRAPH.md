@@ -335,3 +335,16 @@ GraphEvidenceReference carries tenant, collection, entity/relationship identity 
 ## Limits and compatibility
 
 Existing KnowledgeBase.search and RetrievalConfig APIs are unchanged. The existing GraphQuery traversal bounds remain enforced. Persistent storage and remote evidence lookup implementations can be added behind the existing ports without introducing graph-vendor dependencies into wayang-rag.
+
+## PostgreSQL JDBC adapter
+
+The durable adapter lives in `wayang-store-jdbc`; the graph contracts in `wayang-rag` remain JDK-only and vendor-neutral. `JdbcGraphStore` currently targets PostgreSQL 16 and uses plain JDBC without bundling a driver.
+
+Apply the idempotent graph schema through `JdbcSchema.apply(dataSource)` or deploy `wayang-store-jdbc/src/main/resources/wayang/schema-knowledge-graph.sql` through the platform's migration process. The schema stores entities, relationships and their evidence in separate tables. Composite keys and foreign keys include both tenant and collection, so relationship endpoints cannot cross either boundary.
+
+`upsertGraph` runs in one JDBC transaction. It validates endpoint existence and immutable identity fields, merges aliases/properties and inserts evidence idempotently. A failure rolls back the entire entity/relationship batch. Source-version retraction also runs transactionally: it deletes only evidence for the exact tenant, collection, source and version, then removes only relationships that lost their final evidence in that operation. Entities are retained, and relationships without evidence (for example curated edges) are not removed by unrelated source retractions.
+
+Traversal performs bounded breadth-first reads with deterministic relationship ordering and the limits carried by `GraphQuery`. It queries adjacency by indexed endpoint columns and never exposes SQL to the RAG contract. Authorization of source passages remains the responsibility of the graph evidence lookup / document retrieval adapter.
+
+The optional integration test `JdbcGraphStoreIT` runs when `WAYANG_TEST_JDBC_URL` is configured and a PostgreSQL JDBC driver is present on the test classpath. It covers persistence across adapter instances, tenant isolation, batch rollback, exact-version evidence retraction and preservation of curated relationships. Without that environment variable the test returns without contacting a database; a green CI run alone therefore does not prove PostgreSQL integration behavior.
+

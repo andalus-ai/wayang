@@ -33,7 +33,7 @@ public final class JdbcSchema {
                 } catch (IOException e) {
                     throw new IllegalStateException(e);
                 }
-                for (String stmt : ddl.replaceAll("--[^\\n]*", "").split(";")) {
+                for (String stmt : ddl.replaceAll("--[^\n]*", "").split(";")) {
                     if (!stmt.isBlank()) {
                         st.execute(stmt);
                     }
