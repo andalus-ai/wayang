@@ -42,6 +42,22 @@ public final class GraphAwareRetriever {
                 refs.size(), total > refs.size() || traversal.truncated());
     }
 
+    /** Links query mentions first, then runs the same bounded graph-aware retrieval path. */
+    public QueryGraphRetrievalResult retrieveQuery(
+            List<Hit> documentHits, String query, QueryEntityLinker linker,
+            GraphAwareRetrievalRequest request) {
+        if (linker == null || request == null)
+            throw new RagException("query graph retrieval requires a linker and retrieval request");
+        QueryEntityLinkingResult linking = linker.link(request.tenantId(), request.collectionId(), query);
+        Set<String> seeds = new LinkedHashSet<>(request.seedEntityIds());
+        seeds.addAll(linking.seedEntityIds());
+        GraphAwareRetrievalRequest linkedRequest = new GraphAwareRetrievalRequest(
+                request.tenantId(), request.collectionId(), seeds, request.direction(),
+                request.predicates(), request.maxDepth(), request.maxNodes(), request.maxEdges(),
+                request.maxEvidence(), request.topK());
+        return new QueryGraphRetrievalResult(linking, retrieve(documentHits, linkedRequest));
+    }
+
     private static List<GraphEvidenceReference> references(
             GraphTraversalResult traversal, GraphAwareRetrievalRequest request, int limit) {
         List<GraphEvidenceReference> result = new ArrayList<>();

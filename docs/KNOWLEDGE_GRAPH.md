@@ -1,6 +1,6 @@
 # Knowledge graph and hybrid retrieval
 
-**Status: graph foundation, extraction SPIs, schema validation, conservative alias resolution an in-memory evidence lifecycle and graph-aware retrieval contracts are implemented.** Durable persistence, workflow nodes and graph-aware retrieval remain planned. This document distinguishes implemented contracts from the intended architecture. A type or SPI is not evidence that a complete graph pipeline exists.
+**Status: graph foundation, extraction SPIs, schema validation, conservative alias resolution, evidence lifecycle, PostgreSQL persistence, graph-aware retrieval and the first query-time entity-linking path are implemented.** Workflow nodes and production-grade model-backed query understanding remain planned. This document distinguishes implemented contracts from the intended architecture. A type or SPI is not evidence that a complete graph pipeline exists.
 
 ## Goals and non-goals
 
@@ -177,7 +177,7 @@ The first query abstraction intentionally supports bounded breadth-first travers
 
 Production adapters must enforce the same limits server-side. They must not fetch an unbounded graph and truncate only after materializing it.
 
-## Hybrid retrieval (planned)
+## Hybrid retrieval
 
 A graph-aware retrieval pipeline should:
 
@@ -253,11 +253,11 @@ This branch adds unit tests for idempotent evidence merge, multi-source provenan
 
 ## Graph-aware retrieval
 
-GraphAwareRetriever is an opt-in composition layer over existing BM25/vector/hybrid document results. It does not change KnowledgeBase.search or RetrievalConfig. Applications invoke graph expansion only when query understanding supplies tenant- and collection-scoped seed entity IDs.
+GraphAwareRetriever is an opt-in composition layer over existing BM25/vector/hybrid document results. It does not change KnowledgeBase.search or RetrievalConfig. Applications may invoke graph expansion with pre-resolved seed IDs or use `retrieveQuery` to compose the configured query mention extractor, scoped graph candidate lookup and entity resolver.
 
 The retrieval sequence is:
 1. Run existing document retrieval and retain its Hit list.
-2. Resolve query mentions to canonical entity IDs in the application query-understanding layer.
+2. Resolve query mentions to canonical entity IDs through `QueryEntityLinker` or an application query-understanding layer.
 3. Submit bounded traversal limits and optional predicate filters to GraphStore.
 4. Collect and deduplicate evidence references from traversed entities and relationships, subject to a maximum evidence count.
 5. Resolve references to source passages through GraphEvidenceLookup.
@@ -267,7 +267,7 @@ GraphEvidenceLookup is a security boundary. Each adapter MUST enforce tenant and
 
 Traversal depth, node count, edge count, evidence count and top-K are bounded. Truncation is surfaced in the result. Empty seed sets return the original document hits without invoking graph or evidence lookup.
 
-The first implementation does not provide automatic query entity linking, a reranking model, graph database adapters, or changes to existing RAG defaults. Applications opt in and supply the query entity IDs and an ACL-aware evidence lookup adapter.
+The query-linking increment provides opt-in regex-based mention extraction, bounded scoped candidate lookup, conservative exact-alias resolution and composition through `GraphAwareRetriever.retrieveQuery`. A model-backed mention extractor, reranking model and graph-native database adapters remain optional future extensions. Existing RAG defaults are unchanged.
 
 ## Evidence lookup contract
 
@@ -348,3 +348,16 @@ Traversal performs bounded breadth-first reads with deterministic relationship o
 
 The optional integration test `JdbcGraphStoreIT` runs when `WAYANG_TEST_JDBC_URL` is configured and a PostgreSQL JDBC driver is present on the test classpath. It covers persistence across adapter instances, tenant isolation, batch rollback, exact-version evidence retraction and preservation of curated relationships. Without that environment variable the test returns without contacting a database; a green CI run alone therefore does not prove PostgreSQL integration behavior.
 
+
+
+## Query-time entity linking (Phase 11 increment)
+
+**Implemented contract and reference path:** `QueryMentionExtractor` extracts query-local mentions; `RegexQueryMentionExtractor` is a deterministic, dependency-free implementation for trusted configured patterns. `GraphEntityLookup` returns a bounded candidate set within an explicit tenant and collection. `QueryEntityLinker` delegates canonical resolution to the existing `EntityResolver` SPI and accepts only one decision per mention. A match is accepted only when the canonical entity is in the returned scoped candidate set. Ambiguous mentions produce no seed IDs; new/unmatched mentions do not trigger graph expansion.
+
+`InMemoryGraphStore` implements the lookup port for development and tests. `JdbcGraphEntityLookup` provides a PostgreSQL candidate adapter using tenant, collection and entity-type predicates with a hard result limit; it hydrates candidates through `GraphStore.findEntity`. The exact-alias resolver remains provider-neutral and performs final name/alias comparison in Java.
+
+`GraphAwareRetriever.retrieveQuery` composes query linking with the existing graph-aware retrieval path and returns `QueryGraphRetrievalResult`, preserving both linking diagnostics and retrieval output. When no mentions match (or all mentions are ambiguous/new), the resolved seed set is empty and document-only hits are retained without graph/evidence lookup. Existing `KnowledgeBase.search` and retrieval defaults remain unchanged.
+
+The first regex mention extractor is deliberately configuration-driven; it is not a general-purpose NER model. Candidate lookup is capped at 2,000 entities and query extraction at 100 mentions. Applications should configure entity-type patterns conservatively. A future provider may implement a more selective indexed name/alias lookup without changing the SPI. The evidence lookup remains responsible for source ACL/current-version checks; entity linking does not grant document access.
+
+**Verification status:** tests cover exact in-scope matching, ambiguous aliases, lookup scope enforcement, document-only fallback and linking-to-retrieval composition. Tests are authored but have not been executed in this session. CI must validate both `wayang-rag` and `wayang-store-jdbc`, including the PostgreSQL integration test.

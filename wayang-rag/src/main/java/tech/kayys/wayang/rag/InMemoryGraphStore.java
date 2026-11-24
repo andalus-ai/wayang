@@ -11,7 +11,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /** Bounded process-local reference implementation of {@link GraphStore}. */
-public final class InMemoryGraphStore implements GraphStore {
+public final class InMemoryGraphStore implements GraphStore, GraphEntityLookup {
     public static final int DEFAULT_MAX_ENTITIES = 20_000;
     public static final int DEFAULT_MAX_RELATIONSHIPS = 100_000;
 
@@ -90,6 +90,23 @@ public final class InMemoryGraphStore implements GraphStore {
     public synchronized Optional<KnowledgeEntity> findEntity(String tenantId, String collectionId, String entityId) {
         if (entityId == null || entityId.isBlank()) return Optional.empty();
         return Optional.ofNullable(entities.get(new EntityKey(scope(tenantId, collectionId), entityId)));
+    }
+
+    @Override
+    public synchronized List<KnowledgeEntity> findCandidates(
+            String tenantId, String collectionId, Set<String> entityTypes, int limit) {
+        Scope requested = scope(tenantId, collectionId);
+        if (entityTypes == null || entityTypes.isEmpty()) return List.of();
+        if (limit < 1 || limit > 2_000) throw new RagException("graph candidate limit must be 1..2000");
+        List<KnowledgeEntity> matches = entities.values().stream()
+                .filter(entity -> entity.tenantId().equals(requested.tenantId())
+                        && entity.collectionId().equals(requested.collectionId()))
+                .filter(entity -> entityTypes.contains(entity.type()))
+                .sorted(Comparator.comparing(KnowledgeEntity::id))
+                .limit((long) limit + 1).toList();
+        if (matches.size() > limit)
+            throw new RagException("graph entity candidate set exceeds the configured lookup limit");
+        return List.copyOf(matches);
     }
 
     @Override
