@@ -134,9 +134,23 @@ public final class AgentDependencyResolver {
 
     private static int[] parts(String value) {
         Matcher matcher = VERSION.matcher(value);
-        if (!matcher.matches()) throw new ResolutionException("Invalid semantic version '" + value + "'");
-        return new int[] { Integer.parseInt(matcher.group(1)), Integer.parseInt(matcher.group(2)),
-                Integer.parseInt(matcher.group(3)) };
+        if (matcher.matches()) {
+            return new int[] { Integer.parseInt(matcher.group(1)), Integer.parseInt(matcher.group(2)),
+                    Integer.parseInt(matcher.group(3)) };
+        }
+        // Dependency ranges commonly use ^1.0 or ~2.3; omitted components are zero.
+        String[] components = value.split("\\.", -1);
+        if (components.length < 1 || components.length > 3) {
+            throw new ResolutionException("Invalid semantic version '" + value + "'");
+        }
+        int[] result = new int[] { 0, 0, 0 };
+        for (int i = 0; i < components.length; i++) {
+            if (!components[i].matches("0|[1-9][0-9]*")) {
+                throw new ResolutionException("Invalid semantic version '" + value + "'");
+            }
+            result[i] = Integer.parseInt(components[i]);
+        }
+        return result;
     }
 
     private static int compareVersions(String left, String right) {
