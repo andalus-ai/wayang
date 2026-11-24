@@ -76,6 +76,11 @@
             </dependency>
             <dependency>
                 <groupId>tech.kayys.wayang</groupId>
+                <artifactId>wayang-endpoints-amqp</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tech.kayys.wayang</groupId>
                 <artifactId>wayang-rag-pdf</artifactId>
                 <version>${project.version}</version>
             </dependency>
