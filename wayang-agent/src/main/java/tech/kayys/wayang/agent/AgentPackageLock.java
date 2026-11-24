@@ -11,8 +11,8 @@ public record AgentPackageLock(String packageId, String version, String artifact
         List<LockedDependency> dependencies, String sha256) {
 
     public AgentPackageLock {
-        requireText(packageId, "packageId");
-        requireText(version, "version");
+        requireText(packageId, "packageId", 256);
+        requireText(version, "version", 64);
         requireDigest(artifactSha256, "artifactSha256");
         artifactSha256 = artifactSha256.toLowerCase(java.util.Locale.ROOT);
         dependencies = (dependencies == null ? List.<LockedDependency>of() : dependencies).stream().sorted().toList();
@@ -53,8 +53,9 @@ public record AgentPackageLock(String packageId, String version, String artifact
         }
     }
 
-    private static void requireText(String value, String name) {
+    private static void requireText(String value, String name, int maxLength) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " is required");
+        if (value.length() > maxLength) throw new IllegalArgumentException(name + " exceeds " + maxLength + " characters");
     }
 
     private static void requireDigest(String value, String name) {
@@ -65,9 +66,9 @@ public record AgentPackageLock(String packageId, String version, String artifact
     public record LockedDependency(String kind, String packageId, String version, String artifactSha256)
             implements Comparable<LockedDependency> {
         public LockedDependency {
-            requireText(kind, "dependency.kind");
-            requireText(packageId, "dependency.packageId");
-            requireText(version, "dependency.version");
+            requireText(kind, "dependency.kind", 32);
+            requireText(packageId, "dependency.packageId", 256);
+            requireText(version, "dependency.version", 64);
             requireDigest(artifactSha256, "dependency.artifactSha256");
             artifactSha256 = artifactSha256.toLowerCase(java.util.Locale.ROOT);
         }
