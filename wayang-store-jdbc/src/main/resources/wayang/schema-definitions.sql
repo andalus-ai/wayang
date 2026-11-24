@@ -174,3 +174,18 @@ CREATE TABLE IF NOT EXISTS wayang_rate_events (
 );
 CREATE INDEX IF NOT EXISTS wayang_rate_events_lookup ON wayang_rate_events (scope, key_hash, at_ms);
 CREATE INDEX IF NOT EXISTS wayang_rate_events_time ON wayang_rate_events (at_ms);
+
+-- Project-scoped installed Agent Packages. Credentials are never stored; record_json contains references only.
+CREATE TABLE IF NOT EXISTS wayang_installed_agent (
+    tenant_id       VARCHAR(128) NOT NULL,
+    project_id      VARCHAR(128) NOT NULL,
+    installation_id VARCHAR(128) NOT NULL,
+    package_id      VARCHAR(256) NOT NULL,
+    package_version VARCHAR(64)  NOT NULL,
+    artifact_sha256 CHAR(64)      NOT NULL,
+    lock_sha256     CHAR(64)      NOT NULL,
+    record_json     TEXT          NOT NULL,
+    PRIMARY KEY (tenant_id, project_id, installation_id)
+);
+CREATE INDEX IF NOT EXISTS wayang_installed_agent_package
+    ON wayang_installed_agent (tenant_id, project_id, package_id, package_version);
