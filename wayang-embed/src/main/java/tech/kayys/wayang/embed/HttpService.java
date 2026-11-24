@@ -193,6 +193,27 @@ public final class HttpService implements AutoCloseable {
         }
     }
 
+    /**
+     * What the release says about itself, for a management plane's inventory: the generator's {@code wayang/release.json} (version, target,
+     * components, connectors and lock digests). Never holds secrets; absent when the engine runs outside a generated release.
+     */
+    static Map<String, Object> identity() {
+        try (java.io.InputStream in = HttpService.class.getClassLoader().getResourceAsStream("wayang/release.json")) {
+            if (in == null || !(Json.read(new String(in.readNBytes(1 << 20), StandardCharsets.UTF_8)) instanceof Map<?, ?> m)) {
+                return Map.of();
+            }
+            Map<String, Object> out = new LinkedHashMap<>();
+            for (String k : new String[] {"target", "wayangVersion", "components", "componentLockSha256", "artifacts", "artifactLockSha256", "connectors"}) {
+                if (m.get(k) != null) {
+                    out.put(k, m.get(k));
+                }
+            }
+            return out;
+        } catch (IOException | RuntimeException e) {
+            return Map.of();
+        }
+    }
+
     private static final java.util.regex.Pattern CHAT_ID = java.util.regex.Pattern.compile("[A-Za-z0-9._:@-]{1,128}");
     private static final int MAX_MESSAGE = 16_000;
 
@@ -249,6 +270,8 @@ public final class HttpService implements AutoCloseable {
             out.put("bundleSha256", rt.bundle().sha256());
             out.put("processes", procs);
             out.put("missingSecrets", rt.missingSecrets());
+            out.put("agents", new java.util.ArrayList<>(rt.agentIds()));
+            out.putAll(identity());
             send(ex, 200, out);
         } else if (p.length >= 1 && p[0].equals("files") && p.length <= 2) {
             files(ex, m, p);

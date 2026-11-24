@@ -215,7 +215,12 @@ class EmbedTest {
             assertEquals(401, call(s, "GET", "/v1/release", "wrong", null, null).status());
             Resp rel = call(s, "GET", "/v1/release", "sekret", null, null);
             assertEquals(200, rel.status());
-            assertEquals("abc123", rel.body().get("bundleSha256"));
+            assertEquals("abc123", rel.body().get("bundleSha256"), "the engine's bundle, not the resource file's");
+            assertEquals(List.of(), rel.body().get("agents"));
+            assertEquals("c1", rel.body().get("componentLockSha256"));
+            assertEquals("0.0.1", rel.body().get("wayangVersion"));
+            assertEquals(List.of("http"), rel.body().get("connectors"));
+            assertFalse(rel.body().containsKey("secretsLike"), "only the listed identity fields are exposed");
 
             Resp r = call(s, "POST", "/v1/processes/hello/runs", "sekret", "application/json", "{\"input\":{\"person\":\"Ann\"}}");
             assertEquals(201, r.status(), r.raw());

@@ -1,0 +1,1 @@
+{"format":"wayang.release","target":"SERVICE","project":"x","bundleSha256":"ignored","wayangVersion":"0.0.1","components":["wayang.http"],"componentLockSha256":"c1","artifacts":["wayang-runtime"],"artifactLockSha256":"a1","connectors":["http"],"secretsLike":"must-not-leak"}
