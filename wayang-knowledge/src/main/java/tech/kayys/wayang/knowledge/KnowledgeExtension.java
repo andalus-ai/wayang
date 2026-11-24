@@ -15,7 +15,7 @@ import tech.kayys.wayang.runtime.ServiceHandler;
 import tech.kayys.wayang.runtime.WayangExtension;
 
 /**
- * Adds the knowledge connectors ({@code rag-ingest}, {@code rag-search}, {@code rag-forget}) and the reusable file storage steps ({@code file-put},
+ * Adds the knowledge connectors ({@code rag-ingest}, {@code rag-search}, {@code rag-forget}, {@code graph-query}, {@code graph-retract}) and the reusable file storage steps ({@code file-put},
  * {@code file-get}, {@code file-list}, {@code file-delete}); loaded only when the profile enables the KNOWLEDGE feature.
  */
 public final class KnowledgeExtension implements WayangExtension {
