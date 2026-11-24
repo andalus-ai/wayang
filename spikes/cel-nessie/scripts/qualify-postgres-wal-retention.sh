@@ -214,6 +214,7 @@ simulation_dir="/tmp/wayang-wal-retention-simulation"
 python3 spikes/cel-nessie/scripts/simulate-postgres-wal-retention.py \
   --archive-dir "$catalog_dir/archive" \
   --plan-json /tmp/wayang-wal-retention-plan.json \
+  --catalog "$catalog_dir/catalog.json" \
   --destination "$simulation_dir" \
   > /tmp/wayang-wal-retention-simulation.json
 for backup in /base-backup /base-backup-2; do
