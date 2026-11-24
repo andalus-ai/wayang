@@ -209,6 +209,7 @@ grep -q '"00000002.history"' /tmp/wayang-successive-timeline-plan.json
 grep -q '"00000003.history"' /tmp/wayang-successive-timeline-plan.json
 python3 spikes/cel-nessie/scripts/simulate-postgres-wal-retention.py \
   --archive-dir "$catalog_dir/archive" --plan-json /tmp/wayang-successive-timeline-plan.json \
+  --catalog "$catalog_dir/catalog.json" \
   --destination /tmp/wayang-successive-timeline-simulated-wal \
   > /tmp/wayang-successive-timeline-simulation.json
 
