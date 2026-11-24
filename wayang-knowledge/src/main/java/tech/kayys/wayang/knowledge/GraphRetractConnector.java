@@ -28,7 +28,7 @@ final class GraphRetractConnector implements ServiceHandler.Connector {
     }
 
     @Override
-    public Map<String, Object> call(Map<String, Object> inputs) {
+    public Map<String, Object> call(Map<String, Object> inputs) throws ServiceHandler.ConnectorException {
         throw new ServiceHandler.ConnectorException("graph-retract needs node configuration", false);
     }
 
@@ -56,7 +56,7 @@ final class GraphRetractConnector implements ServiceHandler.Connector {
         return value == null || value instanceof String text && text.isBlank();
     }
 
-    private static String bounded(Object value, String field) {
+    private static String bounded(Object value, String field) throws ServiceHandler.ConnectorException {
         if (!(value instanceof String text) || text.isBlank() || text.length() > 200)
             throw new ServiceHandler.ConnectorException(field + " must contain 1..200 characters", false);
         return text.strip();

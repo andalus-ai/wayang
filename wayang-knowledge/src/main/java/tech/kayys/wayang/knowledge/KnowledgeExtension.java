@@ -48,19 +48,19 @@ public final class KnowledgeExtension implements WayangExtension {
                 files == null ? java.time.Clock.systemUTC() : files.clock());
         this.files = files;
         java.util.Objects.requireNonNull(graphStore, "graphStore");
-        this.connectors = Map.of(
-                "rag-ingest", new RagIngest(registry, files),
-                "rag-search", new RagSearch(registry),
-                "rag-forget", new RagForget(registry),
-                "rag-list", new RagList(registry),
-                "file-put", new FileConnectors.Put(files),
-                "file-fetch", new FileConnectors.Fetch(files, guard),
-                "file-get", new FileConnectors.Get(files),
-                "file-list", new FileConnectors.ListFiles(files),
-                "file-delete", new FileConnectors.Delete(files),
-                "file-purge", new FileConnectors.Purge(files),
-                "graph-query", new GraphQueryConnector(graphStore),
-                "graph-retract", new GraphRetractConnector(graphStore));
+        this.connectors = Map.ofEntries(
+                Map.entry("rag-ingest", new RagIngest(registry, files)),
+                Map.entry("rag-search", new RagSearch(registry)),
+                Map.entry("rag-forget", new RagForget(registry)),
+                Map.entry("rag-list", new RagList(registry)),
+                Map.entry("file-put", new FileConnectors.Put(files)),
+                Map.entry("file-fetch", new FileConnectors.Fetch(files, guard)),
+                Map.entry("file-get", new FileConnectors.Get(files)),
+                Map.entry("file-list", new FileConnectors.ListFiles(files)),
+                Map.entry("file-delete", new FileConnectors.Delete(files)),
+                Map.entry("file-purge", new FileConnectors.Purge(files)),
+                Map.entry("graph-query", new GraphQueryConnector(graphStore)),
+                Map.entry("graph-retract", new GraphRetractConnector(graphStore)));
     }
 
     @Override

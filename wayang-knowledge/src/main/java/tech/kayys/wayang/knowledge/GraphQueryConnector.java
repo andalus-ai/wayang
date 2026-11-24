@@ -36,7 +36,7 @@ final class GraphQueryConnector implements ServiceHandler.Connector {
     }
 
     @Override
-    public Map<String, Object> call(Map<String, Object> inputs) {
+    public Map<String, Object> call(Map<String, Object> inputs) throws ServiceHandler.ConnectorException {
         throw new ServiceHandler.ConnectorException("graph-query needs node configuration", false);
     }
 
@@ -98,7 +98,7 @@ final class GraphQueryConnector implements ServiceHandler.Connector {
         return out;
     }
 
-    private static List<String> strings(Object value, String field, int max) {
+    private static List<String> strings(Object value, String field, int max) throws ServiceHandler.ConnectorException {
         if (value == null) return List.of();
         if (!(value instanceof List<?> list) || list.size() > max)
             throw new ServiceHandler.ConnectorException(field + " must be an array of at most " + max + " strings", false);
@@ -111,20 +111,20 @@ final class GraphQueryConnector implements ServiceHandler.Connector {
         return List.copyOf(result);
     }
 
-    private static String required(Object value, String field) {
+    private static String required(Object value, String field) throws ServiceHandler.ConnectorException {
         if (!(value instanceof String text) || text.isBlank() || text.length() > 200)
             throw new ServiceHandler.ConnectorException(field + " must be configured", false);
         return text.strip();
     }
 
-    private static int integer(Object value, int fallback) {
+    private static int integer(Object value, int fallback) throws ServiceHandler.ConnectorException {
         if (value == null) return fallback;
         if (!(value instanceof Number number) || number.doubleValue() != Math.rint(number.doubleValue()))
             throw new ServiceHandler.ConnectorException("graph traversal limits must be whole numbers", false);
         return number.intValue();
     }
 
-    private static GraphQuery.Direction direction(Object value) {
+    private static GraphQuery.Direction direction(Object value) throws ServiceHandler.ConnectorException {
         if (value == null) return GraphQuery.Direction.BOTH;
         if (!(value instanceof String text)) throw new ServiceHandler.ConnectorException("graphDirection must be a string", false);
         try {
