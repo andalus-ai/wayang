@@ -18,7 +18,7 @@ public record InstalledAgent(String tenantId, String projectId, String installat
         Objects.requireNonNull(lock, "lock");
         Map<String, ConfigurationBinding> copy = new LinkedHashMap<>();
         if (configurationBindings != null) configurationBindings.forEach((key, value) -> {
-            require(key, "configuration binding id");
+            require(key, "configuration binding id", 128);
             copy.put(key, Objects.requireNonNull(value, "configuration binding"));
         });
         configurationBindings = Map.copyOf(copy);
