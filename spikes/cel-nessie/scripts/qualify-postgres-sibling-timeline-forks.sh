@@ -172,6 +172,7 @@ grep -q '"00000002.history"' /tmp/wayang-sibling-forks-plan.json
 grep -q '"00000003.history"' /tmp/wayang-sibling-forks-plan.json
 python3 spikes/cel-nessie/scripts/simulate-postgres-wal-retention.py \
   --archive-dir /tmp/wayang-sibling-forks/archive --plan-json /tmp/wayang-sibling-forks-plan.json \
+  --catalog /tmp/wayang-sibling-forks/catalog.json \
   --destination /tmp/wayang-sibling-forks-simulated > /tmp/wayang-sibling-forks-simulation.json
 
 # Restore both siblings independently from the same timeline-1 physical
