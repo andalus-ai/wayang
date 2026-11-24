@@ -20,6 +20,8 @@ Verification vocabulary used everywhere: **unit-tested** (JUnit, in CI), **contr
 
 ## Architecture blueprints
 
+- [Foundation contract audit](../architecture/FOUNDATION-CONTRACT-AUDIT.md) — current Project/Definition/Node/Component contracts, gaps and M1 implementation sequence.
+
 - [Multi-mode platform architecture](../MULTI-MODE-ARCHITECTURE.md) — product modes, neutral core, capability packs, engines and editions.
 - [Platform diagrams](../architecture/DIAGRAMS.md) — end-to-end system, authoring, deployment, discovery, dispatch, scaling, recovery and security.
 - [Distributed runtime](../architecture/DISTRIBUTED-RUNTIME.md) — service discovery, capability-aware routing, backpressure, rollout, HA and recovery.
@@ -28,3 +30,5 @@ Verification vocabulary used everywhere: **unit-tested** (JUnit, in CI), **contr
 - [Business Automation (BPMN / DMN)](../architecture/modes/BUSINESS-AUTOMATION.md)
 - [Intelligent Business Automation](../architecture/modes/INTELLIGENT-BUSINESS.md)
 - [Creative Content (future)](../architecture/modes/CREATIVE-CONTENT.md)
+
+- [Extension platform and collaborator marketplace](../architecture/EXTENSION-PLATFORM-AND-MARKETPLACE.md) — extension contracts, publisher workflow, artifact trust, installation and public/private catalogs.

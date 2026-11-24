@@ -210,3 +210,17 @@ The overview in this document is intentionally complemented by detailed, diagram
 | [Creative Content (future)](architecture/modes/CREATIVE-CONTENT.md) | Future media graph, asset lineage, GPU scheduling, worker execution and scaling |
 
 These diagrams are normative design guidance for new work, subject to implementation status and engine-selection decisions. Keep them synchronized with code and tests. A diagram must label proposed/future components honestly and must not imply that a candidate engine or control-plane capability has already been adopted or shipped.
+
+
+## 13. Foundation contract alignment
+
+The current implementation baseline and proposed M1 contract work are tracked in [Foundation Contract Audit](architecture/FOUNDATION-CONTRACT-AUDIT.md). Read it before changing project/document ownership, domain document kinds, node/port descriptors, component registries, capability packs or artifact dependency resolution. It explicitly distinguishes current code from proposed contracts and preserves the BPMN-specific process model rather than making it the universal graph model.
+
+
+## 13. Extension platform and collaborator ecosystem
+
+All Studio modes share one extension contract and distribution ecosystem. Collaborators may contribute nodes, ports, components, connectors, triggers, document schemas, validators, migrations, designers, templates, engine adapters and isolated workers. A plugin may contribute multiple capabilities and artifacts; it is not synonymous with one node.
+
+The extension contract, runtime discovery/activation, artifact repository, marketplace catalog and installation/governance are separate concerns. The marketplace catalog never executes code, and an installed runtime never depends on the marketplace being online. Preserve existing `WayangExtension`, `PluginManifest`, `PluginRegistry`, `ComponentRegistry` and `ComponentLockfile` contracts as the compatibility baseline; extend them incrementally rather than building a second plugin system.
+
+See [Extension Platform and Collaborator Marketplace](architecture/EXTENSION-PLATFORM-AND-MARKETPLACE.md) for the proposed manifest evolution, contribution types, publisher lifecycle, trust/security controls, Studio extension API, packaging, editions and roadmap. Marketplace publishing, signature verification, installation, sandboxing and remote worker provisioning remain proposed until implemented and verified.

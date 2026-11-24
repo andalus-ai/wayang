@@ -369,3 +369,8 @@ The first regex mention extractor is deliberately configuration-driven; it is no
 `ConfidenceAwareEntityResolver` adapts an injected `EntityResolutionModel` over the already bounded tenant/collection candidate set. It accepts a model match only when both the absolute confidence threshold and winner-to-runner-up margin pass, and the selected entity ID and entity type belong to the supplied candidate set. Low-confidence or ambiguous predictions fall back to `ExactAliasEntityResolver`; provider failures and malformed/out-of-scope responses fall back for the full request. Neither model output nor entity linking can widen tenant/collection scope or bypass the ACL-aware evidence lookup.
 
 Both model ports are synchronous, provider-neutral SPIs. Applications own timeout, retry, concurrency and provider lifecycle policy in their adapter layer. Deterministic implementations remain available and are suitable for offline tests and deployments without a model provider.
+
+
+## Query understanding evaluation
+
+The model-assisted extraction path now has a deterministic golden-set regression harness covering exact span/type precision, recall and F1, including missed and extra mentions. See [Query understanding evaluation](QUERY-UNDERSTANDING-EVALUATION.md) for scope, invocation and limitations. The fixture uses a synthetic provider; its metrics validate the harness, not real model quality. Provider benchmarking requires a separately versioned representative dataset and the actual adapter.

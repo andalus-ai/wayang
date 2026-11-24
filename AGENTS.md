@@ -154,3 +154,21 @@ Before implementing or changing a mode, runtime deployment, service discovery, s
 Treat these as target architecture, not proof of implementation. Preserve the ownership of execution state, retries, timers, transactions, idempotency and compensation at each engine boundary. Any sequence crossing engine/service boundaries must define identity and tenant propagation, correlation/causation, deadlines, cancellation, idempotency, typed errors and observability. Any distributed design must cover readiness versus liveness, lease expiry, fencing/ownership, backpressure, graceful drain, recovery and failure testing. Service discovery by itself is never an HA design.
 
 Update the relevant diagrams when implementation changes a contract or ownership boundary. If the code differs from the target, document the gap and status rather than silently treating the diagram as implemented.
+
+
+## Foundation contract alignment
+
+Before changing project/document persistence, document kinds, Studio node catalogs, component descriptors, capability packs, or artifact dependency resolution, read `docs/architecture/FOUNDATION-CONTRACT-AUDIT.md`. It records the current implementation baseline and the proposed M1 contract direction. In particular:
+- Keep BPMN `NodeCatalog` BPMN-specific; do not turn its element enum into the universal multi-mode palette.
+- Keep graph-node/port descriptors distinct from runtime component descriptors.
+- Keep configuration schemas distinct from typed data ports. Missing mandatory data inputs are advisory diagnostics by default; only explicit hard preconditions block publish or execution.
+- Keep tenant/project ownership explicit and preserve legacy `studio.projectId` documents through migration.
+- Deeply freeze/copy stored and published JSON documents; shallow map wrappers are not sufficient for immutable snapshots.
+- Treat execution-mode declarations as metadata, not as proof of remote routing, worker registration, plugin installation or HA.
+
+The audit is a proposed alignment, not a claim that these contracts are already implemented. Update it as M1 implementation and tests land.
+
+
+## Extension platform and marketplace
+
+Before changing plugin manifests, extension discovery, component registries, Studio contributions, package installation, signing, worker activation or marketplace distribution, read `docs/architecture/EXTENSION-PLATFORM-AND-MARKETPLACE.md`. Reuse the existing `WayangExtension`, `PluginManifest`, `PluginRegistry`, component descriptors and release lockfile; do not create a parallel plugin framework. Keep extension contract, runtime activation, artifact repository, marketplace catalog and install/governance services as separate responsibilities. Treat all third-party artifacts as untrusted until signature, digest, compatibility, dependency and policy checks pass. Do not load untrusted executable code into Studio/core in-process. Keep Community offline/all-in-one capable; a hosted marketplace is optional, never a runtime execution dependency. Mark marketplace, installer, signature verification and dynamic activation as proposed until implemented and verified.
