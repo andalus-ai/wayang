@@ -1,9 +1,9 @@
-# Editions and deployment modes
+# Editions and runtime deployment topologies
 
-Wayang is one codebase with two ways to run it. This document is the reference for both and for what is built today versus planned. Status words are literal:
+Wayang is one multi-mode product and one codebase. This document distinguishes the Studio product modes from the runtime operating topologies and records what is built today versus planned. Status words are literal:
 **implemented** (code exists and is tested at the level stated elsewhere in `docs/`), **partial**, **proposed** (a plan, not code).
 
-## The two modes
+## Runtime operating topologies (not Studio product modes)
 
 | | **Community / development: all-in-one** | **Pro / Enterprise: separated** |
 |---|---|---|
@@ -64,9 +64,10 @@ The same definitions work in both: a project built in the all-in-one mode is rel
 
 Any other value is an error at start-up (never a silent fall-back to executing). Use `design` for the production Studio of the separated edition and ship runs through generated runtimes. Do not configure triggers or chat channels on a design server: they start runs, which it refuses. `GET /api/v1/mode` returns `{mode, executes}`; Studio hides the Runs and Tasks screens when `executes` is false (an older server without the endpoint is treated as executing). Listing and reading runs still works (it is empty unless the server previously ran in community mode).
 
-## Rules that keep the two modes one product
+## Rules that keep the two runtime topologies one product
 
-- One definition model; the mode changes where things run, never what a definition means.
+- Studio product modes select domain-specific authoring experiences; runtime operating topology changes where things run, never what a definition means.
+- `WAYANG_MODE=community|design` is a server operating-mode switch, not the Agent Builder / Integration / BPMN / Intelligent Business Studio mode selector.
 - A runtime never depends on Studio or the Console to execute. The Console never contains workflow semantics; it manages what the compiler produced.
 - The all-in-one mode must stay usable with no external service (no Numu, no Console, no database required).
 - In the separated mode the design service must not be a production execution path, and a generated runtime must carry only the dependencies its workflows use.
