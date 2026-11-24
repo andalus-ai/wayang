@@ -35,7 +35,12 @@ class DivergentTimelineRetentionTest(unittest.TestCase):
         path = self.archive / name
         if isinstance(content, str):
             content = content.encode("ascii")
-        path.write_bytes(content)
+        if MODULE.WAL_NAME.fullmatch(name) and content == b"wal":
+            # Sparse full-size segments mirror PostgreSQL's completed WAL archive files.
+            with path.open("wb") as stream:
+                stream.truncate(SEGMENT_SIZE)
+        else:
+            path.write_bytes(content)
         os.utime(path, (mtime, mtime))
         return path
 

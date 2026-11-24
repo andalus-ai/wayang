@@ -62,7 +62,7 @@ The same definitions work in both: a project built in the all-in-one mode is rel
 | unset, `community` (also `all-in-one`, `development`) | design and execute in one server |
 | `design` (also `design-only`) | the server designs but never executes: starting a run, completing a task, sending a message and firing timers answer **409** ("this server runs in design mode"). Definitions, validation, versions, projects, secrets, templates and releases work as usual |
 
-Any other value is an error at start-up (never a silent fall-back to executing). Use `design` for the production Studio of the separated edition and ship runs through generated runtimes. Triggers and chat channels start runs, so a design server refuses to create or switch one on (409), and its trigger ticker starts nothing; switching one off or deleting it still works. `GET /api/v1/mode` returns `{mode, executes}`; Studio hides the Runs and Tasks screens when `executes` is false (an older server without the endpoint is treated as executing). Listing and reading runs still works (it is empty unless the server previously ran in community mode).
+Any other value is an error at start-up (never a silent fall-back to executing). Use `design` for the production Studio of the separated edition and ship runs through generated runtimes. Do not configure triggers or chat channels on a design server: they start runs, which it refuses. `GET /api/v1/mode` returns `{mode, executes}`; Studio hides the Runs and Tasks screens when `executes` is false (an older server without the endpoint is treated as executing). Listing and reading runs still works (it is empty unless the server previously ran in community mode).
 
 ## Rules that keep the two modes one product
 
@@ -78,7 +78,7 @@ Any other value is an error at start-up (never a silent fall-back to executing).
 1. All-in-one packaging so Community is one command; document it as the quick start.
 2. ~~Test that a production release has no route back to the design server.~~ Done: `PublishTest.aReleaseCarriesNoCodeOrRouteBackToTheDesignServer` checks, for every target, that the pom and artifact lock hold none of the design modules (api, stores, identity and management adapters, publisher, REST shell, OIDC, database) and that no generated file references the design API package, `WAYANG_MODE`/`WAYANG_STUDIO` or `/api/v1`.
 3. ~~An agent-runtime generator~~ Done as an agent-only release with a chat endpoint (`docs/RELEASE.md`); a dedicated agent-oriented profile remains open.
-4. Release signing and an artifact registry hand-off (digest header and an optional HMAC signature are done, `docs/RELEASE.md`; Ed25519 signing is done too; the registry is open) the Console can pull from (`docs/architecture/release-artifact-resolution.md`).
+4. Release signing and an artifact registry hand-off the Console can pull from (`docs/architecture/release-artifact-resolution.md`).
 5. Console integration tests against a real Console once it publishes a stable management protocol (`wayang-core`).
 
 ## All-in-one on one machine

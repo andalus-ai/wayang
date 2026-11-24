@@ -36,6 +36,10 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
         path = self.archive / name
         if name.endswith(".history"):
             path.write_text("1 0/01000000 no recovery target specified\n", encoding="ascii")
+        elif MODULE.WAL_NAME.fullmatch(name):
+            # Sparse full-size segments keep the fixtures cheap while matching PostgreSQL archives.
+            with path.open("wb") as stream:
+                stream.truncate(SEGMENT_SIZE)
         else:
             path.write_bytes(b"wal-or-marker")
         os.utime(path, (mtime, mtime))
@@ -359,6 +363,40 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
         with self.assertRaisesRegex(CatalogError, "symbolic link"):
             build_plan(self.archive, self.catalog_path, self.cutoff)
 
+    def test_archive_snapshot_fingerprint_is_stable_for_unchanged_archive(self):
+        manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
+        self.put_archive_file("000000010000000000000000")
+        self.write_catalog([{"backup_id": "base", "retained": True, "manifest": manifest}])
+
+        first = build_plan(self.archive, self.catalog_path, self.cutoff)
+        second = build_plan(self.archive, self.catalog_path, self.cutoff)
+
+        self.assertEqual(first.archive_snapshot_sha256, second.archive_snapshot_sha256)
+        self.assertRegex(first.archive_snapshot_sha256, r"^[0-9a-f]{64}$")
+
+    def test_archive_content_change_invalidates_previous_archive_snapshot(self):
+        manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
+        self.put_archive_file("000000010000000000000000")
+        candidate = self.put_archive_file("000000010000000000000010")
+        self.write_catalog([{"backup_id": "base", "retained": True, "manifest": manifest}])
+        first = build_plan(self.archive, self.catalog_path, self.cutoff)
+
+        candidate.write_bytes(b"replacement with the same filename")
+        second = build_plan(self.archive, self.catalog_path, self.cutoff)
+
+        self.assertNotEqual(first.archive_snapshot_sha256, second.archive_snapshot_sha256)
+
+    def test_archive_membership_change_invalidates_previous_archive_snapshot(self):
+        manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
+        self.put_archive_file("000000010000000000000000")
+        self.write_catalog([{"backup_id": "base", "retained": True, "manifest": manifest}])
+        first = build_plan(self.archive, self.catalog_path, self.cutoff)
+
+        self.put_archive_file("000000010000000000000010")
+        second = build_plan(self.archive, self.catalog_path, self.cutoff)
+
+        self.assertNotEqual(first.archive_snapshot_sha256, second.archive_snapshot_sha256)
+
     def test_snapshot_fingerprint_is_stable_for_unchanged_catalog(self):
         manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
         self.put_archive_file("000000010000000000000000")
@@ -421,6 +459,25 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
         plan = build_plan(self.archive, self.catalog_path, self.cutoff)
         with self.assertRaisesRegex(CatalogError, "lowercase SHA-256"):
             require_snapshot_match(plan, "not-a-digest")
+
+    def test_truncated_required_wal_segment_fails_closed(self):
+        manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
+        path = self.put_archive_file("000000010000000000000000")
+        path.write_bytes(b"truncated-wal")
+        self.write_catalog([{"backup_id": "truncated", "retained": True, "manifest": manifest}])
+
+        with self.assertRaisesRegex(CatalogError, "has size 13; expected 16777216 bytes"):
+            build_plan(self.archive, self.catalog_path, self.cutoff)
+
+    def test_oversized_required_wal_segment_fails_closed(self):
+        manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
+        path = self.put_archive_file("000000010000000000000000")
+        with path.open("ab") as stream:
+            stream.write(b"x")
+        self.write_catalog([{"backup_id": "oversized", "retained": True, "manifest": manifest}])
+
+        with self.assertRaisesRegex(CatalogError, "expected 16777216 bytes"):
+            build_plan(self.archive, self.catalog_path, self.cutoff)
 
     def test_invalid_segment_size_fails_closed(self):
         self.write_catalog([], segment_size=12345)
