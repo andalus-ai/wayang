@@ -82,6 +82,23 @@ class ConfidenceAwareEntityResolverTest {
     }
 
     @Test
+    void modelCannotMatchAnEntityOfAnotherType() {
+        KnowledgeEntity acme = entity("acme", "Acme Corporation", List.of("Acme Corp"));
+        KnowledgeEntity person = new KnowledgeEntity("tenant-a", "docs", "person-1", "Person",
+                "Acme Corp", List.of(), Map.of(),
+                List.of(new KnowledgeEvidence("source-person", "v1", "chunk-person",
+                        0, 12, "test", 0.9)));
+        ConfidenceAwareEntityResolver resolver = resolver(
+                request -> List.of(new EntityMatchPrediction("mention-acme", "person-1", 0.99, 0.01)),
+                0.85, 0.10);
+
+        EntityResolutionDecision decision = resolver.resolve(request(List.of(acme, person))).get(0);
+
+        assertEquals(EntityResolutionDecision.Status.MATCHED, decision.status());
+        assertEquals("acme", decision.canonicalEntityId());
+    }
+
+    @Test
     void modelFailureFallsBackToExactAliasResolution() {
         KnowledgeEntity acme = entity("acme", "Acme Corporation", List.of("Acme Corp"));
         ConfidenceAwareEntityResolver resolver = resolver(
