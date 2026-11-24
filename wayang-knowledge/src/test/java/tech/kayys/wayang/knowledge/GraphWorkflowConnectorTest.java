@@ -41,6 +41,8 @@ class GraphWorkflowConnectorTest {
         InMemoryGraphStore store = new InMemoryGraphStore();
         store.upsertGraph(List.of(entity("acme", "Acme Corp", "v1"), entity("globex", "Globex", "v1")),
                 List.of(relationship("v1")));
+        store.upsertEntity(new KnowledgeEntity("tenant-b", "policies", "acme", "Organization",
+                "Other Tenant Acme", List.of(), Map.of(), List.of(evidence("v1"))));
         ServiceHandler.Connector connector = extension(store).connectors().get("graph-query");
 
         assertTrue(connector.inputs().stream().anyMatch(input ->
@@ -106,4 +108,20 @@ class GraphWorkflowConnectorTest {
         assertEquals(0, result.get("entityEvidenceRemoved"));
         assertTrue(store.findEntity("tenant-a", "policies", "acme").isPresent());
     }
+    @Test
+    void componentDescriptorsPublishTypedInputsAndRequiredConfiguration() {
+        var descriptors = extension(new InMemoryGraphStore()).components();
+        var query = descriptors.stream().filter(d -> d.id().equals("wayang.knowledge.graph-query")).findFirst().orElseThrow();
+        var retract = descriptors.stream().filter(d -> d.id().equals("wayang.knowledge.graph-retract")).findFirst().orElseThrow();
+
+        assertTrue(((List<?>) query.configSchema().get("required")).contains("graphCollection"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> queryInputs = (List<Map<String, Object>>) query.uiHints().get("inputs");
+        assertTrue(queryInputs.stream().anyMatch(input ->
+                "seedEntityIds".equals(input.get("name")) && Boolean.TRUE.equals(input.get("mandatory"))));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> retractInputs = (List<Map<String, Object>>) retract.uiHints().get("inputs");
+        assertEquals(2, retractInputs.stream().filter(input -> Boolean.TRUE.equals(input.get("mandatory"))).count());
+    }
+
 }
