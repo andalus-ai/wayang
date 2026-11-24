@@ -93,10 +93,11 @@ class QueryUnderstandingEvaluationTest {
     @Test
     void rejectsInvalidSpansInsteadOfCountingThemAsExtractedMentions() {
         String query = "Ask about Acme Corp";
+        int start = query.indexOf("Acme Corp");
         ModelQueryMentionExtractor extractor = new ModelQueryMentionExtractor(
                 (text, limit) -> List.of(
-                        new QueryMentionPrediction("Organization", "Invented Corp", 15, 26, 0.99),
-                        new QueryMentionPrediction("Organization", "Acme Corp", 15, 24, 0.99)),
+                        new QueryMentionPrediction("Organization", "Invented Corp", start, start + 12, 0.99),
+                        new QueryMentionPrediction("Organization", "Acme Corp", start, start + "Acme Corp".length(), 0.99)),
                 text -> List.of(), 0.80, 10);
 
         List<EntityCandidate> result = extractor.extract(query);
