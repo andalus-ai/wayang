@@ -106,6 +106,7 @@ public final class InMemoryGraphStore implements GraphStore, GraphEntityLookup {
                 .limit((long) limit + 1).toList();
         if (matches.size() > limit)
             throw new RagException("graph entity candidate set exceeds the configured lookup limit");
+        return List.copyOf(matches);
     }
 
     @Override
