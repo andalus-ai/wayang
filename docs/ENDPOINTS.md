@@ -25,7 +25,7 @@ flowchart LR
 |---|---|---|
 | 1 | `wayang-endpoints`: file system connectors and the `fs` trigger source (JDK only) | implemented (this document) |
 | 2 | `sql` connector and `jdbc` trigger source over JDBC (driver supplied by the deployment, parameterized queries only) | implemented (below) |
-| 3 | SFTP/FTP, Kafka and AMQP/JMS as separate optional modules (each needs a client library) | Kafka **implemented** (`wayang-endpoints-kafka`); SFTP **implemented** (`wayang-endpoints-sftp`); FTP and AMQP/JMS **proposed** |
+| 3 | SFTP/FTP, Kafka and AMQP/JMS as separate optional modules (each needs a client library) | Kafka **implemented** (`wayang-endpoints-kafka`, below); SFTP/FTP and AMQP/JMS **proposed** |
 | 4 | `camel` connector: send a message to an Apache Camel route (DSL, Kamelet) exposed over HTTP; Camel runs in its own process, nothing of Camel is embedded | **implemented** (JDK only; tested against a local HTTP server, never a real Camel runtime) |
 | 5 | Releases that serve poll sources from extensions: an `fs` or `jdbc` POLL trigger now generates a release with `wayang-endpoints` and wires `Extensions.load` (tenant `release`) | **implemented** (CI-verified only; not run in a deployed release) |
 
@@ -103,21 +103,3 @@ A separate module because it needs `kafka-clients` (version managed by the Quark
 `kafka` trigger: Wayang keeps the position, not a consumer group. The cursor is the next offset per partition (`0:120,1:98`), so it is at-least-once, resumes exactly, needs no group coordination and commits nothing on the broker. `latest` pins the end the first time, so records arriving between polls are not missed. If the broker has deleted data the cursor points at, the poll fails with a clear message rather than skipping silently; reset the trigger. Events carry `topic`, `partition`, `offset`, `key`, `value`, `timestamp`, `headers`. Limits: text keys and values only (no Avro or schema registry), one replica should consume a topic, no transactions, no consumer-group scaling.
 
 Verified only against fake clients (no broker): see `KafkaTest`. Never run against a real Kafka.
-
-## SFTP (`wayang-endpoints-sftp`)
-
-A separate module because the JDK has no SSH client: it needs `sshj` (pinned in the module's pom, not managed by the Quarkus BOM). Feature `ENDPOINTS_SFTP` (in `integration` and `full`, not `agentic`). Connectors `sftp-list`, `sftp-read`, `sftp-write`, `sftp-delete` and the `sftp` trigger source. A release that uses any of them gets the module.
-
-**Off until the operator permits it**: `WAYANG_ENDPOINTS_SFTP_HOSTS` (comma-separated `host:port`; a node without `port` means 22). A node can only reach a listed server.
-
-| Config | Meaning |
-|---|---|
-| `host`, `port`, `user` | the server (must be listed) |
-| `password` or `privateKey` (+ `passphrase`) | exactly one; as `${secret:NAME}`; never echoed, error messages carry only the exception type |
-| `hostKey` | **mandatory** `SHA256:...` fingerprint of the server (`ssh-keyscan host \| ssh-keygen -lf -`); checked before authenticating; there is no trust-on-first-use and no switch to turn it off |
-
-Paths are relative to the account's home and may not be empty, absolute, contain `..`, empty segments, backslashes or NUL; bad paths are refused before any connection. `sftp-read` returns text (strict UTF-8) or base64, default limit 8 MiB (max 32 MiB); `sftp-write` writes to a temporary name then renames, refusing to replace unless `overwrite`; `sftp-delete` removes one file (never a directory); `sftp-list` lists files (at most 1000). Timeouts and connection failures are retryable, everything else is not.
-
-`sftp` trigger: a run per new file (`path`, `glob`, `settleSeconds` default 5 so a file still being uploaded is not picked up, `includeExisting` default false, `maxFiles` 1-50). Cursor `<mtime>|<name>`: at-least-once, ordered by modification time then name; a file replaced with an older modification time is not seen again. The event holds `name`, `path`, `size`, `mtime`; fetch the content with `sftp-read` and move or delete the file when done. Run it on one replica.
-
-Verified only against a fake session (`SftpTest`); the sshj adapter (`SshjOpener`) compiled on CI at best and has **never talked to a real SFTP server**. FTP/FTPS is not covered.
