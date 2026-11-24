@@ -30,8 +30,9 @@ public interface InstalledAgentStore {
         public synchronized InstalledAgent save(InstalledAgent installedAgent) {
             Key key = key(installedAgent.tenantId(), installedAgent.projectId(), installedAgent.installationId());
             InstalledAgent previous = entries.get(key);
-            if (previous != null && installedAgent.installedAt().isBefore(previous.installedAt())) {
-                throw new IllegalArgumentException("An installation cannot move backwards in time");
+            if (previous != null && (installedAgent.installedAt().isBefore(previous.installedAt())
+                    || installedAgent.updatedAt().isBefore(previous.updatedAt()))) {
+                throw new IllegalArgumentException("An installation update cannot move backwards in time");
             }
             entries.put(key, installedAgent);
             return installedAgent;
