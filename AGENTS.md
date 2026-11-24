@@ -138,3 +138,19 @@ Traditional BI/analytics is not implied by the Intelligent Business Automation m
 ### Required architecture review
 
 For every significant feature/PR, identify the mode(s), neutral-core versus pack ownership, domain document model, designer contribution, execution engine owner, adapter contract, artifact dependency impact, Community behavior, Pro/Enterprise deployment needs, security/reliability requirements, and implementation/verification status. Update the architecture docs when any of these boundaries change.
+
+
+## Detailed architecture diagrams
+
+Before implementing or changing a mode, runtime deployment, service discovery, scaling, retry, recovery or engine adapter, read the relevant diagrams and mode architecture:
+- Platform sequences and topology: `docs/architecture/DIAGRAMS.md`
+- Distributed runtime, registration, routing, HA and backpressure: `docs/architecture/DISTRIBUTED-RUNTIME.md`
+- Agent Builder: `docs/architecture/modes/AGENT-BUILDER.md`
+- Integration / ESB: `docs/architecture/modes/INTEGRATION-ESB.md`
+- BPMN / DMN Business Automation: `docs/architecture/modes/BUSINESS-AUTOMATION.md`
+- Cross-domain Intelligent Business Automation: `docs/architecture/modes/INTELLIGENT-BUSINESS.md`
+- Future Creative Content: `docs/architecture/modes/CREATIVE-CONTENT.md`
+
+Treat these as target architecture, not proof of implementation. Preserve the ownership of execution state, retries, timers, transactions, idempotency and compensation at each engine boundary. Any sequence crossing engine/service boundaries must define identity and tenant propagation, correlation/causation, deadlines, cancellation, idempotency, typed errors and observability. Any distributed design must cover readiness versus liveness, lease expiry, fencing/ownership, backpressure, graceful drain, recovery and failure testing. Service discovery by itself is never an HA design.
+
+Update the relevant diagrams when implementation changes a contract or ownership boundary. If the code differs from the target, document the gap and status rather than silently treating the diagram as implemented.
