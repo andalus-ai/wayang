@@ -50,13 +50,15 @@ public final class JdbcGraphEntityLookup implements GraphEntityLookup {
             statement.setString(2, collection);
             int index = 3;
             for (String type : types) statement.setString(index++, type);
-            statement.setInt(index, limit);
+            statement.setInt(index, limit + 1);
             try (ResultSet result = statement.executeQuery()) {
                 while (result.next()) ids.add(result.getString(1));
             }
         } catch (SQLException failure) {
             throw new IllegalStateException("JDBC graph entity candidate lookup failed", failure);
         }
+        if (ids.size() > limit)
+            throw new IllegalStateException("graph entity candidate set exceeds the configured lookup limit");
         List<KnowledgeEntity> candidates = new ArrayList<>(ids.size());
         for (String id : ids) graphStore.findEntity(tenant, collection, id).ifPresent(candidates::add);
         return List.copyOf(candidates);
