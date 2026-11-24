@@ -29,7 +29,7 @@ public final class KafkaExtension implements WayangExtension {
 
     @Override
     public String id() {
-        return "wayang-endpoints-kafka";
+        return "endpoints-kafka";
     }
 
     @Override
