@@ -1,6 +1,6 @@
 # Knowledge graph and hybrid retrieval
 
-**Status: graph foundation, extraction SPIs, schema validation, conservative alias resolution an in-memory evidence lifecycle and graph-aware retrieval contracts are implemented.** Durable persistence, workflow nodes and graph-aware retrieval remain planned. This document distinguishes implemented contracts from the intended architecture. A type or SPI is not evidence that a complete graph pipeline exists.
+**Status: graph foundation, extraction SPIs, schema validation, conservative alias resolution, evidence lifecycle, PostgreSQL persistence, graph-aware retrieval and the first query-time entity-linking path are implemented.** Workflow nodes and production-grade model-backed query understanding remain planned. This document distinguishes implemented contracts from the intended architecture. A type or SPI is not evidence that a complete graph pipeline exists.
 
 ## Goals and non-goals
 
@@ -177,7 +177,7 @@ The first query abstraction intentionally supports bounded breadth-first travers
 
 Production adapters must enforce the same limits server-side. They must not fetch an unbounded graph and truncate only after materializing it.
 
-## Hybrid retrieval (planned)
+## Hybrid retrieval
 
 A graph-aware retrieval pipeline should:
 
@@ -253,11 +253,11 @@ This branch adds unit tests for idempotent evidence merge, multi-source provenan
 
 ## Graph-aware retrieval
 
-GraphAwareRetriever is an opt-in composition layer over existing BM25/vector/hybrid document results. It does not change KnowledgeBase.search or RetrievalConfig. Applications invoke graph expansion only when query understanding supplies tenant- and collection-scoped seed entity IDs.
+GraphAwareRetriever is an opt-in composition layer over existing BM25/vector/hybrid document results. It does not change KnowledgeBase.search or RetrievalConfig. Applications may invoke graph expansion with pre-resolved seed IDs or use `retrieveQuery` to compose the configured query mention extractor, scoped graph candidate lookup and entity resolver.
 
 The retrieval sequence is:
 1. Run existing document retrieval and retain its Hit list.
-2. Resolve query mentions to canonical entity IDs in the application query-understanding layer.
+2. Resolve query mentions to canonical entity IDs through `QueryEntityLinker` or an application query-understanding layer.
 3. Submit bounded traversal limits and optional predicate filters to GraphStore.
 4. Collect and deduplicate evidence references from traversed entities and relationships, subject to a maximum evidence count.
 5. Resolve references to source passages through GraphEvidenceLookup.
@@ -267,7 +267,7 @@ GraphEvidenceLookup is a security boundary. Each adapter MUST enforce tenant and
 
 Traversal depth, node count, edge count, evidence count and top-K are bounded. Truncation is surfaced in the result. Empty seed sets return the original document hits without invoking graph or evidence lookup.
 
-The first implementation does not provide automatic query entity linking, a reranking model, graph database adapters, or changes to existing RAG defaults. Applications opt in and supply the query entity IDs and an ACL-aware evidence lookup adapter.
+The query-linking increment provides opt-in regex-based mention extraction, bounded scoped candidate lookup, conservative exact-alias resolution and composition through `GraphAwareRetriever.retrieveQuery`. A model-backed mention extractor, reranking model and graph-native database adapters remain optional future extensions. Existing RAG defaults are unchanged.
 
 ## Evidence lookup contract
 
