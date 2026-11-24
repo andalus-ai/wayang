@@ -1,5 +1,7 @@
 # Wayang Platform Roadmap
 
+> Product architecture: [Multi-Mode Platform Architecture](MULTI-MODE-ARCHITECTURE.md) is the source of truth for the mode model, capability packs, domain/engine boundaries, Phase 1/Phase 2 lifecycle, and Community/Pro/Enterprise direction. This roadmap tracks implementation progress; it does not redefine those product boundaries.
+
 > Status: architecture and implementation plan. This document distinguishes existing, partially verified capabilities from proposed work. It is not a claim that every target below is implemented.
 
 ## 1. Product direction

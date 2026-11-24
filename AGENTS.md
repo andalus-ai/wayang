@@ -88,3 +88,53 @@ Rules for contributors: a definition means the same in both modes; a generated r
 - Extract existing public types incrementally. Add characterization/serialization tests and compatibility facades before changing package names or wire formats.
 - The Core repository's roadmap is a plan, not proof that artifacts or APIs are already implemented/released. Do not add Core dependencies until the relevant artifact has been published and compatibility is verified.
 - Canonical management and worker protocol sources should eventually live in Core; server and runtime adapters remain in their owning repositories.
+
+
+## Multi-mode product architecture (authoritative)
+
+Read and follow [docs/MULTI-MODE-ARCHITECTURE.md](docs/MULTI-MODE-ARCHITECTURE.md) before making product, Studio, schema, plugin, compiler, runtime, or deployment changes. It is the architectural source of truth for the multi-mode product direction.
+
+Wayang is **one extensible low-code platform with specialized modes**, not a collection of separate products or separate codebases:
+
+- **Agent Builder:** agents, tools, knowledge/RAG, multi-agent and event-driven AI workflows.
+- **Integration / ESB:** endpoints, routes, processors, messaging and EIP.
+- **Business Automation:** BPMN process modeling and DMN decisions, preserving native domain semantics.
+- **Intelligent Business Automation:** composition of agents, BPMN/DMN, EIP, data and human work; it is not a separate execution engine.
+- **Creative Content:** future media-generation and multimodal pipeline mode; do not treat it as an initial-release dependency.
+
+Traditional BI/analytics is not implied by the Intelligent Business Automation mode; treat a future BI experience as a separately scoped mode if approved.
+
+### Mode, capability pack and deployment target
+
+- A **mode** selects the user experience and authoring workflow.
+- A **capability pack** contributes versioned domain components, schemas, designers/editors, validators, connectors, engine adapters and runtime dependency metadata.
+- A **deployment target/profile** determines how a compiled solution is packaged and operated.
+- Never conflate these three axes or create a separate runtime merely because a new Studio mode exists.
+- Provide specialized designers and domain document models. Shared graph/editor infrastructure is encouraged, but do not force BPMN, DMN, EIP, agent and future media models into one lossy generic graph.
+- Intelligent Business Automation composes existing capabilities through explicit typed and versioned boundaries; it does not justify a duplicate workflow engine.
+
+### Core and engine boundaries
+
+- Keep Wayang core domain-neutral. Domain semantics belong in capability packs and their engine adapters.
+- Preserve the ownership boundaries above: Gamelan owns durable workflow execution/lifecycle; Andalus owns agent execution. Use adapters and stable contracts.
+- Use a mature integration engine/component ecosystem for EIP where appropriate; Apache Camel may be evaluated as a reference/candidate, not assumed to be an existing dependency.
+- Use a BPMN-compatible engine/adapter for BPMN execution when required; do not casually expand a partial in-house BPMN subset into a claim of full BPMN conformance.
+- DMN evaluation must state its supported conformance and semantics.
+- Creative/media execution requires a future specialized graph/worker path for GPU scheduling, model residency, large artifacts and streaming. Do not force those concerns into BPMN or the generic workflow engine.
+- Cross-engine calls must define typed payloads, identity/tenant propagation, correlation, deadlines, cancellation, idempotency, error mapping, security and observability.
+
+### Two-phase lifecycle and edition constraints
+
+- **Phase 1 — Studio authoring:** design, validate, test, version and publish authoring projects.
+- **Phase 2 — deployment/execution:** compile published projects into immutable, reproducible, dependency-resolved artifacts and deploy independent runtimes.
+- A Phase 2 runtime must execute without Studio or Wayang Console and include only dependencies required by its artifact.
+- Phase 2 deployment targets include standalone local runtime, microservices, and cloud-native deployment. Microservice/cloud-native scaling requires discovery, health, durable state where needed, idempotency/fencing, graceful drain, recovery and explicit retry ownership; service discovery alone is not HA.
+- **Community:** all-in-one Studio + design server + execution. No separated production runtime deployment, distributed scaling or HA orchestration entitlement. Keep it complete and useful without external infrastructure.
+- **Pro:** separated Studio and generated standalone/local or production microservice runtimes.
+- **Enterprise:** distributed/cloud-native deployment, advanced discovery, horizontal scaling, HA, governance and enterprise operations.
+- These are agreed product-direction constraints, not proof that each distribution or entitlement is implemented. Keep status and verification honest in EDITIONS.md and RELEASE.md.
+- Same definitions and core contracts across editions; edition differences are deployment/operations, not forked workflow semantics or incompatible schemas.
+
+### Required architecture review
+
+For every significant feature/PR, identify the mode(s), neutral-core versus pack ownership, domain document model, designer contribution, execution engine owner, adapter contract, artifact dependency impact, Community behavior, Pro/Enterprise deployment needs, security/reliability requirements, and implementation/verification status. Update the architecture docs when any of these boundaries change.

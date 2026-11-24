@@ -1,7 +1,8 @@
 # Wayang
 
-Low-code **agentic factory, BPMN, EIP and DMN** platform, built on top of
-**Andalus** (agent runtime) and **Gamelan** (durable workflow engine).
+A unified, extensible **multi-mode low-code platform** for Agent Builder, Integration / ESB, Business Automation (BPMN / DMN), and Intelligent Business Automation, with Creative Content as a future mode. Built on top of **Andalus** (agent runtime) and **Gamelan** (durable workflow engine).
+
+**Product architecture:** [Multi-Mode Platform Architecture](docs/MULTI-MODE-ARCHITECTURE.md) defines the mode boundaries, neutral core, capability packs, specialized designers, engine adapters, two-phase lifecycle, and Community / Pro / Enterprise deployment direction.
 
 Wayang owns *definitions* and the user-facing model; it never implements a second
 persistent workflow engine.

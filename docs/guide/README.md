@@ -11,6 +11,7 @@ Everything here describes the code in this repository; where a statement is a pl
 | [4. Features](04-features.md) | find what Wayang offers: connectors, RAG, files, triggers, secrets, tenancy, profiles |
 | [5. Release and operations](05-release-and-operations.md) | go from design to a generated runtime, deployment modes, Console and Management Agent |
 | [6. Developer guide](06-developer-guide.md) | add a connector, extension, node type, RAG method, Studio screen; test and document it |
+| [Multi-mode platform architecture](../MULTI-MODE-ARCHITECTURE.md) | modes, capability packs, engine boundaries, Studio-to-runtime lifecycle and editions |
 | [Editions](../EDITIONS.md) | Community all-in-one versus Pro/Enterprise separated |
 
 Verification vocabulary used everywhere: **unit-tested** (JUnit, in CI), **contract-tested** (against a real PostgreSQL or a local HTTP server),

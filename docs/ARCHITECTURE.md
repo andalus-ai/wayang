@@ -1,5 +1,7 @@
 # Architecture
 
+> This document describes the current implementation and its verified limitations. The target multi-mode product architecture (modes, capability packs, specialized designers, domain document models, edition boundaries and Phase 1/Phase 2 lifecycle) is defined in [MULTI-MODE-ARCHITECTURE.md](MULTI-MODE-ARCHITECTURE.md). Do not infer that a target capability is implemented from its appearance in that architecture.
+
 ## Layers
 
 ```
