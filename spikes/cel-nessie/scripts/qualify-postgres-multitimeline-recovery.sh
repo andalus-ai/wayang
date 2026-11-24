@@ -230,6 +230,7 @@ grep -q "missing timeline history file 00000002.history" /tmp/wayang-multitimeli
 python3 spikes/cel-nessie/scripts/simulate-postgres-wal-retention.py \
   --archive-dir "$catalog_dir/archive" \
   --plan-json /tmp/wayang-multitimeline-plan.json \
+  --catalog "$catalog_dir/catalog.json" \
   --destination /tmp/wayang-multitimeline-simulated-wal \
   > /tmp/wayang-multitimeline-simulation.json
 
