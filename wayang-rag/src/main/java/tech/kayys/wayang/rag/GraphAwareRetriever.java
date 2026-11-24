@@ -49,8 +49,10 @@ public final class GraphAwareRetriever {
         if (linker == null || request == null)
             throw new RagException("query graph retrieval requires a linker and retrieval request");
         QueryEntityLinkingResult linking = linker.link(request.tenantId(), request.collectionId(), query);
+        Set<String> seeds = new LinkedHashSet<>(request.seedEntityIds());
+        seeds.addAll(linking.seedEntityIds());
         GraphAwareRetrievalRequest linkedRequest = new GraphAwareRetrievalRequest(
-                request.tenantId(), request.collectionId(), linking.seedEntityIds(), request.direction(),
+                request.tenantId(), request.collectionId(), seeds, request.direction(),
                 request.predicates(), request.maxDepth(), request.maxNodes(), request.maxEdges(),
                 request.maxEvidence(), request.topK());
         return new QueryGraphRetrievalResult(linking, retrieve(documentHits, linkedRequest));
