@@ -33,8 +33,10 @@ public interface InstalledAgentStore {
             if (previous != null && !installedAgent.lock().packageId().equals(previous.lock().packageId())) {
                 throw new IllegalArgumentException("An installation cannot change package identity");
             }
-            if (previous != null && (installedAgent.installedAt().isBefore(previous.installedAt())
-                    || installedAgent.updatedAt().isBefore(previous.updatedAt()))) {
+            if (previous != null && !installedAgent.installedAt().equals(previous.installedAt())) {
+                throw new IllegalArgumentException("An installation timestamp is immutable");
+            }
+            if (previous != null && installedAgent.updatedAt().isBefore(previous.updatedAt())) {
                 throw new IllegalArgumentException("An installation update cannot move backwards in time");
             }
             entries.put(key, installedAgent);
