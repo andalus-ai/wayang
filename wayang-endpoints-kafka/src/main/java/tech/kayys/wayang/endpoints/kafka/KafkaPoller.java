@@ -133,7 +133,7 @@ final class KafkaPoller implements Poller {
         return e;
     }
 
-    static Map<Integer, Long> parse(String cursor) {
+    static Map<Integer, Long> parse(String cursor) throws ConnectorException {
         Map<Integer, Long> m = new TreeMap<>();
         if (cursor == null || cursor.isBlank()) {
             return m;
