@@ -5,6 +5,7 @@ import json
 import stat
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "simulate-postgres-wal-retention.py"
@@ -95,6 +96,22 @@ class WalRetentionSimulationTest(unittest.TestCase):
         with self.assertRaisesRegex(SimulationError, "archive snapshot changed since planning"):
             simulate(self.archive, self.plan, self.catalog, self.root / "stale-membership")
         self.assertFalse((self.root / "stale-membership").exists())
+
+    def test_copy_drift_is_detected_before_candidates_are_removed(self):
+        destination = self.root / "copy-drift"
+        original_copytree = MODULE.shutil.copytree
+
+        def copy_then_corrupt_source_snapshot(src, dst, **kwargs):
+            copied = original_copytree(src, dst, **kwargs)
+            (Path(dst) / REQUIRED).write_bytes(b"mixed-snapshot-copy")
+            return copied
+
+        with patch.object(MODULE.shutil, "copytree", side_effect=copy_then_corrupt_source_snapshot):
+            with self.assertRaisesRegex(SimulationError, "changed while creating simulation copy"):
+                simulate(self.archive, self.plan, self.catalog, destination)
+
+        self.assertFalse(destination.exists())
+        self.assertEqual((self.archive / REQUIRED).read_bytes(), b"required-wal")
 
     def test_copy_adds_read_access_for_restore_user_without_changing_source(self):
         source = self.archive / REQUIRED
