@@ -68,4 +68,24 @@ class AgentPackageInstallerTest {
         assertThrows(IllegalArgumentException.class,
                 () -> new InstalledAgent.ConfigurationBinding("secret-reference", "plain-secret-value"));
     }
+    @Test
+    void upgradePreservesInstallationIdentityAndOriginalTimestamp() {
+        var reader = new AgentPackageReader();
+        var firstArtifact = new AgentDependencyResolver.PackageArtifact(reader.read(MANIFEST), "a".repeat(64));
+        var upgradedArtifact = new AgentDependencyResolver.PackageArtifact(
+                reader.read(MANIFEST.replace("1.2.0", "1.3.0")), "b".repeat(64));
+        var installer = new AgentPackageInstaller();
+        Instant installedAt = Instant.parse("2026-11-24T00:00:00Z");
+        Instant upgradedAt = installedAt.plusSeconds(60);
+        Map<String, InstalledAgent.ConfigurationBinding> bindings = Map.of(
+                "crm-secret", new InstalledAgent.ConfigurationBinding("secret-reference", "secret://crm/token"));
+        var current = installer.install("tenant", "project", "support", firstArtifact, List.of(), bindings, installedAt);
+        var upgraded = installer.upgrade(current, upgradedArtifact, List.of(), bindings, upgradedAt);
+
+        assertEquals(current.installationId(), upgraded.installationId());
+        assertEquals(current.installedAt(), upgraded.installedAt());
+        assertEquals(upgradedAt, upgraded.updatedAt());
+        assertEquals("1.3.0", upgraded.lock().version());
+    }
+
 }
