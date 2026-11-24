@@ -12,9 +12,9 @@ public record InstalledAgent(String tenantId, String projectId, String installat
         List<String> requestedPermissions, Instant installedAt, Instant updatedAt) {
 
     public InstalledAgent {
-        require(tenantId, "tenantId");
-        require(projectId, "projectId");
-        require(installationId, "installationId");
+        require(tenantId, "tenantId", 128);
+        require(projectId, "projectId", 128);
+        require(installationId, "installationId", 128);
         Objects.requireNonNull(lock, "lock");
         Map<String, ConfigurationBinding> copy = new LinkedHashMap<>();
         if (configurationBindings != null) configurationBindings.forEach((key, value) -> {
@@ -28,8 +28,9 @@ public record InstalledAgent(String tenantId, String projectId, String installat
         if (updatedAt.isBefore(installedAt)) throw new IllegalArgumentException("updatedAt precedes installedAt");
     }
 
-    private static void require(String value, String name) {
+    private static void require(String value, String name, int maxLength) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " is required");
+        if (value.length() > maxLength) throw new IllegalArgumentException(name + " exceeds " + maxLength + " characters");
     }
 
     /** Only references are persisted; secret values and connection credentials never belong here. */
