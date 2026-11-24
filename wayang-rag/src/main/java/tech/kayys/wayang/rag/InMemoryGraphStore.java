@@ -93,6 +93,20 @@ public final class InMemoryGraphStore implements GraphStore {
     }
 
     @Override
+    public synchronized List<KnowledgeEntity> findCandidates(
+            String tenantId, String collectionId, Set<String> entityTypes, int limit) {
+        Scope requested = scope(tenantId, collectionId);
+        if (entityTypes == null || entityTypes.isEmpty()) return List.of();
+        if (limit < 1 || limit > 2_000) throw new RagException("graph candidate limit must be 1..2000");
+        return entities.values().stream()
+                .filter(entity -> entity.tenantId().equals(requested.tenantId())
+                        && entity.collectionId().equals(requested.collectionId()))
+                .filter(entity -> entityTypes.contains(entity.type()))
+                .sorted(Comparator.comparing(KnowledgeEntity::id))
+                .limit(limit).toList();
+    }
+
+    @Override
     public synchronized EvidenceRetractionResult retractEvidence(
             String tenantId, String collectionId, String sourceId, String sourceVersion) {
         Scope scope = scope(tenantId, collectionId);
