@@ -1,6 +1,6 @@
 # Editions and runtime deployment topologies
 
-Wayang is one multi-mode product and one codebase. This document distinguishes the Studio product modes from the runtime operating topologies and records what is built today versus planned. Status words are literal:
+Wayang is one multi-mode product and one codebase. This document distinguishes the Studio product modes from the two runtime operating topologies and records what is built today versus planned. Status words are literal:
 **implemented** (code exists and is tested at the level stated elsewhere in `docs/`), **partial**, **proposed** (a plan, not code).
 
 ## Runtime operating topologies (not Studio product modes)

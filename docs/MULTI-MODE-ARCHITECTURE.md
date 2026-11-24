@@ -197,7 +197,7 @@ If these questions cannot be answered, the architecture is not ready for impleme
 
 ## 12. Detailed mode and operational architecture
 
-The overview in this document is complemented by detailed, diagram-rich architecture documents:
+The overview in this document is intentionally complemented by detailed, diagram-rich architecture documents:
 
 | Document | Scope |
 |---|---|
