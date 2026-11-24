@@ -466,6 +466,15 @@ class PublishTest {
         assertTrue(text(p, "src/main/java/com/acme/release/Processes.java").contains("\"kafka\""));
     }
 
+    @Test
+    void anSftpTriggerBringsTheSftpModuleAndIsAcceptedAsASource() {
+        var b = withTriggers(bundle(false, false, "x"), List.of(trigger("t", "POLL", Map.of("source", "sftp"))), List.of());
+        var p = Publisher.generate(b, OPTS);
+        assertTrue(text(p, "pom.xml").contains("wayang-endpoints-sftp"));
+        assertFalse(text(p, "pom.xml").contains("wayang-endpoints-kafka"), "only the module that is used");
+        assertTrue(text(p, "src/main/java/com/acme/release/Processes.java").contains("\"sftp\""));
+    }
+
     private static Publisher.Project build0(String bundle) {
         return Publisher.generate(bundle, OPTS);
     }

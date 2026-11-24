@@ -105,7 +105,7 @@ public final class Publisher {
             }
         }
         List<String> unknownTriggers = new ArrayList<>();
-        pollSources.stream().filter(x -> !ENDPOINTS_POLL_SOURCES.contains(x) && !KAFKA_POLL_SOURCES.contains(x))
+        pollSources.stream().filter(x -> !ENDPOINTS_POLL_SOURCES.contains(x) && !KAFKA_POLL_SOURCES.contains(x) && !SFTP_POLL_SOURCES.contains(x))
                 .filter(x -> !Connectors.pollers(new tech.kayys.wayang.connectors.UrlGuard(false, Set.of())).containsKey(x))
                 .forEach(x -> unknownTriggers.add("poll source " + x));
         providers.stream().filter(x -> !Connectors.webhookProviders().containsKey(x)).forEach(x -> unknownTriggers.add("webhook provider " + x));
@@ -120,6 +120,9 @@ public final class Publisher {
         }
         if (used.stream().anyMatch(KAFKA_CONNECTORS::contains) || pollSources.stream().anyMatch(KAFKA_POLL_SOURCES::contains)) {
             knowledge += KAFKA_DEP; // brings kafka-clients; the operator sets the permitted brokers and topic prefixes
+        }
+        if (used.stream().anyMatch(SFTP_CONNECTORS::contains) || pollSources.stream().anyMatch(SFTP_POLL_SOURCES::contains)) {
+            knowledge += SFTP_DEP; // brings sshj; the operator sets the permitted servers
         }
         boolean mcp = used.stream().anyMatch(MCP_CONNECTORS::contains);
         boolean needsConnectors = !used.isEmpty() || !pollSources.isEmpty() || !providers.isEmpty();
@@ -352,6 +355,16 @@ public final class Publisher {
                                     <version>${wayang.version}</version>
                                 </dependency>
                         """;
+    /** Needed only for an {@code sftp-*} connector or an {@code sftp} trigger; its own module because it needs an SSH library. */
+    static final String SFTP_DEP = """
+                                <dependency>
+                                    <groupId>tech.kayys.wayang</groupId>
+                                    <artifactId>wayang-endpoints-sftp</artifactId>
+                                    <version>${wayang.version}</version>
+                                </dependency>
+                        """;
+    static final Set<String> SFTP_POLL_SOURCES = Set.of("sftp");
+    static final Set<String> SFTP_CONNECTORS = Set.of("sftp-list", "sftp-read", "sftp-write", "sftp-delete");
     static final Set<String> KAFKA_POLL_SOURCES = Set.of("kafka");
     static final Set<String> KAFKA_CONNECTORS = Set.of("kafka-publish");
     /** Trigger sources served by the endpoints extension (found through ServiceLoader, like its connectors). */
