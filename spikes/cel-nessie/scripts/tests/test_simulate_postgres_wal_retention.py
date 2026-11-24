@@ -28,6 +28,13 @@ class WalRetentionSimulationTest(unittest.TestCase):
         self.archive.mkdir()
         (self.archive / REQUIRED).write_bytes(b"required-wal")
         (self.archive / CANDIDATE).write_bytes(b"unreferenced-wal")
+        self.catalog = self.root / "catalog.json"
+        self.manifest = self.root / "backup_manifest"
+        self.manifest.write_text(json.dumps({"WAL-Ranges": []}), encoding="utf-8")
+        self.catalog.write_text(json.dumps({
+            "wal_segment_size_bytes": 16 * 1024 * 1024,
+            "backups": [{"backup_id": "retained", "retained": True, "manifest": self.manifest.name}],
+        }), encoding="utf-8")
         self.plan = self.root / "plan.json"
         self.write_plan()
 
@@ -41,6 +48,7 @@ class WalRetentionSimulationTest(unittest.TestCase):
             "required_wal_files": [REQUIRED],
             "missing_required_files": [],
             "archive_snapshot_sha256": MODULE.inventory_fingerprint(MODULE.inventory(self.archive)),
+            "catalog_snapshot_sha256": MODULE.catalog_snapshot_fingerprint(self.catalog),
         }
         plan.update(overrides)
         self.plan.write_text(json.dumps(plan), encoding="utf-8")
@@ -49,7 +57,7 @@ class WalRetentionSimulationTest(unittest.TestCase):
         destination = self.root / "simulation"
         before = {p.name: p.read_bytes() for p in self.archive.iterdir()}
 
-        report = simulate(self.archive, self.plan, destination)
+        report = simulate(self.archive, self.plan, self.catalog, destination)
 
         self.assertFalse((destination / CANDIDATE).exists())
         self.assertTrue((destination / REQUIRED).is_file())
@@ -58,11 +66,27 @@ class WalRetentionSimulationTest(unittest.TestCase):
         self.assertFalse(report["deletion_performed_on_source"])
         self.assertEqual(report["removed_candidate_files"], [CANDIDATE])
 
+    def test_catalog_change_since_planning_fails_closed(self):
+        changed = json.loads(self.catalog.read_text(encoding="utf-8"))
+        changed["backups"][0]["backup_id"] = "retained-updated"
+        self.catalog.write_text(json.dumps(changed), encoding="utf-8")
+
+        with self.assertRaisesRegex(SimulationError, "catalog snapshot changed since planning"):
+            simulate(self.archive, self.plan, self.catalog, self.root / "stale-catalog")
+        self.assertFalse((self.root / "stale-catalog").exists())
+
+    def test_manifest_change_since_planning_fails_closed(self):
+        self.manifest.write_text('{"WAL-Ranges": [], "revision": 2}', encoding="utf-8")
+
+        with self.assertRaisesRegex(SimulationError, "catalog snapshot changed since planning"):
+            simulate(self.archive, self.plan, self.catalog, self.root / "stale-manifest")
+        self.assertFalse((self.root / "stale-manifest").exists())
+
     def test_archive_content_change_since_planning_fails_closed(self):
         (self.archive / CANDIDATE).write_bytes(b"changed after planning")
 
         with self.assertRaisesRegex(SimulationError, "archive snapshot changed since planning"):
-            simulate(self.archive, self.plan, self.root / "stale-plan")
+            simulate(self.archive, self.plan, self.catalog, self.root / "stale-plan")
         self.assertFalse((self.root / "stale-plan").exists())
 
     def test_archive_membership_change_since_planning_fails_closed(self):
