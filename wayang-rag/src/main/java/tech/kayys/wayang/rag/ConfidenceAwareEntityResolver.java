@@ -48,15 +48,19 @@ public final class ConfidenceAwareEntityResolver implements EntityResolver {
 
         Set<String> expected = new HashSet<>();
         request.candidates().forEach(c -> expected.add(c.candidateId()));
-        Set<String> existingIds = new HashSet<>();
-        request.existingEntities().forEach(e -> existingIds.add(e.id()));
+        Map<String, KnowledgeEntity> existingById = new HashMap<>();
+        request.existingEntities().forEach(e -> existingById.put(e.id(), e));
         Map<String, EntityMatchPrediction> byCandidate = new HashMap<>();
         try {
             for (EntityMatchPrediction prediction : predictions) {
                 if (prediction == null || !expected.contains(prediction.candidateId())
                         || byCandidate.putIfAbsent(prediction.candidateId(), prediction) != null
                         || (prediction.canonicalEntityId() != null
-                            && !existingIds.contains(prediction.canonicalEntityId()))) {
+                            && (!existingById.containsKey(prediction.canonicalEntityId())
+                                || !existingById.get(prediction.canonicalEntityId()).type().equals(
+                                    request.candidates().stream()
+                                        .filter(candidate -> candidate.candidateId().equals(prediction.candidateId()))
+                                        .findFirst().orElseThrow().entityType())))) {
                     return fallback.resolve(request);
                 }
             }
