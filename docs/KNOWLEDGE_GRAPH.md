@@ -361,3 +361,11 @@ The optional integration test `JdbcGraphStoreIT` runs when `WAYANG_TEST_JDBC_URL
 The first regex mention extractor is deliberately configuration-driven; it is not a general-purpose NER model. Candidate lookup is capped at 2,000 entities and query extraction at 100 mentions. Applications should configure entity-type patterns conservatively. A future provider may implement a more selective indexed name/alias lookup without changing the SPI. The evidence lookup remains responsible for source ACL/current-version checks; entity linking does not grant document access.
 
 **Verification status:** tests cover exact in-scope matching, ambiguous aliases, lookup scope enforcement, document-only fallback and linking-to-retrieval composition. Tests are authored but have not been executed in this session. CI must validate both `wayang-rag` and `wayang-store-jdbc`, including the PostgreSQL integration test.
+
+## Model-assisted query entity linking (Phase 12 increment)
+
+`ModelQueryMentionExtractor` adapts an injected `QueryMentionModel` without adding a model SDK or provider dependency to `wayang-rag`. Every returned span is checked against the original query text, offsets, entity-type and surface-length bounds, and a configurable minimum confidence. Malformed, low-confidence, empty or failed model output falls back to the configured deterministic `QueryMentionExtractor`. Query length remains capped at 2,000 characters and mention count at 100.
+
+`ConfidenceAwareEntityResolver` adapts an injected `EntityResolutionModel` over the already bounded tenant/collection candidate set. It accepts a model match only when both the absolute confidence threshold and winner-to-runner-up margin pass, and the selected entity ID and entity type belong to the supplied candidate set. Low-confidence or ambiguous predictions fall back to `ExactAliasEntityResolver`; provider failures and malformed/out-of-scope responses fall back for the full request. Neither model output nor entity linking can widen tenant/collection scope or bypass the ACL-aware evidence lookup.
+
+Both model ports are synchronous, provider-neutral SPIs. Applications own timeout, retry, concurrency and provider lifecycle policy in their adapter layer. Deterministic implementations remain available and are suitable for offline tests and deployments without a model provider.
