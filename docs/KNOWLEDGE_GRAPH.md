@@ -360,7 +360,7 @@ The optional integration test `JdbcGraphStoreIT` runs when `WAYANG_TEST_JDBC_URL
 
 The first regex mention extractor is deliberately configuration-driven; it is not a general-purpose NER model. Candidate lookup is capped at 2,000 entities and query extraction at 100 mentions. Applications should configure entity-type patterns conservatively. A future provider may implement a more selective indexed name/alias lookup without changing the SPI. The evidence lookup remains responsible for source ACL/current-version checks; entity linking does not grant document access.
 
-**Verification status:** tests cover exact in-scope matching, ambiguous aliases, lookup scope enforcement, document-only fallback and linking-to-retrieval composition. Tests are authored but have not been executed in this session. CI must validate both `wayang-rag` and `wayang-store-jdbc`, including the PostgreSQL integration test.
+**Verification status:** tests cover exact in-scope matching, ambiguous aliases, lookup scope enforcement, document-only fallback and linking-to-retrieval composition. The current main CI workflow passed all four jobs on 2026-11-24. PostgreSQL integration behavior is covered only when `WAYANG_TEST_JDBC_URL` is configured; a normal green CI run without that variable is not evidence of a live database test.
 
 ## Model-assisted query entity linking (Phase 12 increment)
 
@@ -375,6 +375,10 @@ Both model ports are synchronous, provider-neutral SPIs. Applications own timeou
 
 The model-assisted extraction path now has a deterministic golden-set regression harness covering exact span/type precision, recall and F1, including missed and extra mentions. See [Query understanding evaluation](QUERY-UNDERSTANDING-EVALUATION.md) for scope, invocation and limitations. The fixture uses a synthetic provider; its metrics validate the harness, not real model quality. Provider benchmarking requires a separately versioned representative dataset and the actual adapter.
 
+
+
+
+**Studio representation note:** the graph-query and graph-retract capabilities added below are exposed as versioned runtime component descriptors and can be placed through the existing service-task/component binding path. They are not a claim that the proposed cross-mode neutral Node/Port Descriptor registry from `FOUNDATION-CONTRACT-AUDIT.md` is complete. Keep BPMN `NodeCatalog`, runtime component descriptors and future domain graph-node descriptors as separate contracts.
 
 ## Knowledge graph workflow components (Phase 13 increment)
 
