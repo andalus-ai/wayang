@@ -32,14 +32,17 @@ public final class JdbcInstalledAgentStore implements InstalledAgentStore {
         String document = Json.write(toDocument(installedAgent));
         String sql = """
                 INSERT INTO wayang_installed_agent
-                    (tenant_id, project_id, installation_id, package_id, package_version, artifact_sha256, lock_sha256, record_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (tenant_id, project_id, installation_id, package_id, package_version, artifact_sha256, lock_sha256, record_json, installed_ms, updated_ms)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (tenant_id, project_id, installation_id) DO UPDATE SET
                     package_id = EXCLUDED.package_id,
                     package_version = EXCLUDED.package_version,
                     artifact_sha256 = EXCLUDED.artifact_sha256,
                     lock_sha256 = EXCLUDED.lock_sha256,
-                    record_json = EXCLUDED.record_json
+                    record_json = EXCLUDED.record_json,
+                    installed_ms = EXCLUDED.installed_ms,
+                    updated_ms = EXCLUDED.updated_ms
+                WHERE wayang_installed_agent.updated_ms <= EXCLUDED.updated_ms
                 """;
         try (Connection connection = dataSource.getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, installedAgent.tenantId());
@@ -50,7 +53,11 @@ public final class JdbcInstalledAgentStore implements InstalledAgentStore {
             statement.setString(6, installedAgent.lock().artifactSha256());
             statement.setString(7, installedAgent.lock().sha256());
             statement.setString(8, document);
-            statement.executeUpdate();
+            statement.setLong(9, installedAgent.installedAt().toEpochMilli());
+            statement.setLong(10, installedAgent.updatedAt().toEpochMilli());
+            if (statement.executeUpdate() == 0) {
+                throw new IllegalArgumentException("A stale installed agent update cannot replace a newer record");
+            }
             return installedAgent;
         } catch (SQLException e) {
             throw failure("save", e);
