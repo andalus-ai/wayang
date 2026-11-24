@@ -185,6 +185,8 @@ CREATE TABLE IF NOT EXISTS wayang_installed_agent (
     artifact_sha256 CHAR(64)      NOT NULL,
     lock_sha256     CHAR(64)      NOT NULL,
     record_json     TEXT          NOT NULL,
+    installed_ms    BIGINT        NOT NULL,
+    updated_ms      BIGINT        NOT NULL,
     PRIMARY KEY (tenant_id, project_id, installation_id)
 );
 CREATE INDEX IF NOT EXISTS wayang_installed_agent_package
