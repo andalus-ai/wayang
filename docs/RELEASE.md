@@ -61,7 +61,7 @@ carried. Vault, cloud (`aws.`, `gcp.`, `azure.`) and `file.` secret names are no
 
 ```
 GET  /healthz   GET /readyz            probes, no auth (readyz: 503 while a required secret is missing; counts only)
-GET  /v1/release                       project, processes + versions, bundle hash, missing secret names
+GET  /v1/release                       project, processes + versions, agents, bundle hash, missing secret names, and the release identity (target, Wayang version, components, connectors, component/artifact lock digests) for an inventory such as the Console's
 POST /v1/processes/{id}/runs           {"input": {...}}  -> 201 with the run (maybe WAITING with a task token)
 GET  /v1/runs[?processId=&limit=]      GET /v1/runs/{id}      POST /v1/runs/{id}/cancel
 POST /v1/tasks/{token}/complete        {"outputs": {...}}
