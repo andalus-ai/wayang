@@ -348,3 +348,16 @@ Traversal performs bounded breadth-first reads with deterministic relationship o
 
 The optional integration test `JdbcGraphStoreIT` runs when `WAYANG_TEST_JDBC_URL` is configured and a PostgreSQL JDBC driver is present on the test classpath. It covers persistence across adapter instances, tenant isolation, batch rollback, exact-version evidence retraction and preservation of curated relationships. Without that environment variable the test returns without contacting a database; a green CI run alone therefore does not prove PostgreSQL integration behavior.
 
+
+
+## Query-time entity linking (Phase 11 increment)
+
+**Implemented contract and reference path:** `QueryMentionExtractor` extracts query-local mentions; `RegexQueryMentionExtractor` is a deterministic, dependency-free implementation for trusted configured patterns. `GraphEntityLookup` returns a bounded candidate set within an explicit tenant and collection. `QueryEntityLinker` delegates canonical resolution to the existing `EntityResolver` SPI and accepts only one decision per mention. A match is accepted only when the canonical entity is in the returned scoped candidate set. Ambiguous mentions produce no seed IDs; new/unmatched mentions do not trigger graph expansion.
+
+`InMemoryGraphStore` implements the lookup port for development and tests. `JdbcGraphEntityLookup` provides a PostgreSQL candidate adapter using tenant, collection and entity-type predicates with a hard result limit; it hydrates candidates through `GraphStore.findEntity`. The exact-alias resolver remains provider-neutral and performs final name/alias comparison in Java.
+
+`GraphAwareRetriever.retrieveQuery` composes query linking with the existing graph-aware retrieval path and returns `QueryGraphRetrievalResult`, preserving both linking diagnostics and retrieval output. When no mentions match (or all mentions are ambiguous/new), the resolved seed set is empty and document-only hits are retained without graph/evidence lookup. Existing `KnowledgeBase.search` and retrieval defaults remain unchanged.
+
+The first regex mention extractor is deliberately configuration-driven; it is not a general-purpose NER model. Candidate lookup is capped at 2,000 entities and query extraction at 100 mentions. Applications should configure entity-type patterns conservatively. A future provider may implement a more selective indexed name/alias lookup without changing the SPI. The evidence lookup remains responsible for source ACL/current-version checks; entity linking does not grant document access.
+
+**Verification status:** tests cover exact in-scope matching, ambiguous aliases, lookup scope enforcement, document-only fallback and linking-to-retrieval composition. Tests are authored but have not been executed in this session. CI must validate both `wayang-rag` and `wayang-store-jdbc`, including the PostgreSQL integration test.
