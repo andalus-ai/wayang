@@ -17,7 +17,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
 
 import javax.sql.DataSource;
 
@@ -458,7 +457,7 @@ public final class JdbcGraphStore implements GraphStore {
 
     private record Visit(String entityId, int depth) {}
 
-    private <T> T transaction(Function<Connection, T> work) {
+    private <T> T transaction(SqlWork<T> work) {
         try (Connection connection = dataSource.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
