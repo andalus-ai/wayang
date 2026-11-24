@@ -280,3 +280,8 @@ Do not replace all current models in one migration. Introduce compatible seams i
 - Changing Community edition into a distributed deployment.
 
 The next implementation slice should be **M1.1 — immutable, versioned document envelope**, followed by **M1.2 — first-class project/document ownership**. These changes are prerequisites for safe multi-mode authoring and deterministic Phase 2 artifact generation.
+
+
+## 9. Extension ecosystem dependency
+
+The neutral node/port descriptor, document-kind registry, capability-pack contract and deterministic artifact lock are also the foundation for a future collaborator marketplace. The detailed target architecture is documented in [Extension Platform and Collaborator Marketplace](EXTENSION-PLATFORM-AND-MARKETPLACE.md). Reuse the existing runtime plugin/extension contracts; do not create a second plugin manager or marketplace-specific component identity system.
