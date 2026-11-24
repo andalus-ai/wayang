@@ -95,4 +95,16 @@ class AgentDependencyResolverTest {
         assertThrows(IllegalArgumentException.class, () -> new AgentPackageLock(
                 valid.packageId(), valid.version(), valid.artifactSha256(), List.of(), "b".repeat(64)));
     }
+    @Test
+    void rejectsDifferentDigestsForTheSameImmutablePackageVersion() {
+        var root = artifact("acme:root", "1.0.0",
+                """
+                {"id":"acme:child","versionRange":"^1.0","kind":"agent"}
+                """, 'a');
+        var child = artifact("acme:child", "1.0.0", "", 'b');
+        var mutated = new AgentDependencyResolver.PackageArtifact(child.agentPackage(), "c".repeat(64));
+        assertThrows(AgentDependencyResolver.ResolutionException.class,
+                () -> new AgentDependencyResolver().resolve(root, List.of(child, mutated)));
+    }
+
 }
