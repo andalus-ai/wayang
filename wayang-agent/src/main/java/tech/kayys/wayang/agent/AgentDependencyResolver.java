@@ -32,10 +32,21 @@ public final class AgentDependencyResolver {
             }
         }
         catalog.computeIfAbsent(root.agentPackage().metadata().id(), ignored -> new ArrayList<>()).add(root);
-        catalog.values().forEach(list -> list.sort(Comparator
-                .comparing((PackageArtifact a) -> a.agentPackage().metadata().version(), AgentDependencyResolver::compareVersions)
-                .reversed()
-                .thenComparing(a -> a.sha256())));
+        catalog.forEach((packageId, list) -> {
+            Map<String, String> digestByVersion = new HashMap<>();
+            for (PackageArtifact artifact : list) {
+                String version = artifact.agentPackage().metadata().version();
+                String previousDigest = digestByVersion.putIfAbsent(version, artifact.sha256());
+                if (previousDigest != null && !previousDigest.equals(artifact.sha256())) {
+                    throw new ResolutionException("Package '" + packageId + "' version '" + version
+                            + "' has multiple artifact digests");
+                }
+            }
+            list.sort(Comparator
+                    .comparing((PackageArtifact a) -> a.agentPackage().metadata().version(), AgentDependencyResolver::compareVersions)
+                    .reversed()
+                    .thenComparing(PackageArtifact::sha256));
+        });
 
         Map<String, PackageArtifact> selected = new LinkedHashMap<>();
         Set<String> visiting = new LinkedHashSet<>();
