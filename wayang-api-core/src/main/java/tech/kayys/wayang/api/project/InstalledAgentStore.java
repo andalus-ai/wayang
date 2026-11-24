@@ -30,6 +30,9 @@ public interface InstalledAgentStore {
         public synchronized InstalledAgent save(InstalledAgent installedAgent) {
             Key key = key(installedAgent.tenantId(), installedAgent.projectId(), installedAgent.installationId());
             InstalledAgent previous = entries.get(key);
+            if (previous != null && !installedAgent.lock().packageId().equals(previous.lock().packageId())) {
+                throw new IllegalArgumentException("An installation cannot change package identity");
+            }
             if (previous != null && (installedAgent.installedAt().isBefore(previous.installedAt())
                     || installedAgent.updatedAt().isBefore(previous.updatedAt()))) {
                 throw new IllegalArgumentException("An installation update cannot move backwards in time");
