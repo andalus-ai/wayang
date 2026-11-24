@@ -374,3 +374,25 @@ Both model ports are synchronous, provider-neutral SPIs. Applications own timeou
 ## Query understanding evaluation
 
 The model-assisted extraction path now has a deterministic golden-set regression harness covering exact span/type precision, recall and F1, including missed and extra mentions. See [Query understanding evaluation](QUERY-UNDERSTANDING-EVALUATION.md) for scope, invocation and limitations. The fixture uses a synthetic provider; its metrics validate the harness, not real model quality. Provider benchmarking requires a separately versioned representative dataset and the actual adapter.
+
+
+## Knowledge graph workflow components (Phase 13 increment)
+
+The KNOWLEDGE extension exposes two graph operations as reusable Studio components and workflow service connectors:
+
+- **Traverse knowledge graph** (`wayang.knowledge.graph-query`, connector `graph-query`) accepts `seedEntityIds` and an optional relationship predicate allow-list. Its configuration selects `graphCollection`, direction (`OUTGOING`, `INCOMING`, `BOTH`) and bounded traversal limits. It returns canonical entity and relationship records, source evidence references, counts and a `truncated` flag.
+- **Retract graph evidence** (`wayang.knowledge.graph-retract`, connector `graph-retract`) accepts `sourceId` and exact `sourceVersion`. It removes only matching evidence and removes a relationship only when its final evidence reference is gone.
+
+Both components declare their inputs through the existing `ConnectorInput` contract. Mandatory inputs are advisory: missing seeds return an empty graph result; missing retraction fields return a no-op result. The runtime can surface the missing-input warning without failing the workflow. The collection is configuration, while tenant scope comes from the runtime's `wayang.tenant` context and is never accepted from node input.
+
+Traversal is bounded by the existing graph contract: depth 1–3, at most 1,000 entities and 2,000 relationships, with lower defaults (depth 2, 100 entities, 200 relationships). A missing seed list does not issue a graph query. No raw SQL or vendor-specific graph query language is exposed.
+
+### GraphStore deployment boundary
+
+The default no-argument `KnowledgeExtension` uses a bounded process-local `InMemoryGraphStore`, suitable for local development and tests; it is not durable across restarts or shared across replicas. Deployments should construct the extension with their configured `GraphStore` adapter, such as `JdbcGraphStore` backed by PostgreSQL. The workflow component contract is unchanged across adapters. Do not use the in-memory default for multi-replica production deployments.
+
+Graph traversal returns graph facts and their provenance metadata; it does **not** authorize access to source documents. When graph facts are used to retrieve passages, continue through `GraphAwareRetriever` and an ACL/current-version-aware `GraphEvidenceLookup`. Graph query output must not be treated as a substitute for document authorization.
+
+### Current scope and next increment
+
+This increment delivers traversal and exact-version evidence retraction as workflow nodes. It does not yet add a graph-ingestion node: graph ingestion requires a configured extraction provider, versioned `KnowledgeSchema`, resolution policy and GraphStore adapter to be assembled explicitly. The next increment will compose those existing SPIs into a bounded graph-ingestion workflow component rather than silently inventing a default ontology or fuzzy merge policy.
