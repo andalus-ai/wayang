@@ -30,3 +30,5 @@ Verification vocabulary used everywhere: **unit-tested** (JUnit, in CI), **contr
 - [Business Automation (BPMN / DMN)](../architecture/modes/BUSINESS-AUTOMATION.md)
 - [Intelligent Business Automation](../architecture/modes/INTELLIGENT-BUSINESS.md)
 - [Creative Content (future)](../architecture/modes/CREATIVE-CONTENT.md)
+
+- [Extension platform and collaborator marketplace](../architecture/EXTENSION-PLATFORM-AND-MARKETPLACE.md) — extension contracts, publisher workflow, artifact trust, installation and public/private catalogs.
