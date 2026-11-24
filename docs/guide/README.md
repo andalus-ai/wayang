@@ -16,3 +16,15 @@ Everything here describes the code in this repository; where a statement is a pl
 
 Verification vocabulary used everywhere: **unit-tested** (JUnit, in CI), **contract-tested** (against a real PostgreSQL or a local HTTP server),
 **compiled only** (built in CI, never run against the real system), **not verified**.
+
+
+## Architecture blueprints
+
+- [Multi-mode platform architecture](../MULTI-MODE-ARCHITECTURE.md) — product modes, neutral core, capability packs, engines and editions.
+- [Platform diagrams](../architecture/DIAGRAMS.md) — end-to-end system, authoring, deployment, discovery, dispatch, scaling, recovery and security.
+- [Distributed runtime](../architecture/DISTRIBUTED-RUNTIME.md) — service discovery, capability-aware routing, backpressure, rollout, HA and recovery.
+- [Agent Builder](../architecture/modes/AGENT-BUILDER.md)
+- [Integration / ESB](../architecture/modes/INTEGRATION-ESB.md)
+- [Business Automation (BPMN / DMN)](../architecture/modes/BUSINESS-AUTOMATION.md)
+- [Intelligent Business Automation](../architecture/modes/INTELLIGENT-BUSINESS.md)
+- [Creative Content (future)](../architecture/modes/CREATIVE-CONTENT.md)
