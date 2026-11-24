@@ -167,3 +167,8 @@ Before changing project/document persistence, document kinds, Studio node catalo
 - Treat execution-mode declarations as metadata, not as proof of remote routing, worker registration, plugin installation or HA.
 
 The audit is a proposed alignment, not a claim that these contracts are already implemented. Update it as M1 implementation and tests land.
+
+
+## Extension platform and marketplace
+
+Before changing plugin manifests, extension discovery, component registries, Studio contributions, package installation, signing, worker activation or marketplace distribution, read `docs/architecture/EXTENSION-PLATFORM-AND-MARKETPLACE.md`. Reuse the existing `WayangExtension`, `PluginManifest`, `PluginRegistry`, component descriptors and release lockfile; do not create a parallel plugin framework. Keep extension contract, runtime activation, artifact repository, marketplace catalog and install/governance services as separate responsibilities. Treat all third-party artifacts as untrusted until signature, digest, compatibility, dependency and policy checks pass. Do not load untrusted executable code into Studio/core in-process. Keep Community offline/all-in-one capable; a hosted marketplace is optional, never a runtime execution dependency. Mark marketplace, installer, signature verification and dynamic activation as proposed until implemented and verified.
