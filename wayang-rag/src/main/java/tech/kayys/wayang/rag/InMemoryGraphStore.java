@@ -11,7 +11,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /** Bounded process-local reference implementation of {@link GraphStore}. */
-public final class InMemoryGraphStore implements GraphStore {
+public final class InMemoryGraphStore implements GraphStore, GraphEntityLookup {
     public static final int DEFAULT_MAX_ENTITIES = 20_000;
     public static final int DEFAULT_MAX_RELATIONSHIPS = 100_000;
 
