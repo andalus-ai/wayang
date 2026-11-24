@@ -104,12 +104,14 @@ public final class AgentDependencyResolver {
     }
 
     static boolean matches(String version, String range) {
-        int[] candidate = parts(version);
+        parts(version); // validate the candidate even when the range is a wildcard
         String expression = range == null ? "" : range.trim();
         if (expression.equals("*") || expression.equalsIgnoreCase("x")) return true;
         if (expression.startsWith("^") || expression.startsWith("~")) {
-            int[] base = parts(expression.substring(1));
-            if (compare(candidate, base) < 0) return false;
+            String baseExpression = expression.substring(1);
+            int[] base = parts(baseExpression);
+            if (hasPrerelease(version) && !hasPrerelease(baseExpression)) return false;
+            if (compareVersions(version, canonical(base)) < 0) return false;
             int[] upper = base.clone();
             if (expression.charAt(0) == '^') {
                 if (base[0] > 0) { upper[0]++; upper[1] = 0; upper[2] = 0; }
@@ -119,9 +121,9 @@ public final class AgentDependencyResolver {
                 upper[1]++;
                 upper[2] = 0;
             }
-            return compare(candidate, upper) < 0;
+            return compareVersions(version, canonical(upper)) < 0;
         }
-        if (VERSION.matcher(expression).matches()) return compare(candidate, parts(expression)) == 0;
+        if (VERSION.matcher(expression).matches()) return compareVersions(version, expression) == 0;
         for (String token : expression.split("[ ,]+")) {
             if (token.isBlank()) continue;
             String operator = token.startsWith(">=") || token.startsWith("<=") ? token.substring(0, 2)
@@ -129,7 +131,9 @@ public final class AgentDependencyResolver {
             if (!Set.of(">=", "<=", ">", "<", "=").contains(operator)) {
                 throw new ResolutionException("Unsupported version range '" + range + "'");
             }
-            int comparison = compare(candidate, parts(token.substring(operator.length())));
+            String boundary = token.substring(operator.length());
+            if (hasPrerelease(version) && !hasPrerelease(boundary)) return false;
+            int comparison = compareVersions(version, boundary);
             boolean accepted = switch (operator) {
                 case ">=" -> comparison >= 0;
                 case "<=" -> comparison <= 0;
@@ -165,7 +169,47 @@ public final class AgentDependencyResolver {
     }
 
     private static int compareVersions(String left, String right) {
-        return compare(parts(left), parts(right));
+        Matcher leftMatcher = VERSION.matcher(left);
+        Matcher rightMatcher = VERSION.matcher(right);
+        if (!leftMatcher.matches()) throw new ResolutionException("Invalid semantic version '" + left + "'");
+        if (!rightMatcher.matches()) {
+            int[] padded = parts(right);
+            right = canonical(padded);
+            rightMatcher = VERSION.matcher(right);
+            rightMatcher.matches();
+        }
+        int[] leftParts = new int[] { Integer.parseInt(leftMatcher.group(1)), Integer.parseInt(leftMatcher.group(2)),
+                Integer.parseInt(leftMatcher.group(3)) };
+        int[] rightParts = new int[] { Integer.parseInt(rightMatcher.group(1)), Integer.parseInt(rightMatcher.group(2)),
+                Integer.parseInt(rightMatcher.group(3)) };
+        int numeric = compare(leftParts, rightParts);
+        if (numeric != 0) return numeric;
+        String leftPre = leftMatcher.group(4);
+        String rightPre = rightMatcher.group(4);
+        if (leftPre == null && rightPre == null) return 0;
+        if (leftPre == null) return 1;
+        if (rightPre == null) return -1;
+        String[] a = leftPre.split("\\.");
+        String[] b = rightPre.split("\\.");
+        for (int i = 0; i < Math.min(a.length, b.length); i++) {
+            boolean an = a[i].matches("[0-9]+");
+            boolean bn = b[i].matches("[0-9]+");
+            int result;
+            if (an && bn) result = new java.math.BigInteger(a[i]).compareTo(new java.math.BigInteger(b[i]));
+            else if (an != bn) result = an ? -1 : 1;
+            else result = a[i].compareTo(b[i]);
+            if (result != 0) return result;
+        }
+        return Integer.compare(a.length, b.length);
+    }
+
+    private static boolean hasPrerelease(String value) {
+        Matcher matcher = VERSION.matcher(value);
+        return matcher.matches() && matcher.group(4) != null;
+    }
+
+    private static String canonical(int[] parts) {
+        return parts[0] + "." + parts[1] + "." + parts[2];
     }
 
     private static int compare(int[] left, int[] right) {
