@@ -108,4 +108,22 @@ class AgentDependencyResolverTest {
                 () -> new AgentDependencyResolver().resolve(root, List.of(child, mutated)));
     }
 
+    @Test
+    void detectsCyclesInsideAlreadySelectedTransitiveDependencies() {
+        var root = artifact("acme:root", "1.0.0",
+                """
+                {"id":"acme:child","versionRange":"^1.0","kind":"agent"}
+                """, 'a');
+        var child = artifact("acme:child", "1.0.0",
+                """
+                {"id":"acme:leaf","versionRange":"^1.0","kind":"agent"}
+                """, 'b');
+        var leaf = artifact("acme:leaf", "1.0.0",
+                """
+                {"id":"acme:child","versionRange":"^1.0","kind":"agent"}
+                """, 'c');
+        assertThrows(AgentDependencyResolver.ResolutionException.class,
+                () -> new AgentDependencyResolver().resolve(root, List.of(child, leaf)));
+    }
+
 }
