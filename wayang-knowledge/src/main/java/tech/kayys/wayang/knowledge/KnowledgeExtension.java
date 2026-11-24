@@ -6,6 +6,8 @@ import java.util.Map;
 import java.util.Set;
 
 import tech.kayys.wayang.connectors.UrlGuard;
+import tech.kayys.wayang.rag.GraphStore;
+import tech.kayys.wayang.rag.InMemoryGraphStore;
 import tech.kayys.wayang.runtime.ComponentDescriptor;
 import tech.kayys.wayang.runtime.ConnectorInput;
 import tech.kayys.wayang.runtime.Profile;
@@ -20,6 +22,7 @@ public final class KnowledgeExtension implements WayangExtension {
 
     private final KnowledgeRegistry registry;
     private final FileStore files;
+    private final GraphStore graphStore;
     private final Map<String, ServiceHandler.Connector> connectors;
 
     public KnowledgeExtension() {
@@ -27,15 +30,25 @@ public final class KnowledgeExtension implements WayangExtension {
     }
 
     KnowledgeExtension(FileStore files) {
-        this(files, new UrlGuard("true".equalsIgnoreCase(System.getenv("WAYANG_CONNECTORS_ALLOW_PRIVATE")), hosts()));
+        this(files, new UrlGuard("true".equalsIgnoreCase(System.getenv("WAYANG_CONNECTORS_ALLOW_PRIVATE")), hosts()),
+                new InMemoryGraphStore());
     }
 
     KnowledgeExtension(FileStore files, UrlGuard guard) {
+        this(files, guard, new InMemoryGraphStore());
+    }
+
+    /**
+     * Allows a deployment to supply its configured GraphStore adapter (for example PostgreSQL).
+     * The no-argument extension uses a bounded process-local store for development and standalone use.
+     */
+    public KnowledgeExtension(FileStore files, UrlGuard guard, GraphStore graphStore) {
         this.registry = new KnowledgeRegistry(
                 guard,
                 files == null ? null : new KnowledgePersistence(files.root().resolve("knowledge")),
                 files == null ? java.time.Clock.systemUTC() : files.clock());
         this.files = files;
+        this.graphStore = java.util.Objects.requireNonNull(graphStore, "graphStore");
         this.connectors = Map.of(
                 "rag-ingest", new RagIngest(registry, files),
                 "rag-search", new RagSearch(registry),
@@ -46,7 +59,9 @@ public final class KnowledgeExtension implements WayangExtension {
                 "file-get", new FileConnectors.Get(files),
                 "file-list", new FileConnectors.ListFiles(files),
                 "file-delete", new FileConnectors.Delete(files),
-                "file-purge", new FileConnectors.Purge(files));
+                "file-purge", new FileConnectors.Purge(files),
+                "graph-query", new GraphQueryConnector(graphStore),
+                "graph-retract", new GraphRetractConnector(graphStore));
     }
 
     @Override
