@@ -193,3 +193,20 @@ Every proposed feature or PR should answer:
 - What is implemented, proposed and actually verified?
 
 If these questions cannot be answered, the architecture is not ready for implementation.
+
+
+## 12. Detailed mode and operational architecture
+
+The overview in this document is intentionally complemented by detailed, diagram-rich architecture documents:
+
+| Document | Scope |
+|---|---|
+| [Platform diagrams](architecture/DIAGRAMS.md) | System context, platform layers, authoring/publish, deployment, discovery, dispatch, scaling, recovery, HA and security sequences |
+| [Distributed runtime](architecture/DISTRIBUTED-RUNTIME.md) | Runtime registration, leases, capability-aware routing, backpressure, rollout/drain, durable ownership, HA and observability |
+| [Agent Builder](architecture/modes/AGENT-BUILDER.md) | Agent invocation, Andalus boundary, tools, persona/guardrails, RAG ingestion/query, triggers, scaling and security |
+| [Integration / ESB](architecture/modes/INTEGRATION-ESB.md) | Endpoint/route model, EIP, message delivery, acknowledgement, retry, DLQ, replay and consumer scaling |
+| [Business Automation](architecture/modes/BUSINESS-AUTOMATION.md) | BPMN/DMN boundaries, process start, decision evaluation, human tasks, timers, conformance and process recovery |
+| [Intelligent Business Automation](architecture/modes/INTELLIGENT-BUSINESS.md) | Cross-engine composition, procurement sequence, typed contracts, compensation, governance and independent scaling |
+| [Creative Content (future)](architecture/modes/CREATIVE-CONTENT.md) | Future media graph, asset lineage, GPU scheduling, worker execution and scaling |
+
+These diagrams are normative design guidance for new work, subject to implementation status and engine-selection decisions. Keep them synchronized with code and tests. A diagram must label proposed/future components honestly and must not imply that a candidate engine or control-plane capability has already been adopted or shipped.
