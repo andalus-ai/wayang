@@ -19,6 +19,26 @@ public final class AgentPackageInstaller {
         this.resolver = Objects.requireNonNull(resolver, "resolver");
     }
 
+    /** Creates an upgraded record while preserving the original installation timestamp and identity. */
+    public InstalledAgent upgrade(InstalledAgent current, AgentDependencyResolver.PackageArtifact root,
+            List<AgentDependencyResolver.PackageArtifact> available,
+            Map<String, InstalledAgent.ConfigurationBinding> bindings, Instant now) {
+        Objects.requireNonNull(current, "current");
+        Objects.requireNonNull(root, "root");
+        Objects.requireNonNull(now, "now");
+        if (!current.lock().packageId().equals(root.agentPackage().metadata().id())) {
+            throw new InstallationException("An installation cannot be upgraded to a different package identity");
+        }
+        if (now.isBefore(current.updatedAt())) {
+            throw new InstallationException("Upgrade timestamp precedes the current installation update");
+        }
+        InstalledAgent candidate = install(current.tenantId(), current.projectId(), current.installationId(),
+                root, available, bindings, now);
+        return new InstalledAgent(current.tenantId(), current.projectId(), current.installationId(),
+                candidate.lock(), candidate.configurationBindings(), candidate.requestedPermissions(),
+                current.installedAt(), now);
+    }
+
     public InstalledAgent install(String tenantId, String projectId, String installationId,
             AgentDependencyResolver.PackageArtifact root,
             List<AgentDependencyResolver.PackageArtifact> available,
