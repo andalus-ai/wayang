@@ -37,11 +37,12 @@ class AgentDependencyResolverTest {
                 """
                 {"id":"acme:leaf","versionRange":"~2.1","kind":"agent"}
                 """, 'c');
+        var prerelease = artifact("acme:child", "1.9.0-beta", "", 'e');
         var leaf = artifact("acme:leaf", "2.1.5", "", 'd');
 
         var resolver = new AgentDependencyResolver();
-        var first = resolver.resolve(root, List.of(childOld, leaf, childNew));
-        var second = resolver.resolve(root, List.of(childNew, childOld, leaf));
+        var first = resolver.resolve(root, List.of(childOld, leaf, childNew, prerelease));
+        var second = resolver.resolve(root, List.of(prerelease, childNew, childOld, leaf));
 
         assertEquals(first.lock(), second.lock());
         assertEquals(first.lock().sha256(), second.lock().sha256());
