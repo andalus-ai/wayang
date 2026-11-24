@@ -5,7 +5,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Objects;
 
 /** Immutable, deterministic lock for the exact artifacts selected for an agent installation. */
 public record AgentPackageLock(String packageId, String version, String artifactSha256,
@@ -15,7 +14,13 @@ public record AgentPackageLock(String packageId, String version, String artifact
         requireText(packageId, "packageId");
         requireText(version, "version");
         requireDigest(artifactSha256, "artifactSha256");
-        dependencies = List.copyOf(dependencies == null ? List.of() : dependencies);
+        dependencies = (dependencies == null ? List.<LockedDependency>of() : dependencies).stream().sorted().toList();
+        for (int i = 1; i < dependencies.size(); i++) {
+            if (dependencies.get(i - 1).kind().equals(dependencies.get(i).kind())
+                    && dependencies.get(i - 1).packageId().equals(dependencies.get(i).packageId())) {
+                throw new IllegalArgumentException("Duplicate dependency lock entry for " + dependencies.get(i).packageId());
+            }
+        }
         String expected = digest(packageId, version, artifactSha256, dependencies);
         if (sha256 == null || sha256.isBlank()) {
             sha256 = expected;
