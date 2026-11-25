@@ -37,8 +37,14 @@ class DmnScreen extends ConsumerWidget {
                       underline: const SizedBox.shrink(),
                       dropdownColor: AppColors.darkSurfaceRaised,
                       items: tables.map((t) => DropdownMenuItem(value: t.id, child: Text(t.name))).toList(),
-                      onChanged: (v) {
-                        if (v != null) ref.read(activeDecisionTableIdProvider.notifier).state = v;
+                      onChanged: (v) async {
+                        final current = activeId ?? (tables.isNotEmpty ? tables.first.id : null);
+                        if (v == null || v == current) return;
+                        if (current != null && ref.read(dmnControllerProvider(current)).dirty) {
+                          final name = ref.read(dmnControllerProvider(current)).table?.name ?? 'this table';
+                          if (!await confirmDiscardEdits(context, what: 'decision table "$name"', save: () => ref.read(dmnControllerProvider(current).notifier).save())) return;
+                        }
+                        ref.read(activeDecisionTableIdProvider.notifier).state = v;
                       },
                     ),
                     PopupMenuButton<String>(
