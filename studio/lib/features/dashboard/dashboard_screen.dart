@@ -15,6 +15,26 @@ Color runStatusColor(RunStatus status) => switch (status) {
       RunStatus.cancelled => AppColors.textMutedDark,
     };
 
+/// One step of the first-run guide on the overview.
+class FirstRunStep {
+  const FirstRunStep(this.title, this.detail, this.done, this.navKey);
+  final String title;
+  final String detail;
+  final bool done;
+  final String navKey;
+}
+
+/// The guide for someone new: connect, design a process, run it. [connected] means at least one overview request succeeded.
+/// A design-only server has no "run" step. Empty when everything is done (the guide then disappears).
+List<FirstRunStep> firstRunSteps({required bool connected, required int processes, required int runs, bool executes = true}) {
+  final steps = [
+    FirstRunStep('Connect to a server', 'Set the API address and key in Settings.', connected, 'settings'),
+    FirstRunStep('Design a process', 'Open the process designer and draw a first flow.', processes > 0, 'bpmn'),
+    if (executes) FirstRunStep('Run it', 'Start a run and follow it in Runs.', runs > 0, 'runs'),
+  ];
+  return steps.every((s) => s.done) ? const [] : steps;
+}
+
 /// Compose-mode overview. Every metric and activity item comes from the API;
 /// refresh revalidates the same providers used by the rest of Studio.
 class DashboardScreen extends ConsumerWidget {
@@ -123,6 +143,41 @@ class DashboardScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
             ],
+            Builder(builder: (context) {
+              final steps = firstRunSteps(
+                connected: runs.hasValue || tasks.hasValue || processes.hasValue || decisions.hasValue || agents.hasValue,
+                processes: processes.valueOrNull?.length ?? 0,
+                runs: runs.valueOrNull?.length ?? 0,
+                executes: ref.watch(executesProvider).maybeWhen(data: (v) => v, orElse: () => true),
+              );
+              // Wait for the answers so the guide does not flash up while the counts are still loading.
+              if (steps.isEmpty || processes.isLoading || runs.isLoading) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: SurfacePanel(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Getting started', style: Theme.of(context).textTheme.titleSmall),
+                      const SizedBox(height: 8),
+                      for (final step in steps)
+                        ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            step.done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                            color: step.done ? AppColors.success : AppColors.textMutedDark,
+                          ),
+                          title: Text(step.title),
+                          subtitle: Text(step.detail),
+                          trailing: step.done ? null : const Icon(Icons.chevron_right_rounded),
+                          onTap: step.done ? null : () => ref.read(selectedNavKeyProvider.notifier).state = step.navKey,
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            }),
             LayoutBuilder(
               builder: (context, constraints) {
                 final columns = constraints.maxWidth >= 1050
