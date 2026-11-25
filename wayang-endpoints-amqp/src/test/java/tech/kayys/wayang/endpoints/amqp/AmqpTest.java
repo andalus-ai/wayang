@@ -153,4 +153,99 @@ class AmqpTest {
         assertEquals(1, ext.components().size());
         assertEquals("wayang.endpoints.amqp-publish", ext.components().get(0).id());
     }
+
+    static final class FakeReader implements Amqp.Reader {
+        final List<Amqp.Delivery> queue = new ArrayList<>();
+        final List<Long> asked = new ArrayList<>();
+        Exception failure;
+
+        @Override
+        public List<Amqp.Delivery> read(Amqp.Target t, String q, long from, int max, int waitMs) throws Exception {
+            if (failure != null) {
+                throw failure;
+            }
+            asked.add(from);
+            return queue.stream().filter(d -> d.offset() >= Math.max(from, 0)).limit(max).toList();
+        }
+    }
+
+    static Amqp.Delivery msg(long offset, String text) {
+        return new Amqp.Delivery(offset, text.getBytes(StandardCharsets.UTF_8), "text/plain", "id-" + offset);
+    }
+
+    final FakeReader reader = new FakeReader();
+    final AmqpStreamPoller poller = new AmqpStreamPoller(new Amqp(Set.of("mq.example.com:5671"), List.of(), List.of("wy-"), fake, reader));
+
+    static Map<String, Object> streamConfig() {
+        Map<String, Object> c = config();
+        c.remove("exchange");
+        c.put("queue", "wy-events");
+        return c;
+    }
+
+    @Test
+    void theStreamTriggerResumesFromItsOwnCursorAndNeverSkips() throws Exception {
+        reader.queue.addAll(List.of(msg(0, "a"), msg(1, "b"), msg(2, "c")));
+        var first = poller.poll(streamConfig(), null);
+        assertEquals(3, first.events().size());
+        assertEquals("o:3", first.nextCursor());
+        assertEquals(-1L, reader.asked.get(0));
+        assertEquals("b", first.events().get(1).get("body"));
+        assertEquals(1L, first.events().get(1).get("offset"));
+        var idle = poller.poll(streamConfig(), "o:3");
+        assertTrue(idle.events().isEmpty());
+        assertEquals(null, idle.nextCursor(), "nothing new: the cursor stays");
+        reader.queue.add(msg(3, "d"));
+        var more = poller.poll(streamConfig(), "o:3");
+        assertEquals(1, more.events().size());
+        assertEquals("o:4", more.nextCursor());
+        assertEquals(3L, reader.asked.get(2));
+    }
+
+    @Test
+    void theStreamTriggerBoundsBatchesAndMarksBinaryAndOversizeBodies() throws Exception {
+        for (int i = 0; i < 5; i++) {
+            reader.queue.add(msg(i, "m" + i));
+        }
+        var c = streamConfig();
+        c.put("maxMessages", 2);
+        var r = poller.poll(c, null);
+        assertEquals(2, r.events().size());
+        assertEquals("o:2", r.nextCursor());
+        reader.queue.clear();
+        reader.queue.add(new Amqp.Delivery(0, new byte[] {(byte) 0xff, (byte) 0xfe}, null, null));
+        reader.queue.add(msg(1, "x".repeat(Amqp.MAX_EVENT_BODY + 5)));
+        var e = poller.poll(streamConfig(), null).events();
+        assertEquals(true, e.get(0).get("binary"));
+        assertEquals("", e.get(0).get("body"));
+        assertEquals(true, e.get(1).get("bodyTruncated"));
+        assertEquals((long) Amqp.MAX_EVENT_BODY + 5, e.get(1).get("size"));
+        assertEquals(Amqp.MAX_EVENT_BODY, ((String) e.get(1).get("body")).length());
+    }
+
+    @Test
+    void theStreamTriggerIsOffUntilPermittedAndRefusesBadConfigAndCursors() {
+        var off = new AmqpStreamPoller(new Amqp(Set.of("mq.example.com:5671"), List.of(), List.of(), fake, reader));
+        assertThrows(ConnectorException.class, () -> off.poll(streamConfig(), null));
+        var other = streamConfig();
+        other.put("queue", "classic-queue");
+        assertThrows(ConnectorException.class, () -> poller.poll(other, null));
+        var bad = streamConfig();
+        bad.put("maxMessages", 101);
+        assertThrows(ConnectorException.class, () -> poller.poll(bad, null));
+        var start = streamConfig();
+        start.put("start", "last");
+        assertThrows(ConnectorException.class, () -> poller.poll(start, null));
+        assertThrows(ConnectorException.class, () -> poller.poll(streamConfig(), "p:3"));
+        assertThrows(ConnectorException.class, () -> poller.poll(streamConfig(), "o:-4"));
+        reader.failure = new SocketTimeoutException("slow");
+        try {
+            poller.poll(streamConfig(), null);
+        } catch (ConnectorException e) {
+            assertTrue(e.retryable());
+            assertFalse(e.getMessage().contains("s3cret-pw"));
+        } catch (Exception e) {
+            throw new AssertionError(e);
+        }
+    }
 }

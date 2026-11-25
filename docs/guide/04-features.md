@@ -66,7 +66,7 @@ Connectors are selected by `config.connector` (or as an agent tool `type`). All 
 | SaaS | GitHub, Notion, Google Calendar and Sheets, Airtable, Todoist, Linear, Trello |
 | AI and agents | `mcp` (call MCP tools; generate an MCP server from OpenAPI, [MCP](../MCP.md)), A2A, multimodal (image generation, ComfyUI, transcribe, speak, describe: [MULTIMODAL](../MULTIMODAL.md)) |
 | Scripting | CES, JavaScript, Python via JSR-223, with limits ([SCRIPTING](../SCRIPTING.md)) |
-| Endpoints (ESB) | `fs-read`, `fs-write`, `fs-list`, `fs-move`, `fs-delete` the `fs` trigger source, `sql` and the `jdbc` trigger source ([ENDPOINTS](../ENDPOINTS.md)); `camel`, `kafka-publish` and the `kafka` trigger, `sftp-*` and the `sftp` trigger, `ftp-*` (FTPS by default) and the `ftp` trigger, `amqp-publish` (optional modules, off until the operator permits hosts) |
+| Endpoints (ESB) | `fs-read`, `fs-write`, `fs-list`, `fs-move`, `fs-delete` the `fs` trigger source, `sql` and the `jdbc` trigger source ([ENDPOINTS](../ENDPOINTS.md)); `camel`, `kafka-publish` and the `kafka` trigger, `sftp-*` and the `sftp` trigger, `ftp-*` (FTPS by default) and the `ftp` trigger, `amqp-publish` and the `amqp-stream` trigger (optional modules, off until the operator permits hosts) |
 | Knowledge and files | `rag-ingest`, `rag-search`, `rag-forget`, `rag-list`, `file-put`, `file-fetch`, `file-get`, `file-list`, `file-delete`, `file-purge`, `graph-query`, `graph-retract` |
 
 ## Knowledge (RAG) and files

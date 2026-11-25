@@ -89,7 +89,7 @@ class FeedbackScreen extends ConsumerWidget {
           Expanded(
             child: items.when(
               loading: () => const LoadingView(),
-              error: (e, _) => ErrorView(message: errText(e), onRetry: () => ref.invalidate(feedbackListProvider)),
+              error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(feedbackListProvider)),
               data: (list) => list.isEmpty
                   ? const EmptyState(icon: Icons.feedback_outlined, title: 'No feedback yet')
                   : ListView(children: [for (final f in list) _FeedbackCard(item: f)]),
