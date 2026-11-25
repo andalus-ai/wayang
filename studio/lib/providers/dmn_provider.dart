@@ -296,12 +296,13 @@ class DmnController extends StateNotifier<DmnEditorState> {
 
   /// Saves the edit buffer, then freezes it as the next immutable version.
   Future<void> publish() async {
-    if (!await save()) return;
+    if (state.saving || !await save()) return; // a second click while a save/publish is running does nothing
+    state = state.copyWith(saving: true); // keeps Save and Publish disabled (spinner on) until the server answers
     try {
       final v = await _repo.publish(DefinitionKind.decision, state.table!.id);
-      state = state.copyWith(publishedVersion: v.version, clearError: true);
+      state = state.copyWith(saving: false, publishedVersion: v.version, clearError: true);
     } catch (e) {
-      state = state.copyWith(error: e is WayangApiException ? e.fullMessage : '$e');
+      state = state.copyWith(saving: false, error: e is WayangApiException ? e.fullMessage : '$e');
     }
   }
 }

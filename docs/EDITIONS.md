@@ -102,7 +102,7 @@ export WAYANG_AUTH_LOCAL_API_KEY=$(openssl rand -hex 24)
 docker compose -f deploy/docker-compose.all-in-one.yml up --build
 ```
 
-The compose file publishes on `127.0.0.1` only, refuses to start without the key, and runs as a non-root user. The store is in memory by default: stopping the container loses everything; set `WAYANG_STORE=jdbc` and a datasource for durability. Studio is built with `WAYANG_API=http://localhost:8080`; build with `--build-arg WAYANG_API=...` if the server is reached under another address.
+The compose file publishes on `127.0.0.1` only, refuses to start without the key, and runs as a non-root user. For a durable single-machine install add `-f deploy/docker-compose.all-in-one.postgres.yml` (PostgreSQL in a named volume, `WAYANG_STORE=jdbc`; unbuilt, untested like the rest). The store is in memory by default: stopping the container loses everything; set `WAYANG_STORE=jdbc` and a datasource for durability. Studio is built with `WAYANG_API=http://localhost:8080`; build with `--build-arg WAYANG_API=...` if the server is reached under another address.
 
 
 ## Agreed multi-mode packaging direction

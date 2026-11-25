@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme.dart';
 import '../../core/utils.dart';
 import '../../core/widgets.dart';
-import '../../data/api_client.dart' show errText;
+import '../../data/api_client.dart' show errText, needsSettings;
 import '../../data/run_events.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
@@ -124,7 +124,7 @@ class _BpmnDebugPanelState extends ConsumerState<BpmnDebugPanel> {
     });
     return run.when(
       loading: () => const LoadingView(),
-      error: (e, _) => ErrorView(message: errText(e)),
+      error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e)),
       data: (r) {
         if (_steps.executed.length != r.executedNodes.length || !_sameList(_steps.executed, r.executedNodes)) {
           final next = _steps.withExecuted(r.executedNodes);
