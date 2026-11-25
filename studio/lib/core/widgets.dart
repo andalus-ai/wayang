@@ -459,3 +459,26 @@ void showToast(BuildContext context, String message, {bool isError = false}) {
     ),
   );
 }
+
+/// Before something replaces the open editor's content: asks what to do with unsaved edits. Returns true to go ahead (the edits were
+/// saved by [save], or the person chose to discard them), false to stay. Call it only when there are unsaved edits.
+Future<bool> confirmDiscardEdits(BuildContext context, {required Future<bool> Function() save, String what = 'this'}) async {
+  final choice = await showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: AppColors.darkSurfaceRaised,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+      title: const Text('Unsaved changes'),
+      content: Text('You have unsaved changes in $what. Save them as a draft first?',
+          style: const TextStyle(color: AppColors.textSecondaryDark)),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, 'stay'), child: const Text('Stay')),
+        TextButton(onPressed: () => Navigator.pop(ctx, 'discard'), child: const Text('Discard changes')),
+        ElevatedButton(onPressed: () => Navigator.pop(ctx, 'save'), child: const Text('Save draft and continue')),
+      ],
+    ),
+  );
+  if (choice == 'discard') return true;
+  if (choice == 'save') return save();
+  return false;
+}

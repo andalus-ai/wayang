@@ -174,8 +174,10 @@ class _BpmnToolbar extends ConsumerWidget {
                       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: AppColors.textPrimaryDark),
                       dropdownColor: AppColors.darkSurfaceRaised,
                       items: items.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name))).toList(),
-                      onChanged: (v) {
-                        if (v != null) ref.read(activeBpmnDiagramIdProvider.notifier).state = v;
+                      onChanged: (v) async {
+                        if (v == null || v == activeId) return;
+                        if (!await _leaveOpenProcess(context, ref)) return;
+                        ref.read(activeBpmnDiagramIdProvider.notifier).state = v;
                       },
                     );
             },
@@ -260,10 +262,19 @@ class _BpmnToolbar extends ConsumerWidget {
     );
   }
 
+  /// True when it is fine to replace the open process: nothing unsaved, or the person saved or discarded the edits.
+  Future<bool> _leaveOpenProcess(BuildContext context, WidgetRef ref) async {
+    final c = ref.read(bpmnControllerProvider);
+    if (!c.dirty) return true;
+    return confirmDiscardEdits(context, what: 'process "${c.diagram.name}"', save: () => ref.read(bpmnControllerProvider.notifier).save());
+  }
+
   Future<void> _handleMenuAction(BuildContext context, WidgetRef ref, String action, List<DefinitionSummary> items) async {
     final actions = ref.read(bpmnDiagramActionsProvider);
     final current = ref.read(bpmnControllerProvider).diagram;
     try {
+      // These open another process in place of this one, so unsaved edits would be lost.
+      if (const {'new', 'import', 'duplicate'}.contains(action) && !await _leaveOpenProcess(context, ref)) return;
       switch (action) {
         case 'new':
           final name = await _promptText(context, 'New process', 'Untitled process');
