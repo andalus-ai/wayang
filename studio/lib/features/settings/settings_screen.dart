@@ -67,12 +67,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             children: [
               const ScreenHeader(title: 'Settings', subtitle: 'Connection to the Wayang API.', icon: Icons.settings_rounded),
               const SizedBox(height: 20),
-              TextField(controller: _url, decoration: const InputDecoration(labelText: 'API base URL')),
+              TextField(controller: _url, decoration: const InputDecoration(labelText: 'API base URL'), textInputAction: TextInputAction.next),
               const SizedBox(height: 12),
               TextField(
                 controller: _token,
                 obscureText: true,
-                decoration: const InputDecoration(labelText: 'Bearer token (kept in memory only)'),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _apply(),
+                decoration: const InputDecoration(
+                  labelText: 'API key or bearer token (kept in memory only)',
+                  helperText: 'Local mode: the operator key. JWT or Numu mode: your bearer token.',
+                ),
               ),
               const SizedBox(height: 12),
               TextField(

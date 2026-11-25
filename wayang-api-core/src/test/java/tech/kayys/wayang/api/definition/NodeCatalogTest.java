@@ -106,4 +106,19 @@ class NodeCatalogTest {
         assertFalse(NodeCatalog.validateConfig(ElementType.SERVICE_TASK, Map.of("connector", "websocket", "url", "wss://x", "collect", 99)).isEmpty());
         assertTrue(NodeCatalog.validateConfig(ElementType.SERVICE_TASK, Map.of("connector", "http", "url", "https://x", "query", Map.of("a", "b"))).isEmpty());
     }
+    @Test
+    void graphWorkflowSettingsAreExposedAndBounded() {
+        assertTrue(NodeCatalog.validateConfig(ElementType.SERVICE_TASK, Map.of(
+                "connector", "graph-query",
+                "graphCollection", "policies",
+                "graphDirection", "BOTH",
+                "graphMaxDepth", 2,
+                "graphMaxNodes", 100,
+                "graphMaxEdges", 200)).isEmpty());
+        assertFalse(NodeCatalog.validateConfig(ElementType.SERVICE_TASK, Map.of(
+                "connector", "graph-query", "graphCollection", "policies", "graphMaxDepth", 4)).isEmpty());
+        assertTrue(NodeCatalog.validateConfig(ElementType.SERVICE_TASK, Map.of(
+                "connector", "graph-retract", "graphCollection", "policies")).isEmpty());
+    }
+
 }

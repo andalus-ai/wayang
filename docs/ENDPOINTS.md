@@ -7,14 +7,14 @@ flowchart LR
   subgraph in[Consume: pollers and webhooks]
     fsin[fs: new files]
     jdbcin[jdbc: new rows]
-    other[sftp, kafka, amqp: optional modules]
+    other[sftp, ftp, kafka, amqp: optional modules]
   end
   in -->|one run per event| wf[Workflow / EIP pipeline]
   wf --> out
   subgraph out[Produce: connectors]
     fsout[fs-write, fs-move]
     sqlout[sql]
-    otherout[sftp, kafka, amqp: optional modules]
+    otherout[sftp, ftp, kafka, amqp: optional modules]
   end
   camel[camel connector: planned, optional] -.-> wf
 ```
@@ -25,7 +25,7 @@ flowchart LR
 |---|---|---|
 | 1 | `wayang-endpoints`: file system connectors and the `fs` trigger source (JDK only) | implemented (this document) |
 | 2 | `sql` connector and `jdbc` trigger source over JDBC (driver supplied by the deployment, parameterized queries only) | implemented (below) |
-| 3 | SFTP/FTP, Kafka and AMQP/JMS as separate optional modules (each needs a client library) | Kafka, SFTP and AMQP (publish) **implemented** (`wayang-endpoints-kafka`, `-sftp`, `-amqp`, below); FTP/FTPS and JMS **proposed** |
+| 3 | SFTP/FTP, Kafka and AMQP/JMS as separate optional modules (each needs a client library) | Kafka, SFTP, FTP/FTPS and AMQP (publish) **implemented** (`wayang-endpoints-kafka`, `-sftp`, `-ftp`, `-amqp`, below); JMS **proposed** |
 | 4 | `camel` connector: send a message to an Apache Camel route (DSL, Kamelet) exposed over HTTP; Camel runs in its own process, nothing of Camel is embedded | **implemented** (JDK only; tested against a local HTTP server, never a real Camel runtime) |
 | 5 | Releases that serve poll sources from extensions: an `fs` or `jdbc` POLL trigger now generates a release with `wayang-endpoints` and wires `Extensions.load` (tenant `release`) | **implemented** (CI-verified only; not run in a deployed release) |
 
@@ -110,4 +110,8 @@ Connectors `sftp-list`, `sftp-read`, `sftp-write`, `sftp-delete` and the `sftp` 
 
 ## AMQP / RabbitMQ (`wayang-endpoints-amqp`)
 
-Connector `amqp-publish` (AMQP 0-9-1, `amqp-client`). Off until the operator sets `WAYANG_ENDPOINTS_AMQP_HOSTS` (`host:port`, comma-separated) and `WAYANG_ENDPOINTS_AMQP_EXCHANGE_PREFIXES`. The default exchange is refused (it would reach any queue by name). TLS is on by default (port 5671) with certificate and host-name verification; `tls: false` uses 5672. Messages are persistent, published with publisher confirms and `mandatory`: a message no queue receives is an error, not a silent loss. Inputs: `body` (text, or an object sent as JSON, at most 1 MiB), `routingKey`, `headers`, `messageId` (default random, for consumer de-duplication). Timeouts and connection failures are retryable and a retry can duplicate. No trigger source yet (consuming needs acknowledgement semantics against Gamelan's at-least-once polling; JMS is likewise not done). Limit: never run against a real broker; tested against a fake publisher.
+Connector `amqp-publish` (AMQP 0-9-1, `amqp-client`). Off until the operator sets `WAYANG_ENDPOINTS_AMQP_HOSTS` (`host:port`, comma-separated) and `WAYANG_ENDPOINTS_AMQP_EXCHANGE_PREFIXES`. The default exchange is refused (it would reach any queue by name). TLS is on by default (port 5671) with certificate and host-name verification; `tls: false` uses 5672. Messages are persistent, published with publisher confirms and `mandatory`: a message no queue receives is an error, not a silent loss. Inputs: `body` (text, or an object sent as JSON, at most 1 MiB), `routingKey`, `headers`, `messageId` (default random, for consumer de-duplication). Timeouts and connection failures are retryable and a retry can duplicate. Trigger source `amqp-stream` reads a RabbitMQ **stream** queue (config `queue`, `start: first`, `maxMessages` 1-100): a stream keeps its messages, so Wayang holds the position itself (cursor `o:<next offset>`, via `x-stream-offset`), at-least-once and resumable, like the Kafka trigger. Off until the operator sets `WAYANG_ENDPOINTS_AMQP_STREAM_PREFIXES`; the queue name must start with one. Events carry `queue`, `offset`, `body` (UTF-8, cut at 64 KiB with `bodyTruncated`), `size`, `binary` (non-UTF-8 payloads are flagged, not guessed), `messageId`, `contentType`. Classic queues are deliberately not supported: Gamelan's poller contract has no "processed" callback, so a classic queue could only be acknowledged before the run is started (at-most-once) or redelivered forever. If retention deletes the saved offset the broker resumes at the first available message. JMS is not done. Limit: never run against a real broker; tested against a fake publisher.
+
+## FTP / FTPS (`wayang-endpoints-ftp`)
+
+Connectors `ftp-list`, `ftp-read`, `ftp-write`, `ftp-delete` and the `ftp` trigger source (same behaviour, limits and cursor as SFTP), over commons-net. Off until the operator sets `WAYANG_ENDPOINTS_FTP_HOSTS` (`host:port`, default port 21). Explicit FTPS (AUTH TLS, protected data channel, certificate and host name verified) is the default; plain FTP (`tls: false`) sends the password and data in the clear, so it additionally needs `WAYANG_ENDPOINTS_FTP_ALLOW_PLAIN=true`. Password login only (`${secret:NAME}`), passive mode only. Listing uses MLSD, so a server without MLSD cannot be listed or polled. Limits: implicit FTPS (port 990) is not supported; the client was never connected to a real server here and is compiled on CI only.

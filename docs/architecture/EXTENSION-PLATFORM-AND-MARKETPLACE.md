@@ -1,6 +1,6 @@
 # Wayang Extension Platform and Collaborator Marketplace
 
-> Status: **target architecture / proposed roadmap**. Wayang already has a runtime extension SPI, plugin manifest model, manifest/component consistency validation, in-memory dependency registry and release component lockfile. This document extends those foundations into a secure extension distribution and collaborator ecosystem. It does not claim that marketplace publishing, package installation, signature verification, sandboxing, dynamic activation or remote worker provisioning is implemented.
+> Status: **target architecture / proposed roadmap**. Wayang already has a runtime extension SPI, plugin manifest model, manifest/component consistency validation, in-memory dependency registry and release component lockfile. Agent Package reading, local dependency resolution, deterministic locking, project-scoped installation records and JDBC persistence are now implemented as a separate agent-definition lifecycle. This does not implement marketplace publishing, extension-plugin installation, artifact download, signature verification, sandboxing, dynamic activation or remote worker provisioning. See [Agent Package Installation and Locking](AGENT-PACKAGE-INSTALLATION.md).
 
 ## 1. Product direction
 

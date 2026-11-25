@@ -40,7 +40,17 @@ class BpmnScreen extends ConsumerWidget {
       if (!ref.read(bpmnControllerProvider).loading) ref.read(bpmnControllerProvider.notifier).setHighlight(next);
     });
 
-    return Column(
+    void saveDraft() {
+      final c = ref.read(bpmnControllerProvider);
+      if (activeId != null && c.dirty && !c.saving) ref.read(bpmnControllerProvider.notifier).save();
+    }
+
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true): saveDraft,
+        const SingleActivator(LogicalKeyboardKey.keyS, meta: true): saveDraft,
+      },
+      child: Column(
       children: [
         const _BpmnToolbar(),
         if (state.errorMessage != null) _Banner(text: state.errorMessage!, isError: true),
@@ -112,7 +122,7 @@ class BpmnScreen extends ConsumerWidget {
           ]),
         ),
       ],
-    );
+    ));
   }
 }
 
@@ -240,8 +250,10 @@ class _BpmnToolbar extends ConsumerWidget {
           const SizedBox(width: 10),
           ElevatedButton.icon(
             onPressed: !hasOpen || state.saving || state.errorCount > 0 ? null : controller.publish,
-            icon: const Icon(Icons.rocket_launch_outlined, size: 16),
-            label: const Text('Publish'),
+            icon: state.saving
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.rocket_launch_outlined, size: 16),
+            label: Text(state.saving ? 'Working…' : 'Publish'),
           ),
         ],
       ),

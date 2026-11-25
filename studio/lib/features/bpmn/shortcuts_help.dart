@@ -7,7 +7,7 @@ class ShortcutHelp {
   final String does;
 }
 
-/// Everything the BPMN canvas answers to, grouped. Keep this in step with the bindings in `bpmn_canvas.dart`.
+/// Everything the BPMN editor answers to, grouped. Keep this in step with the bindings in `bpmn_canvas.dart` (and Ctrl/Cmd+S in `bpmn_screen.dart`).
 const Map<String, List<ShortcutHelp>> bpmnShortcutHelp = {
   'Select': [
     ShortcutHelp('Click', 'Select a node'),
@@ -20,6 +20,7 @@ const Map<String, List<ShortcutHelp>> bpmnShortcutHelp = {
   'Edit': [
     ShortcutHelp('Delete / Backspace', 'Delete the selection'),
     ShortcutHelp('Ctrl/Cmd + C / X / V', 'Copy, cut, paste (also between processes)'),
+    ShortcutHelp('Ctrl/Cmd + S', 'Save the draft (when there are unsaved changes)'),
     ShortcutHelp('Ctrl/Cmd + Z', 'Undo'),
     ShortcutHelp('Ctrl + Y or Ctrl/Cmd + Shift + Z', 'Redo'),
     ShortcutHelp('Arrow keys', 'Move the selection one grid cell (Shift: one pixel)'),

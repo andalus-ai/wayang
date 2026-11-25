@@ -15,6 +15,7 @@ import tech.kayys.wayang.runtime.WayangExtension;
 public final class AmqpExtension implements WayangExtension {
 
     private final Map<String, ServiceHandler.Connector> connectors;
+    private final Map<String, tech.kayys.wayang.runtime.Poller> pollers;
 
     public AmqpExtension() {
         this(Amqp.fromEnvironment());
@@ -22,6 +23,7 @@ public final class AmqpExtension implements WayangExtension {
 
     AmqpExtension(Amqp amqp) {
         this.connectors = Map.of("amqp-publish", new AmqpPublish(amqp));
+        this.pollers = Map.of("amqp-stream", new AmqpStreamPoller(amqp));
     }
 
     @Override
@@ -37,6 +39,11 @@ public final class AmqpExtension implements WayangExtension {
     @Override
     public Map<String, ServiceHandler.Connector> connectors() {
         return connectors;
+    }
+
+    @Override
+    public Map<String, tech.kayys.wayang.runtime.Poller> pollers() {
+        return pollers;
     }
 
     @Override
