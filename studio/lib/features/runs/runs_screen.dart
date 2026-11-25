@@ -118,7 +118,7 @@ class RunsScreen extends ConsumerWidget {
           Expanded(
             child: runs.when(
               loading: () => const LoadingView(),
-              error: (e, _) => ErrorView(message: errText(e), onRetry: () => ref.invalidate(runsProvider)),
+              error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(runsProvider)),
               data: (list) => list.isEmpty
                   ? const EmptyState(icon: Icons.play_circle_outline_rounded, title: 'No runs yet', message: 'Publish a process and start it.')
                   : Row(
@@ -234,7 +234,7 @@ class _RunDetail extends ConsumerWidget {
     final run = ref.watch(runDetailProvider(id));
     return run.when(
       loading: () => const LoadingView(),
-      error: (e, _) => ErrorView(message: errText(e)),
+      error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e)),
       data: (r) => SurfacePanel(
         padding: const EdgeInsets.all(16),
         child: ListView(

@@ -41,6 +41,15 @@ class WayangApiException implements Exception {
   /// Message plus the server's detail lines, for showing in a dialog.
   String get fullMessage => details.isEmpty ? message : '$message\n${details.join('\n')}';
 
+  /// What the person can do about it, for the failures that are about the connection rather than the request (null otherwise).
+  String? get hint {
+    if (isUnauthorized) return 'Open Settings and enter the API key or token for this server, then retry.';
+    if (isForbidden) return 'This account is not allowed to do that. Ask an administrator for the needed role.';
+    if (code == 'UNREACHABLE') return 'Check that the server is running and that the server address in Settings is right.';
+    if (code == 'TIMEOUT') return 'The server is busy or the address in Settings is wrong. Retry in a moment.';
+    return null;
+  }
+
   @override
   String toString() => message;
 }
@@ -133,4 +142,11 @@ class ApiClient {
 }
 
 /// What to show a person for any failure.
-String errText(Object e) => e is WayangApiException ? e.fullMessage : '$e';
+String errText(Object e) {
+  if (e is! WayangApiException) return '$e';
+  final h = e.hint;
+  return h == null ? e.fullMessage : '${e.fullMessage}\n$h';
+}
+
+/// True when the failure is about reaching or signing in to the server, so the person should be offered Settings.
+bool needsSettings(Object e) => e is WayangApiException && (e.isUnauthorized || e.code == 'UNREACHABLE' || e.code == 'TIMEOUT');

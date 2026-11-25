@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../providers/app_providers.dart';
 import 'theme.dart';
 
 /// A soft, bordered surface with optional glow — the base "card" look used
@@ -285,25 +288,34 @@ class LoadingView extends StatelessWidget {
   }
 }
 
-/// Error placeholder with retry.
-class ErrorView extends StatelessWidget {
-  const ErrorView({super.key, required this.message, this.onRetry});
+/// Error placeholder with retry; with [needsSettings] it also offers to open Settings (connection and sign-in problems).
+class ErrorView extends ConsumerWidget {
+  const ErrorView({super.key, required this.message, this.onRetry, this.needsSettings = false});
   final String message;
   final VoidCallback? onRetry;
+  final bool needsSettings;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final actions = <Widget>[
+      if (onRetry != null)
+        OutlinedButton.icon(
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh_rounded, size: 16),
+          label: const Text('Retry'),
+        ),
+      if (needsSettings)
+        FilledButton.tonalIcon(
+          onPressed: () => ref.read(selectedNavKeyProvider.notifier).state = 'settings',
+          icon: const Icon(Icons.settings_rounded, size: 16),
+          label: const Text('Open Settings'),
+        ),
+    ];
     return EmptyState(
-      icon: Icons.error_outline_rounded,
-      title: 'Something went wrong',
+      icon: needsSettings ? Icons.cloud_off_rounded : Icons.error_outline_rounded,
+      title: needsSettings ? 'Cannot connect' : 'Something went wrong',
       message: message,
-      action: onRetry == null
-          ? null
-          : OutlinedButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded, size: 16),
-              label: const Text('Retry'),
-            ),
+      action: actions.isEmpty ? null : Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: actions),
     );
   }
 }
