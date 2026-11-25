@@ -60,7 +60,7 @@ class ConfigScreen extends ConsumerWidget {
           Expanded(
             child: items.when(
               loading: () => const LoadingView(),
-              error: (e, _) => ErrorView(message: errText(e), onRetry: () => ref.invalidate(configProvider)),
+              error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(configProvider)),
               data: (list) => list.isEmpty
                   ? const EmptyState(icon: Icons.tune_rounded, title: 'No settings in this scope')
                   : ListView(children: [

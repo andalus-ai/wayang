@@ -220,3 +220,13 @@ credential-looking key (names containing `secret`, `password`, `apikey`, `author
 made of such references (optionally after `Bearer ` or `Basic `), never a literal. A finding names the tool and the config path and never repeats
 the value. Not checked: whether the named secret exists, and whether the connector type is wired into the release; both are still answered at run time
 (the model is told the tool is unavailable). Keys such as `maxTokens` are not treated as credentials, and nothing under `parameters` is.
+
+## Verifying a downloaded release
+
+Before deploying an archive, check it against a public key you provisioned yourself (never one the server names):
+
+```
+java -cp wayang-publish.jar tech.kayys.wayang.publish.ReleaseSignatureVerifier release.zip signer.pub "$SIGNATURE_ED25519" "$SHA256"
+```
+
+It prints `verified sha256=...` (exit 0) or `NOT verified: ...` (exit 1). `$SIGNATURE_ED25519` and `$SHA256` are the `X-Wayang-Release-Signature-Ed25519` and `X-Wayang-Release-Sha256` response headers. It checks bytes and signature only; it does not extract or run the archive. The same class is usable from a deployment handler (`verify(Path, PublicKey, signature, sha256)`).

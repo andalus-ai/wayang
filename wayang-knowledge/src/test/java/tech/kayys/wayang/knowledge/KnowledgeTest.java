@@ -101,7 +101,7 @@ class KnowledgeTest {
     @Test
     void extensionNeedsTheKnowledgeFeature() {
         assertEquals(java.util.Set.of(Profile.Feature.KNOWLEDGE), ext.requires());
-        assertEquals(10, ext.components().size());
+        assertEquals(12, ext.components().size());
     }
 
     @Test

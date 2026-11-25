@@ -33,7 +33,7 @@ class ProjectsScreen extends ConsumerWidget {
           Expanded(
             child: projects.when(
               loading: () => const LoadingView(),
-              error: (e, _) => ErrorView(message: errText(e), onRetry: () => ref.invalidate(projectsProvider)),
+              error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(projectsProvider)),
               data: (list) => ListView(children: [
                 Card(
                   child: RadioListTile<String?>(

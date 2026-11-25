@@ -476,6 +476,23 @@ class PublishTest {
     }
 
     @Test
+    void anFtpTriggerBringsTheFtpModuleAndIsAcceptedAsASource() {
+        var b = withTriggers(bundle(false, false, "x"), List.of(trigger("t", "POLL", Map.of("source", "ftp"))), List.of());
+        var p = Publisher.generate(b, OPTS);
+        assertTrue(text(p, "pom.xml").contains("wayang-endpoints-ftp"));
+        assertFalse(text(p, "pom.xml").contains("wayang-endpoints-sftp"), "only the module that is used");
+        assertTrue(text(p, "src/main/java/com/acme/release/Processes.java").contains("\"ftp\""));
+    }
+
+    @Test
+    void anAmqpStreamTriggerBringsTheAmqpModuleAndIsAcceptedAsASource() {
+        var b = withTriggers(bundle(false, false, "x"), List.of(trigger("t", "POLL", Map.of("source", "amqp-stream"))), List.of());
+        var p = Publisher.generate(b, OPTS);
+        assertTrue(text(p, "pom.xml").contains("wayang-endpoints-amqp"));
+        assertFalse(text(p, "pom.xml").contains("wayang-endpoints-ftp"), "only the module that is used");
+    }
+
+    @Test
     void theAmqpModuleIsKnownToTheCatalogAndTheProfiles() {
         assertTrue(Publisher.AMQP_CONNECTORS.contains("amqp-publish"));
         assertTrue(tech.kayys.wayang.runtime.Profile.INTEGRATION.features().contains(tech.kayys.wayang.runtime.Profile.Feature.ENDPOINTS_AMQP));

@@ -41,7 +41,7 @@ class TasksScreen extends ConsumerWidget {
           Expanded(
             child: tasks.when(
               loading: () => const LoadingView(),
-              error: (e, _) => ErrorView(message: errText(e), onRetry: () => ref.invalidate(tasksProvider)),
+              error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(tasksProvider)),
               data: (list) => list.isEmpty
                   ? const EmptyState(icon: Icons.done_all_rounded, title: 'Nothing waiting')
                   : ListView(children: [
