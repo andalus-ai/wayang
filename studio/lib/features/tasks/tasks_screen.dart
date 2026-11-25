@@ -12,12 +12,48 @@ import '../../providers/app_providers.dart';
 
 final tasksProvider = FutureProvider.autoDispose<List<TaskView>>((ref) => ref.watch(repositoryProvider).listTasks());
 
+/// The inbox filter: free text (title, message, node, run, assignee, key) and a kind (`all`, `human`, `timer`, `message`).
+class TaskFilter {
+  const TaskFilter({this.query = '', this.kind = 'all'});
+  final String query;
+  final String kind;
+
+  TaskFilter copyWith({String? query, String? kind}) => TaskFilter(query: query ?? this.query, kind: kind ?? this.kind);
+}
+
+final taskFilterProvider = StateProvider.autoDispose<TaskFilter>((ref) => const TaskFilter());
+
+/// A task is overdue when it has a due time that has passed.
+bool isOverdue(TaskView t, DateTime now) => t.dueAt != null && t.dueAt!.isBefore(now);
+
+/// Tasks matching [f], overdue first, then by due time (soonest first), then those without a due time in their given order.
+List<TaskView> visibleTasks(List<TaskView> all, TaskFilter f, DateTime now) {
+  final words = f.query.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  bool matches(TaskView t) {
+    if (f.kind != 'all' && t.kind != f.kind) return false;
+    final hay = [t.title, t.messageName, t.nodeId, t.runId, t.assignee, t.correlationKey].whereType<String>().join(' ').toLowerCase();
+    return words.every(hay.contains);
+  }
+
+  final hits = all.where(matches).toList();
+  int rank(TaskView t) => isOverdue(t, now) ? 0 : t.dueAt != null ? 1 : 2;
+  final indexed = {for (var i = 0; i < hits.length; i++) hits[i]: i};
+  hits.sort((a, b) {
+    final r = rank(a).compareTo(rank(b));
+    if (r != 0) return r;
+    if (a.dueAt != null && b.dueAt != null) return a.dueAt!.compareTo(b.dueAt!);
+    return indexed[a]!.compareTo(indexed[b]!);
+  });
+  return hits;
+}
+
 class TasksScreen extends ConsumerWidget {
   const TasksScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tasks = ref.watch(tasksProvider);
+    final filter = ref.watch(taskFilterProvider);
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -37,14 +73,37 @@ class TasksScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          Row(children: [
+            SizedBox(
+              width: 280,
+              child: TextField(
+                decoration: const InputDecoration(hintText: 'Search title, run, assignee, key', prefixIcon: Icon(Icons.search_rounded), isDense: true),
+                onChanged: (v) => ref.read(taskFilterProvider.notifier).state = filter.copyWith(query: v),
+              ),
+            ),
+            const SizedBox(width: 12),
+            for (final k in const ['all', 'human', 'timer', 'message'])
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: ChoiceChip(
+                  label: Text(k == 'all' ? 'All' : '${k[0].toUpperCase()}${k.substring(1)}'),
+                  selected: filter.kind == k,
+                  onSelected: (_) => ref.read(taskFilterProvider.notifier).state = filter.copyWith(kind: k),
+                ),
+              ),
+          ]),
+          const SizedBox(height: 12),
           Expanded(
             child: tasks.when(
               loading: () => const LoadingView(),
               error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(tasksProvider)),
-              data: (list) => list.isEmpty
-                  ? const EmptyState(icon: Icons.done_all_rounded, title: 'Nothing waiting')
-                  : ListView(children: [
+              data: (all) {
+                final now = DateTime.now();
+                final list = visibleTasks(all, filter, now);
+                if (all.isEmpty) return const EmptyState(icon: Icons.done_all_rounded, title: 'Nothing waiting');
+                if (list.isEmpty) return const EmptyState(icon: Icons.filter_alt_off_rounded, title: 'No task matches', message: 'Clear the search or choose All.');
+                return ListView(children: [
                       for (final t in list)
                         Card(
                           child: ListTile(
@@ -54,17 +113,18 @@ class TasksScreen extends ConsumerWidget {
                               [
                                 'run ${t.runId}',
                                 if (t.assignee != null) 'assignee ${t.assignee}',
-                                if (t.dueAt != null) 'due ${formatDateShort(t.dueAt!)}',
+                                if (t.dueAt != null) '${isOverdue(t, now) ? 'OVERDUE, due' : 'due'} ${formatDateShort(t.dueAt!)}',
                                 if (t.correlationKey != null) 'key ${t.correlationKey}',
                               ].join(' · '),
-                              style: const TextStyle(fontSize: 11),
+                              style: TextStyle(fontSize: 11, color: isOverdue(t, now) ? AppColors.danger : null),
                             ),
                             trailing: t.kind == 'human'
                                 ? ElevatedButton(onPressed: () => _completeDialog(context, ref, t), child: const Text('Complete'))
                                 : null,
                           ),
                         ),
-                    ]),
+                    ]);
+              },
             ),
           ),
         ],
@@ -75,6 +135,7 @@ class TasksScreen extends ConsumerWidget {
   Future<void> _completeDialog(BuildContext context, WidgetRef ref, TaskView t) async {
     final ctrl = TextEditingController(text: '{}');
     String? error;
+    var completing = false; // a double click must not complete the task twice
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -101,18 +162,29 @@ class TasksScreen extends ConsumerWidget {
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             ElevatedButton(
-              onPressed: () async {
-                final parsed = tryParseJsonObject(ctrl.text);
-                if (parsed == null) return setState(() => error = 'Not a JSON object');
-                try {
-                  await ref.read(repositoryProvider).completeTask(t.token, parsed);
-                  ref.invalidate(tasksProvider);
-                  if (ctx.mounted) Navigator.pop(ctx);
-                } catch (e) {
-                  setState(() => error = errText(e));
-                }
-              },
-              child: const Text('Complete'),
+              onPressed: completing
+                  ? null
+                  : () async {
+                      final parsed = tryParseJsonObject(ctrl.text);
+                      if (parsed == null) return setState(() => error = 'Not a JSON object');
+                      setState(() {
+                        completing = true;
+                        error = null;
+                      });
+                      try {
+                        await ref.read(repositoryProvider).completeTask(t.token, parsed);
+                        ref.invalidate(tasksProvider);
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      } catch (e) {
+                        setState(() {
+                          completing = false;
+                          error = errText(e);
+                        });
+                      }
+                    },
+              child: completing
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Complete'),
             ),
           ],
         ),
