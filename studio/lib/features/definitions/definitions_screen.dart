@@ -161,7 +161,7 @@ class _DefinitionsScreenState extends ConsumerState<DefinitionsScreen> {
                   width: 260,
                   child: list.when(
                     loading: () => const LoadingView(),
-                    error: (e, _) => ErrorView(message: errText(e)),
+                    error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e)),
                     data: (items) => ListView(children: [
                       for (final d in items)
                         ListTile(
