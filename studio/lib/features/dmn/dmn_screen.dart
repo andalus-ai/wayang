@@ -339,8 +339,10 @@ class _DecisionGrid extends StatelessWidget {
               const SizedBox(width: 8),
               ElevatedButton.icon(
                 onPressed: saving ? null : () => controller.publish(),
-                icon: const Icon(Icons.rocket_launch_outlined, size: 15),
-                label: const Text('Publish'),
+                icon: saving
+                    ? const SizedBox(width: 13, height: 13, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.rocket_launch_outlined, size: 15),
+                label: Text(saving ? 'Working…' : 'Publish'),
               ),
             ],
           ),

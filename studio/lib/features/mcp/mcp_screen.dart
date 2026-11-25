@@ -45,7 +45,7 @@ class McpScreen extends ConsumerWidget {
           Expanded(
             child: servers.when(
               loading: () => const LoadingView(),
-              error: (e, _) => ErrorView(message: errText(e), onRetry: () => ref.invalidate(mcpServersProvider)),
+              error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(mcpServersProvider)),
               data: (list) => list.isEmpty
                   ? const EmptyState(icon: Icons.hub_outlined, title: 'No MCP servers', message: 'Import an OpenAPI document to create one.')
                   : ListView(children: [for (final s in list) _ServerCard(s: s)]),

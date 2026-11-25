@@ -113,7 +113,7 @@ flowchart LR
   Context --> Agent[Agent execution]
 ```
 
-Storage is an explicit reusable resource. RAG nodes declare required inputs and storage/index dependencies. A missing required input must be reported as a validation diagnostic and actionable runtime error according to the node contract; it must not silently fabricate data. Separate source object storage, extracted document metadata and vector/lexical indexes. Enforce tenant and source ACL filters before returning chunks.
+Storage is an explicit reusable resource. RAG nodes declare required inputs and storage/index dependencies. Missing mandatory data inputs produce visible diagnostics; by default they are advisory and do not block saving, testing, publishing or workflow execution. A connector that cannot proceed returns a typed empty/no-op outcome and a warning rather than fabricating data. Only an explicitly declared hard precondition may block execution. Separate source object storage, extracted document metadata and vector/lexical indexes. Enforce tenant and source ACL filters before returning chunks.
 
 ### Ingestion sequence
 

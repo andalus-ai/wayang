@@ -64,7 +64,7 @@ class SecretsScreen extends ConsumerWidget {
           Expanded(
             child: secrets.when(
               loading: () => const LoadingView(),
-              error: (e, _) => ErrorView(message: errText(e), onRetry: () => ref.invalidate(secretsProvider)),
+              error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(secretsProvider)),
               data: (list) => list.isEmpty
                   ? const EmptyState(icon: Icons.key_off_outlined, title: 'No secrets')
                   : ListView(children: [
