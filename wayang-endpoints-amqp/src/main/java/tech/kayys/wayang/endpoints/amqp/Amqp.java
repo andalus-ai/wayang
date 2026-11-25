@@ -19,6 +19,8 @@ final class Amqp {
 
     static final String HOSTS_ENV = "WAYANG_ENDPOINTS_AMQP_HOSTS";
     static final String PREFIXES_ENV = "WAYANG_ENDPOINTS_AMQP_EXCHANGE_PREFIXES";
+    static final String QUEUE_PREFIXES_ENV = "WAYANG_ENDPOINTS_AMQP_STREAM_PREFIXES";
+    static final int MAX_EVENT_BODY = 64 * 1024;
     static final int MAX_BODY_BYTES = 1 << 20;
     private static final Pattern HOST = Pattern.compile("[A-Za-z0-9._-]{1,253}");
     private static final Pattern NAME = Pattern.compile("[A-Za-z0-9._:-]{1,255}");
@@ -40,18 +42,35 @@ final class Amqp {
         void publish(Target target, Message message) throws Exception;
     }
 
+    record Delivery(long offset, byte[] body, String contentType, String messageId) {
+    }
+
+    /** Reads up to {@code max} messages of a stream queue starting at {@code fromOffset} (-1 = the first available) and waits at most {@code waitMs}. */
+    interface Reader {
+        List<Delivery> read(Target target, String queue, long fromOffset, int max, int waitMs) throws Exception;
+    }
+
     private final Set<String> hosts;
     private final List<String> prefixes;
+    private final List<String> streamPrefixes;
     final Publisher publisher;
+    final Reader reader;
 
     Amqp(Set<String> hosts, List<String> prefixes, Publisher publisher) {
+        this(hosts, prefixes, List.of(), publisher, null);
+    }
+
+    Amqp(Set<String> hosts, List<String> prefixes, List<String> streamPrefixes, Publisher publisher, Reader reader) {
         this.hosts = hosts;
         this.prefixes = prefixes;
+        this.streamPrefixes = streamPrefixes;
         this.publisher = publisher;
+        this.reader = reader;
     }
 
     static Amqp fromEnvironment() {
-        return new Amqp(Set.copyOf(list(System.getenv(HOSTS_ENV))), list(System.getenv(PREFIXES_ENV)), new RabbitPublisher());
+        return new Amqp(Set.copyOf(list(System.getenv(HOSTS_ENV))), list(System.getenv(PREFIXES_ENV)), list(System.getenv(QUEUE_PREFIXES_ENV)),
+                new RabbitPublisher(), new RabbitReader());
     }
 
     private static List<String> list(String v) {
@@ -62,6 +81,25 @@ final class Amqp {
         if (hosts.isEmpty() || prefixes.isEmpty()) {
             throw new ConnectorException("amqp endpoints are not enabled (the operator sets " + HOSTS_ENV + " and " + PREFIXES_ENV + ")", false);
         }
+        return resolve(config);
+    }
+
+    /** Like {@link #target} for the trigger, which needs the stream-queue prefixes instead of exchange prefixes. */
+    Target streamTarget(Map<String, Object> config) throws ConnectorException {
+        if (hosts.isEmpty() || streamPrefixes.isEmpty() || reader == null) {
+            throw new ConnectorException("amqp triggers are not enabled (the operator sets " + HOSTS_ENV + " and " + QUEUE_PREFIXES_ENV + ")", false);
+        }
+        return resolve(config);
+    }
+
+    String streamQueue(Map<String, Object> config) throws ConnectorException {
+        if (!(config.get("queue") instanceof String q) || !NAME.matcher(q).matches() || streamPrefixes.stream().noneMatch(q::startsWith)) {
+            throw new ConnectorException("queue must be a plain name starting with a permitted stream prefix", false);
+        }
+        return q;
+    }
+
+    private Target resolve(Map<String, Object> config) throws ConnectorException {
         if (!(config.get("host") instanceof String host) || !HOST.matcher(host).matches()) {
             throw new ConnectorException("host is needed (a plain host name or address)", false);
         }
