@@ -41,6 +41,14 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <script>
+    // Asks the browser to confirm before the tab is closed while the studio reports unsaved edits.
+    window.__wayangDirty = false;
+    window.wayangSetDirty = function (v) { window.__wayangDirty = !!v; };
+    window.addEventListener('beforeunload', function (e) {
+      if (window.__wayangDirty) { e.preventDefault(); e.returnValue = ''; }
+    });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
