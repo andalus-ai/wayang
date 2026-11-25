@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
+import '../../core/unsaved_edits.dart';
 import '../../core/widgets.dart';
 import '../../data/api_client.dart';
 import '../../data/dmn_csv.dart';
@@ -43,6 +44,7 @@ class DmnScreen extends ConsumerWidget {
                         if (current != null && ref.read(dmnControllerProvider(current)).dirty) {
                           final name = ref.read(dmnControllerProvider(current)).table?.name ?? 'this table';
                           if (!await confirmDiscardEdits(context, what: 'decision table "$name"', save: () => ref.read(dmnControllerProvider(current).notifier).save())) return;
+                          reportUnsaved(ref, 'dmn:$current', false); // its editor goes away: the edits were saved or discarded
                         }
                         ref.read(activeDecisionTableIdProvider.notifier).state = v;
                       },
@@ -186,6 +188,8 @@ class _DecisionTableEditor extends ConsumerWidget {
     final table = editorState.table!;
     final overlaps = ref.watch(decisionTableOverlapsProvider(table));
     final filter = ref.watch(dmnRuleFilterProvider(tableId));
+
+    reportUnsaved(ref, 'dmn:$tableId', editorState.dirty);
 
     void saveDraft() {
       if (editorState.dirty && !editorState.saving) controller.save();
