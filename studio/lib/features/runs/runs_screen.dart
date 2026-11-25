@@ -166,6 +166,7 @@ class RunsScreen extends ConsumerWidget {
     String? processId = published.isEmpty ? null : published.first.id;
     final input = TextEditingController(text: '{}');
     String? error;
+    var starting = false; // guards against a double click starting two runs
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -202,21 +203,30 @@ class RunsScreen extends ConsumerWidget {
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             ElevatedButton(
-              onPressed: processId == null
+              onPressed: processId == null || starting
                   ? null
                   : () async {
                       final parsed = tryParseJsonObject(input.text);
                       if (parsed == null) return setState(() => error = 'Not a JSON object');
+                      setState(() {
+                        starting = true;
+                        error = null;
+                      });
                       try {
                         final run = await ref.read(repositoryProvider).startRun(processId!, input: parsed);
                         ref.invalidate(runsProvider);
                         ref.read(selectedRunIdProvider.notifier).state = run.id;
                         if (ctx.mounted) Navigator.pop(ctx);
                       } catch (e) {
-                        setState(() => error = errText(e));
+                        setState(() {
+                          starting = false;
+                          error = errText(e);
+                        });
                       }
                     },
-              child: const Text('Start'),
+              child: starting
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Start'),
             ),
           ],
         ),
