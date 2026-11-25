@@ -159,7 +159,7 @@ class _TriggersTab extends ConsumerWidget {
         Expanded(
           child: triggers.when(
             loading: () => const LoadingView(),
-            error: (e, _) => ErrorView(message: errText(e), onRetry: () => ref.invalidate(triggersProvider)),
+            error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(triggersProvider)),
             data: (list) => list.isEmpty
                 ? const EmptyState(icon: Icons.bolt_outlined, title: 'No triggers')
                 : ListView(children: [for (final t in list) _TriggerCard(t: t)]),
@@ -411,7 +411,7 @@ class _AccountsTab extends ConsumerWidget {
         Expanded(
           child: conns.when(
             loading: () => const LoadingView(),
-            error: (e, _) => ErrorView(message: errText(e), onRetry: () => ref.invalidate(oauthConnectionsProvider)),
+            error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(oauthConnectionsProvider)),
             data: (list) => list.isEmpty
                 ? const EmptyState(
                     icon: Icons.link_off_rounded,

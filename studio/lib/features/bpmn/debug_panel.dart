@@ -124,7 +124,7 @@ class _BpmnDebugPanelState extends ConsumerState<BpmnDebugPanel> {
     });
     return run.when(
       loading: () => const LoadingView(),
-      error: (e, _) => ErrorView(message: errText(e)),
+      error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e)),
       data: (r) {
         if (_steps.executed.length != r.executedNodes.length || !_sameList(_steps.executed, r.executedNodes)) {
           final next = _steps.withExecuted(r.executedNodes);
