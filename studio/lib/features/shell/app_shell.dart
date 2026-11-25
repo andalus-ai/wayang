@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
@@ -8,6 +9,7 @@ import '../../plugins/registry.dart';
 import '../../providers/app_providers.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../feedback/feedback_dialog.dart';
+import 'go_to.dart';
 import '../feedback/feedback_screen.dart';
 import '../components/component_catalog_screen.dart';
 import '../projects/projects_screen.dart';
@@ -104,7 +106,17 @@ class AppShell extends ConsumerWidget {
     final extended = width >= 1200;
     final compact = width < 820;
 
-    return Scaffold(
+    final goTo = [for (final n in navItems) GoToEntry(n.key, n.label, n.icon)];
+    void openGoTo() => showGoTo(context, ref, goTo);
+
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyK, control: true): openGoTo,
+        const SingleActivator(LogicalKeyboardKey.keyK, meta: true): openGoTo,
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
       body: Row(
         children: [
           if (!compact)
@@ -114,7 +126,7 @@ class AppShell extends ConsumerWidget {
           Expanded(
             child: Column(
               children: [
-                _TopBar(title: navItems[effectiveIndex].label),
+                _TopBar(title: navItems[effectiveIndex].label, onGoTo: openGoTo),
                 Expanded(
                   child: IndexedStack(
                     index: effectiveIndex,
@@ -127,6 +139,8 @@ class AppShell extends ConsumerWidget {
         ],
       ),
       bottomNavigationBar: compact ? _CompactNav(items: navItems, selectedKey: navItems[effectiveIndex].key) : null,
+        ),
+      ),
     );
   }
 }
@@ -272,8 +286,9 @@ class _CompactNav extends ConsumerWidget {
 }
 
 class _TopBar extends ConsumerWidget {
-  const _TopBar({required this.title});
+  const _TopBar({required this.title, required this.onGoTo});
   final String title;
+  final VoidCallback onGoTo;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -311,6 +326,7 @@ class _TopBar extends ConsumerWidget {
               ),
             ),
           const Spacer(),
+          IconButton(tooltip: 'Go to… (Ctrl/Cmd+K)', onPressed: onGoTo, icon: const Icon(Icons.search_rounded)),
           Builder(builder: (context) {
             final caught = ref.watch(lastErrorProvider);
             return IconButton(
