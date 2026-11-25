@@ -105,7 +105,7 @@ public final class Publisher {
             }
         }
         List<String> unknownTriggers = new ArrayList<>();
-        pollSources.stream().filter(x -> !ENDPOINTS_POLL_SOURCES.contains(x) && !KAFKA_POLL_SOURCES.contains(x) && !SFTP_POLL_SOURCES.contains(x) && !FTP_POLL_SOURCES.contains(x))
+        pollSources.stream().filter(x -> !ENDPOINTS_POLL_SOURCES.contains(x) && !KAFKA_POLL_SOURCES.contains(x) && !SFTP_POLL_SOURCES.contains(x) && !FTP_POLL_SOURCES.contains(x) && !AMQP_POLL_SOURCES.contains(x))
                 .filter(x -> !Connectors.pollers(new tech.kayys.wayang.connectors.UrlGuard(false, Set.of())).containsKey(x))
                 .forEach(x -> unknownTriggers.add("poll source " + x));
         providers.stream().filter(x -> !Connectors.webhookProviders().containsKey(x)).forEach(x -> unknownTriggers.add("webhook provider " + x));
@@ -127,7 +127,7 @@ public final class Publisher {
         if (used.stream().anyMatch(FTP_CONNECTORS::contains) || pollSources.stream().anyMatch(FTP_POLL_SOURCES::contains)) {
             knowledge += FTP_DEP; // brings commons-net; the operator sets the permitted servers and whether plain FTP is allowed
         }
-        if (used.stream().anyMatch(AMQP_CONNECTORS::contains)) {
+        if (used.stream().anyMatch(AMQP_CONNECTORS::contains) || pollSources.stream().anyMatch(AMQP_POLL_SOURCES::contains)) {
             knowledge += AMQP_DEP; // brings amqp-client; the operator sets the permitted brokers and exchange prefixes
         }
         boolean mcp = used.stream().anyMatch(MCP_CONNECTORS::contains);
@@ -387,6 +387,7 @@ public final class Publisher {
                         """;
     static final Set<String> FTP_POLL_SOURCES = Set.of("ftp");
     static final Set<String> FTP_CONNECTORS = Set.of("ftp-list", "ftp-read", "ftp-write", "ftp-delete");
+    static final Set<String> AMQP_POLL_SOURCES = Set.of("amqp-stream");
     static final Set<String> AMQP_CONNECTORS = Set.of("amqp-publish");
     static final Set<String> SFTP_POLL_SOURCES = Set.of("sftp");
     static final Set<String> SFTP_CONNECTORS = Set.of("sftp-list", "sftp-read", "sftp-write", "sftp-delete");
