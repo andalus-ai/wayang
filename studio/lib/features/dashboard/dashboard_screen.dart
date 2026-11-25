@@ -44,6 +44,8 @@ class DashboardScreen extends ConsumerWidget {
 
     final hasError = runs.hasError || tasks.hasError || processes.hasError ||
         decisions.hasError || agents.hasError;
+    final Object? firstError = [runs.error, tasks.error, processes.error, decisions.error, agents.error].whereType<Object>().firstOrNull;
+    final connection = firstError != null && needsSettings(firstError);
 
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -101,10 +103,17 @@ class DashboardScreen extends ConsumerWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Some overview data could not be loaded. Check the API connection in Settings; available sections remain usable.',
+                        connection
+                            ? errText(firstError)
+                            : 'Some overview data could not be loaded. Check the API connection in Settings; available sections remain usable.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),
+                    if (connection)
+                      TextButton(
+                        onPressed: () => ref.read(selectedNavKeyProvider.notifier).state = 'settings',
+                        child: const Text('Open Settings'),
+                      ),
                     TextButton(
                       onPressed: () => _refresh(ref),
                       child: const Text('Retry'),
