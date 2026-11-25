@@ -240,8 +240,10 @@ class _BpmnToolbar extends ConsumerWidget {
           const SizedBox(width: 10),
           ElevatedButton.icon(
             onPressed: !hasOpen || state.saving || state.errorCount > 0 ? null : controller.publish,
-            icon: const Icon(Icons.rocket_launch_outlined, size: 16),
-            label: const Text('Publish'),
+            icon: state.saving
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.rocket_launch_outlined, size: 16),
+            label: Text(state.saving ? 'Working…' : 'Publish'),
           ),
         ],
       ),
