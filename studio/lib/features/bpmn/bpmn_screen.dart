@@ -40,7 +40,17 @@ class BpmnScreen extends ConsumerWidget {
       if (!ref.read(bpmnControllerProvider).loading) ref.read(bpmnControllerProvider.notifier).setHighlight(next);
     });
 
-    return Column(
+    void saveDraft() {
+      final c = ref.read(bpmnControllerProvider);
+      if (activeId != null && c.dirty && !c.saving) ref.read(bpmnControllerProvider.notifier).save();
+    }
+
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true): saveDraft,
+        const SingleActivator(LogicalKeyboardKey.keyS, meta: true): saveDraft,
+      },
+      child: Column(
       children: [
         const _BpmnToolbar(),
         if (state.errorMessage != null) _Banner(text: state.errorMessage!, isError: true),
@@ -112,7 +122,7 @@ class BpmnScreen extends ConsumerWidget {
           ]),
         ),
       ],
-    );
+    ));
   }
 }
 

@@ -181,8 +181,14 @@ class _DecisionTableEditor extends ConsumerWidget {
     final overlaps = ref.watch(decisionTableOverlapsProvider(table));
     final filter = ref.watch(dmnRuleFilterProvider(tableId));
 
+    void saveDraft() {
+      if (editorState.dirty && !editorState.saving) controller.save();
+    }
+
     return CallbackShortcuts(
       bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true): saveDraft,
+        const SingleActivator(LogicalKeyboardKey.keyS, meta: true): saveDraft,
         const SingleActivator(LogicalKeyboardKey.keyZ, control: true): controller.undo,
         const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): controller.undo,
         const SingleActivator(LogicalKeyboardKey.keyY, control: true): controller.redo,
