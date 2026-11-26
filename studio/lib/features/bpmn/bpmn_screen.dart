@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
+import '../../core/unsaved_edits.dart';
 import '../../core/widgets.dart';
 import '../../data/api_client.dart';
 import '../../models/wayang.dart';
@@ -39,6 +40,8 @@ class BpmnScreen extends ConsumerWidget {
     ref.listen<Set<String>>(runHighlightProvider, (_, next) {
       if (!ref.read(bpmnControllerProvider).loading) ref.read(bpmnControllerProvider.notifier).setHighlight(next);
     });
+
+    reportUnsaved(ref, 'bpmn', state.dirty);
 
     void saveDraft() {
       final c = ref.read(bpmnControllerProvider);

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
+import '../../core/unsaved_edits.dart';
 import '../../core/widgets.dart';
 import '../../data/api_client.dart';
 import '../../data/dmn_csv.dart';
@@ -186,6 +187,8 @@ class _DecisionTableEditor extends ConsumerWidget {
     final table = editorState.table!;
     final overlaps = ref.watch(decisionTableOverlapsProvider(table));
     final filter = ref.watch(dmnRuleFilterProvider(tableId));
+
+    reportUnsaved(ref, 'dmn:$tableId', editorState.dirty);
 
     void saveDraft() {
       if (editorState.dirty && !editorState.saving) controller.save();

@@ -10,6 +10,7 @@ import '../../providers/app_providers.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../feedback/feedback_dialog.dart';
 import 'go_to.dart';
+import '../../core/unsaved_edits.dart';
 import '../feedback/feedback_screen.dart';
 import '../components/component_catalog_screen.dart';
 import '../projects/projects_screen.dart';
@@ -106,6 +107,7 @@ class AppShell extends ConsumerWidget {
     final extended = width >= 1200;
     final compact = width < 820;
 
+    ref.listen<Set<String>>(unsavedEditorsProvider, (_, next) => setBrowserCloseGuard(hasUnsaved(next)));
     final goTo = [for (final n in navItems) GoToEntry(n.key, n.label, n.icon)];
     void openGoTo() => showGoTo(context, ref, goTo);
 
