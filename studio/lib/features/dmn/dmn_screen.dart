@@ -44,7 +44,6 @@ class DmnScreen extends ConsumerWidget {
                         if (current != null && ref.read(dmnControllerProvider(current)).dirty) {
                           final name = ref.read(dmnControllerProvider(current)).table?.name ?? 'this table';
                           if (!await confirmDiscardEdits(context, what: 'decision table "$name"', save: () => ref.read(dmnControllerProvider(current).notifier).save())) return;
-                          reportUnsaved(ref, 'dmn:$current', false); // its editor goes away: the edits were saved or discarded
                         }
                         ref.read(activeDecisionTableIdProvider.notifier).state = v;
                       },
