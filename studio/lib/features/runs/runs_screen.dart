@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
@@ -250,7 +251,16 @@ class _RunDetail extends ConsumerWidget {
         child: ListView(
           children: [
             Row(children: [
-              Expanded(child: Text(r.id, style: const TextStyle(fontWeight: FontWeight.w700))),
+              Expanded(child: SelectableText(r.id, style: const TextStyle(fontWeight: FontWeight.w700))),
+              IconButton(
+                tooltip: 'Copy run id',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.copy_rounded, size: 15),
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: r.id));
+                  if (context.mounted) showToast(context, 'Run id copied');
+                },
+              ),
               StatusPill(label: r.status.name, color: runStatusColor(r.status)),
             ]),
             const SizedBox(height: 4),
@@ -297,7 +307,29 @@ class _RunDetail extends ConsumerWidget {
             ]),
             const SizedBox(height: 16),
             const PanelSectionLabel('Executed nodes'),
-            Text(r.executedNodes.isEmpty ? '—' : r.executedNodes.join(' → '), style: const TextStyle(fontSize: 12)),
+            if (r.executedNodes.isEmpty)
+              const Text('—', style: TextStyle(fontSize: 12))
+            else
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  for (var i = 0; i < r.executedNodes.length; i++) ...[
+                    if (i > 0) const Icon(Icons.chevron_right_rounded, size: 14, color: AppColors.textMutedDark),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: i == r.executedNodes.length - 1 && r.status == RunStatus.failed
+                            ? AppColors.danger.withValues(alpha: 0.18)
+                            : AppColors.darkSurfaceRaised,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(r.executedNodes[i], style: const TextStyle(fontSize: 11.5)),
+                    ),
+                  ],
+                ],
+              ),
             if (r.waiting.isNotEmpty) ...[
               const SizedBox(height: 14),
               const PanelSectionLabel('Waiting on'),
@@ -313,10 +345,55 @@ class _RunDetail extends ConsumerWidget {
               const SizedBox(height: 14),
             ],
             const PanelSectionLabel('Variables'),
-            SelectableText(const JsonEncoder.withIndent('  ').convert(r.variables), style: const TextStyle(fontFamily: 'monospace', fontSize: 11.5)),
+            _VariablesView(variables: r.variables),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The first [max] characters of [text] for display, cut at a line end when there is one near the limit; the full text stays available to copy.
+String previewText(String text, {int max = 6000}) {
+  if (text.length <= max) return text;
+  final cut = text.lastIndexOf('\n', max);
+  return text.substring(0, cut > max ~/ 2 ? cut : max);
+}
+
+/// The run's variables as readable JSON: long ones are shortened until the person asks for all of it; the copy button always copies everything.
+class _VariablesView extends StatefulWidget {
+  const _VariablesView({required this.variables});
+  final Map<String, dynamic> variables;
+
+  @override
+  State<_VariablesView> createState() => _VariablesViewState();
+}
+
+class _VariablesViewState extends State<_VariablesView> {
+  bool _all = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final full = const JsonEncoder.withIndent('  ').convert(widget.variables);
+    final shown = _all ? full : previewText(full);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            icon: const Icon(Icons.copy_rounded, size: 14),
+            label: const Text('Copy JSON'),
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: full));
+              if (context.mounted) showToast(context, 'Variables copied');
+            },
+          ),
+        ),
+        SelectableText(shown, style: const TextStyle(fontFamily: 'monospace', fontSize: 11.5)),
+        if (shown.length < full.length)
+          TextButton(onPressed: () => setState(() => _all = true), child: Text('Show all (${full.length} characters)')),
+      ],
     );
   }
 }

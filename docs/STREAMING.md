@@ -9,6 +9,16 @@ Status: **proposal**. Nothing here is built. It records what was verified in the
 - Andalus's backend SPI already has a streaming call: `InferenceBackend.stream(InferenceRequest) -> Multi<InferenceTypes.StreamingChunk>` (andalus-spi). Within `andalus-framework`'s engine module nothing calls it; the model call that `startAgent` ends up making is not in the modules inspected, so where a chunk could be tapped is **not yet confirmed**.
 - Andalus has an observation channel: `AgentExecutionObserver.onEvent(ObservationEvent{executionId, traceId, type, attributes})` (andalus-observability). It is the natural carrier for deltas without changing `ExecutionService`'s signature.
 
+## Findings from reading the local Andalus checkouts (2026-11-26)
+
+These correct and narrow the open questions below; all are from source reading, nothing was run.
+
+- `ExecutionService.startAgent(...)` is declared only as an interface in `andalus-framework` (`andalus-engine`). **No implementation of it exists in the three checkouts** (`andalus`, `andalus-framework`, `andalus-ai`). `AndalusAgentInvoker` says as much ("needs an `ExecutionService` that implements `startAgent`"), so whoever deploys Wayang with Andalus agents supplies that implementation, and that is where a model call and any streaming would live. Wayang cannot add streaming to code it does not contain.
+- `andalus-runtime-core` has an `AgentExecutionService` that creates and resumes `AgentExecution`s step by step (`AgentStrategy.decide(context, status)`); it is not `ExecutionService`. Its model calls go through `InferenceBackend` (Gollek/Gamelan adapters), which has `infer` and `stream(...) -> Multi<StreamingChunk>`.
+- The checkouts are not mutually consistent (a test in `andalus-runtime-core` references strategy and event types that are not in `andalus-framework`), so a change cannot be designed against them reliably until the two settle.
+
+Consequence: step A below belongs with whoever owns the `startAgent` implementation, and cannot be started from this repository. The Wayang side (step B: the `invokeStreaming` default method with its fallback, and the SSE mode) does not depend on it and could be built first: with the default fallback it would already return the whole reply as one `delta` plus `done`, so clients can code against the final protocol today.
+
 ## Constraints
 
 1. Streaming the final text only after the run is complete is not streaming; it would be a fake. Deltas must come from the model call.
@@ -31,6 +41,10 @@ Status: **proposal**. Nothing here is built. It records what was verified in the
 
 ## Open questions (need an Andalus owner)
 
-- Which class makes the model call for `startAgent` (the Gollek backend adapter, per the module names), and does it already pass through `InferenceBackend`?
+- Who implements `ExecutionService.startAgent` in a Wayang deployment, and does that implementation call `InferenceBackend` (and so could use `stream`)?
 - Is `ObservationEvent` delivered synchronously on the model thread (fine) or batched (would add latency)?
 - Can an observer be scoped to one execution id, or must Wayang filter a global stream?
+
+## Status: Wayang-side SSE framing (shipped)
+
+`POST /v1/agents/{id}/chat` with `Accept: text/event-stream` now answers `event: delta` (`{"text":...}`), then `event: done` (same JSON as the plain reply), or `event: error` only when the run failed. Today the whole reply is **one** delta because the model call is not streamed (Andalus side, step A, still open); clients written against this need no change when real deltas arrive. `tool` events are not emitted yet. Errors before the run stay ordinary JSON. Tested against the fake LLM in `AgentChatTest`; never seen against a real browser/EventSource client.
