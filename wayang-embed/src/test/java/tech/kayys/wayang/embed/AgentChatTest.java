@@ -84,6 +84,13 @@ class AgentChatTest {
                 assertEquals(2, seen.get(2).size(), "another chat sees nothing of chat A");
                 assertFalse(seen.get(2).toString().contains("Dewi"));
 
+                var sse = c.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + s.port() + "/v1/agents/bot/chat")).header("Content-Type", "application/json")
+                        .header("Accept", "text/event-stream").header("Authorization", "Bearer sekret")
+                        .POST(HttpRequest.BodyPublishers.ofString("{\"message\":\"hello again\",\"chatId\":\"C\"}")).build(), HttpResponse.BodyHandlers.ofString());
+                assertEquals(200, sse.statusCode());
+                assertTrue(sse.headers().firstValue("Content-Type").orElse("").startsWith("text/event-stream"));
+                assertTrue(sse.body().startsWith("event: delta\ndata: {\"text\":"), sse.body());
+                assertTrue(sse.body().contains("\n\nevent: done\ndata: {"), sse.body());
                 assertEquals(404, post(c, s.port(), "/v1/agents/nope/chat", "sekret", "{\"message\":\"hi\"}").statusCode());
                 assertEquals(400, post(c, s.port(), "/v1/agents/bot/chat", "sekret", "{}").statusCode());
                 assertEquals(400, post(c, s.port(), "/v1/agents/bot/chat", "sekret", "{\"message\":\"\"}").statusCode());

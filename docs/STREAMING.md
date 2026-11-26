@@ -44,3 +44,7 @@ Consequence: step A below belongs with whoever owns the `startAgent` implementat
 - Who implements `ExecutionService.startAgent` in a Wayang deployment, and does that implementation call `InferenceBackend` (and so could use `stream`)?
 - Is `ObservationEvent` delivered synchronously on the model thread (fine) or batched (would add latency)?
 - Can an observer be scoped to one execution id, or must Wayang filter a global stream?
+
+## Status: Wayang-side SSE framing (shipped)
+
+`POST /v1/agents/{id}/chat` with `Accept: text/event-stream` now answers `event: delta` (`{"text":...}`), then `event: done` (same JSON as the plain reply), or `event: error` only when the run failed. Today the whole reply is **one** delta because the model call is not streamed (Andalus side, step A, still open); clients written against this need no change when real deltas arrive. `tool` events are not emitted yet. Errors before the run stay ordinary JSON. Tested against the fake LLM in `AgentChatTest`; never seen against a real browser/EventSource client.
