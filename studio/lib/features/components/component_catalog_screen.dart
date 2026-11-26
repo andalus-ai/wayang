@@ -9,11 +9,32 @@ import '../../providers/app_providers.dart';
 
 /// Read-only view of the active runtime's reusable capabilities and config contracts.
 /// Editing/execution remains in the owning designer and runtime APIs.
-class ComponentCatalogScreen extends ConsumerWidget {
+/// Components matching [query]: every whitespace-separated word must appear (case-insensitive) in the name, id, category, kind,
+/// executor type, description or a capability. An empty query keeps everything.
+List<ComponentCatalogEntry> filterComponents(List<ComponentCatalogEntry> all, String query) {
+  final words = query.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  if (words.isEmpty) return all;
+  return [
+    for (final c in all)
+      if (words.every(_haystack(c).contains)) c,
+  ];
+}
+
+String _haystack(ComponentCatalogEntry c) =>
+    [c.displayName, c.id, c.category, c.kind, c.executorType, c.description, ...c.capabilities].join(' ').toLowerCase();
+
+class ComponentCatalogScreen extends ConsumerStatefulWidget {
   const ComponentCatalogScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ComponentCatalogScreen> createState() => _ComponentCatalogScreenState();
+}
+
+class _ComponentCatalogScreenState extends ConsumerState<ComponentCatalogScreen> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
     final catalog = ref.watch(componentCatalogProvider);
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -25,7 +46,16 @@ class ComponentCatalogScreen extends ConsumerWidget {
             subtitle: 'Reusable capabilities available in this runtime profile, including their configuration contracts.',
             icon: Icons.widgets_outlined,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          TextField(
+            decoration: const InputDecoration(
+              isDense: true,
+              prefixIcon: Icon(Icons.search, size: 18),
+              hintText: 'Search components (name, category, capability…)',
+            ),
+            onChanged: (v) => setState(() => _query = v),
+          ),
+          const SizedBox(height: 12),
           Expanded(
             child: catalog.when(
               loading: () => const LoadingView(label: 'Loading component catalog…'),
@@ -39,17 +69,24 @@ class ComponentCatalogScreen extends ConsumerWidget {
                       title: 'No components available',
                       message: 'Check the active runtime profile and installed extensions.',
                     )
-                  : ListView.separated(
-                      itemCount: items.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
-                      itemBuilder: (context, index) => _ComponentCard(component: items[index]),
-                    ),
+                  : _list(filterComponents(items, _query), items.length),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+Widget _list(List<ComponentCatalogEntry> shown, int total) {
+  if (shown.isEmpty) {
+    return const EmptyState(icon: Icons.search_off, title: 'No component matches', message: 'Try fewer or different words.');
+  }
+  return ListView.separated(
+    itemCount: shown.length,
+    separatorBuilder: (_, __) => const SizedBox(height: 10),
+    itemBuilder: (context, index) => _ComponentCard(component: shown[index]),
+  );
 }
 
 class _ComponentCard extends StatelessWidget {
