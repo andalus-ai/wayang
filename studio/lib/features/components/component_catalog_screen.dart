@@ -7,8 +7,6 @@ import '../../data/component_inputs.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
 
-/// Read-only view of the active runtime's reusable capabilities and config contracts.
-/// Editing/execution remains in the owning designer and runtime APIs.
 /// Components matching [query]: every whitespace-separated word must appear (case-insensitive) in the name, id, category, kind,
 /// executor type, description or a capability. An empty query keeps everything.
 List<ComponentCatalogEntry> filterComponents(List<ComponentCatalogEntry> all, String query) {
@@ -23,6 +21,8 @@ List<ComponentCatalogEntry> filterComponents(List<ComponentCatalogEntry> all, St
 String _haystack(ComponentCatalogEntry c) =>
     [c.displayName, c.id, c.category, c.kind, c.executorType, c.description, ...c.capabilities].join(' ').toLowerCase();
 
+/// Read-only view of the active runtime's reusable capabilities and config contracts.
+/// Editing/execution remains in the owning designer and runtime APIs.
 class ComponentCatalogScreen extends ConsumerStatefulWidget {
   const ComponentCatalogScreen({super.key});
 
