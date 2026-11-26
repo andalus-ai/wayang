@@ -493,6 +493,13 @@ class PublishTest {
     }
 
     @Test
+    void theJmsModuleIsKnownToTheProfilesAndABundleUsingItGetsTheModule() {
+        assertTrue(Publisher.JMS_CONNECTORS.contains("jms-send"));
+        assertTrue(tech.kayys.wayang.runtime.Profile.INTEGRATION.features().contains(tech.kayys.wayang.runtime.Profile.Feature.ENDPOINTS_JMS));
+        assertFalse(tech.kayys.wayang.runtime.Profile.AGENTIC.features().contains(tech.kayys.wayang.runtime.Profile.Feature.ENDPOINTS_JMS));
+    }
+
+    @Test
     void theAmqpModuleIsKnownToTheCatalogAndTheProfiles() {
         assertTrue(Publisher.AMQP_CONNECTORS.contains("amqp-publish"));
         assertTrue(tech.kayys.wayang.runtime.Profile.INTEGRATION.features().contains(tech.kayys.wayang.runtime.Profile.Feature.ENDPOINTS_AMQP));

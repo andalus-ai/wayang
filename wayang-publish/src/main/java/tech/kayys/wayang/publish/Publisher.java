@@ -130,6 +130,9 @@ public final class Publisher {
         if (used.stream().anyMatch(AMQP_CONNECTORS::contains) || pollSources.stream().anyMatch(AMQP_POLL_SOURCES::contains)) {
             knowledge += AMQP_DEP; // brings amqp-client; the operator sets the permitted brokers and exchange prefixes
         }
+        if (used.stream().anyMatch(JMS_CONNECTORS::contains)) {
+            knowledge += JMS_DEP; // brings the Artemis JMS client; the operator sets the permitted brokers and destination prefixes
+        }
         boolean mcp = used.stream().anyMatch(MCP_CONNECTORS::contains);
         boolean needsConnectors = !used.isEmpty() || !pollSources.isEmpty() || !providers.isEmpty();
         List<String> notes = new ArrayList<>();
@@ -385,6 +388,15 @@ public final class Publisher {
                                     <version>${wayang.version}</version>
                                 </dependency>
                         """;
+    /** Needed only for the {@code jms-send} connector; its own module because it needs the Artemis JMS client. */
+    static final String JMS_DEP = """
+                                <dependency>
+                                    <groupId>tech.kayys.wayang</groupId>
+                                    <artifactId>wayang-endpoints-jms</artifactId>
+                                    <version>${wayang.version}</version>
+                                </dependency>
+                        """;
+    static final Set<String> JMS_CONNECTORS = Set.of("jms-send");
     static final Set<String> FTP_POLL_SOURCES = Set.of("ftp");
     static final Set<String> FTP_CONNECTORS = Set.of("ftp-list", "ftp-read", "ftp-write", "ftp-delete");
     static final Set<String> AMQP_POLL_SOURCES = Set.of("amqp-stream");
