@@ -29,7 +29,8 @@ public final class Profile {
         ENDPOINTS_KAFKA("wayang-endpoints-kafka"),
         ENDPOINTS_SFTP("wayang-endpoints-sftp"),
         ENDPOINTS_AMQP("wayang-endpoints-amqp"),
-        ENDPOINTS_FTP("wayang-endpoints-ftp");
+        ENDPOINTS_FTP("wayang-endpoints-ftp"),
+        ENDPOINTS_JMS("wayang-endpoints-jms");
 
         private final String executorType;
 
@@ -47,7 +48,7 @@ public final class Profile {
     public static final Profile AUTOMATION = new Profile("automation",
             EnumSet.of(Feature.SERVICE, Feature.DMN, Feature.HUMAN));
     /** Integration platform: EIP pipelines and connectors. */
-    public static final Profile INTEGRATION = new Profile("integration", EnumSet.of(Feature.SERVICE, Feature.EIP, Feature.ENDPOINTS, Feature.ENDPOINTS_KAFKA, Feature.ENDPOINTS_SFTP, Feature.ENDPOINTS_AMQP, Feature.ENDPOINTS_FTP));
+    public static final Profile INTEGRATION = new Profile("integration", EnumSet.of(Feature.SERVICE, Feature.EIP, Feature.ENDPOINTS, Feature.ENDPOINTS_KAFKA, Feature.ENDPOINTS_SFTP, Feature.ENDPOINTS_AMQP, Feature.ENDPOINTS_FTP, Feature.ENDPOINTS_JMS));
     /** Personal assistant / agent builder. */
     public static final Profile AGENTIC = new Profile("agentic",
             EnumSet.of(Feature.SERVICE, Feature.AGENT, Feature.HUMAN, Feature.EIP, Feature.MEDIA, Feature.KNOWLEDGE));
