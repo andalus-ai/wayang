@@ -19,6 +19,23 @@ flowchart LR
   camel[camel connector: planned, optional] -.-> wf
 ```
 
+## Operator reference
+
+Every endpoint stays **off** until the operator sets its variable(s); lists are comma-separated, `host:port` entries must match exactly (no wildcards; the JDBC and prefix variables match by prefix). Unset means refused, never "allow all". Pass them to the runtime container (compose `environment:`), not into a bundle: bundles carry no allow-lists and no secret values.
+
+| Endpoint | Variable(s) | Value |
+|---|---|---|
+| `fs-*`, `fs` trigger | `WAYANG_ENDPOINTS_FS_ROOT` | one directory; every path is confined under it (each tenant gets its own subdirectory) |
+| `sql`, `jdbc` trigger | `WAYANG_ENDPOINTS_JDBC_URLS` | comma-separated `jdbc:` URL **prefixes**, e.g. `jdbc:postgresql://db.internal:5432/` |
+| Kafka | `WAYANG_ENDPOINTS_KAFKA_SERVERS`, `WAYANG_ENDPOINTS_KAFKA_TOPIC_PREFIXES` | bootstrap `host:port` list, topic name prefixes |
+| SFTP | `WAYANG_ENDPOINTS_SFTP_HOSTS` | `host:port` list |
+| FTP/FTPS | `WAYANG_ENDPOINTS_FTP_HOSTS`, `WAYANG_ENDPOINTS_FTP_ALLOW_PLAIN` | `host:port` list (default port 21); `true` also permits unencrypted FTP |
+| AMQP publish | `WAYANG_ENDPOINTS_AMQP_HOSTS`, `WAYANG_ENDPOINTS_AMQP_EXCHANGE_PREFIXES` | `host:port` list (5671 TLS, 5672 plain), exchange name prefixes |
+| AMQP stream trigger | `WAYANG_ENDPOINTS_AMQP_HOSTS`, `WAYANG_ENDPOINTS_AMQP_STREAM_PREFIXES` | as above, stream queue name prefixes |
+| JMS send | `WAYANG_ENDPOINTS_JMS_BROKERS`, `WAYANG_ENDPOINTS_JMS_DESTINATION_PREFIXES` | `host:port` list (default 61616), queue/topic name prefixes |
+
+Credentials are never part of these: nodes reference `${secret:NAME}`. The `camel` connector has no allow-list: its `baseUrl` goes through the HTTP URL guard, and a private address needs `WAYANG_CONNECTORS_ALLOW_PRIVATE=true` (see the Camel section).
+
 ## Plan
 
 | Slice | What | Status |
@@ -112,7 +129,7 @@ Connectors `sftp-list`, `sftp-read`, `sftp-write`, `sftp-delete` and the `sftp` 
 
 Connector `amqp-publish` (AMQP 0-9-1, `amqp-client`). Off until the operator sets `WAYANG_ENDPOINTS_AMQP_HOSTS` (`host:port`, comma-separated) and `WAYANG_ENDPOINTS_AMQP_EXCHANGE_PREFIXES`. The default exchange is refused (it would reach any queue by name). TLS is on by default (port 5671) with certificate and host-name verification; `tls: false` uses 5672. Messages are persistent, published with publisher confirms and `mandatory`: a message no queue receives is an error, not a silent loss. Inputs: `body` (text, or an object sent as JSON, at most 1 MiB), `routingKey`, `headers`, `messageId` (default random, for consumer de-duplication). Timeouts and connection failures are retryable and a retry can duplicate. Trigger source `amqp-stream` reads a RabbitMQ **stream** queue (config `queue`, `start: first`, `maxMessages` 1-100): a stream keeps its messages, so Wayang holds the position itself (cursor `o:<next offset>`, via `x-stream-offset`), at-least-once and resumable, like the Kafka trigger. Off until the operator sets `WAYANG_ENDPOINTS_AMQP_STREAM_PREFIXES`; the queue name must start with one. Events carry `queue`, `offset`, `body` (UTF-8, cut at 64 KiB with `bodyTruncated`), `size`, `binary` (non-UTF-8 payloads are flagged, not guessed), `messageId`, `contentType`. Classic queues are deliberately not supported: Gamelan's poller contract has no "processed" callback, so a classic queue could only be acknowledged before the run is started (at-most-once) or redelivered forever. If retention deletes the saved offset the broker resumes at the first available message. Limit: never run against a real broker; tested against a fake publisher.
 
-### JMS
+## JMS (`wayang-endpoints-jms`)
 
 Connector `jms-send` (`wayang-endpoints-jms`, Apache ActiveMQ Artemis Jakarta client). Off until the operator sets `WAYANG_ENDPOINTS_JMS_BROKERS` (`host:port`, comma-separated) and `WAYANG_ENDPOINTS_JMS_DESTINATION_PREFIXES`. A node cannot pass a connection URL: it gives `host`, `port` (default 61616), `tls`, `user`, `password` (`${secret:NAME}`), `destination` and `destinationType` (`queue` default, or `topic`), and the address is built from the validated parts. TLS is the default with certificate and host-name verification. Persistent text messages; inputs `body` (text, or an object sent as JSON, at most 1 MiB), `properties` (at most 16, identifier names), `correlationId`, `messageId` (sent as the `messageId` property, default random). Timeouts and connection failures are retryable and a retry can duplicate. **Receiving is not offered**, for the same reason as classic AMQP queues (no "processed" callback in the poller contract). Only Artemis is supported; other JMS providers would need their own sender. Limit: never run against a real broker; the Artemis client is compiled on CI only.
 
