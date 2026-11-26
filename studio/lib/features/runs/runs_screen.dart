@@ -89,6 +89,18 @@ Color runStatusColor(RunStatus s) => switch (s) {
       RunStatus.cancelled => AppColors.textMutedDark,
     };
 
+/// Runs matching [status] (null = any) whose process id or run id contains every word of [query] (case-insensitive).
+List<RunView> filterRuns(List<RunView> all, String query, RunStatus? status) {
+  final words = query.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  return [
+    for (final r in all)
+      if ((status == null || r.status == status) && words.every('${r.processId} ${r.id}'.toLowerCase().contains)) r,
+  ];
+}
+
+final _runQueryProvider = StateProvider.autoDispose<String>((ref) => '');
+final _runStatusFilterProvider = StateProvider.autoDispose<RunStatus?>((ref) => null);
+
 class RunsScreen extends ConsumerWidget {
   const RunsScreen({super.key});
 
@@ -96,6 +108,8 @@ class RunsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final runs = ref.watch(runsProvider);
     final selected = ref.watch(selectedRunIdProvider);
+    final query = ref.watch(_runQueryProvider);
+    final statusFilter = ref.watch(_runStatusFilterProvider);
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -115,12 +129,36 @@ class RunsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              SizedBox(
+                width: 280,
+                child: TextField(
+                  decoration: const InputDecoration(isDense: true, prefixIcon: Icon(Icons.search, size: 18), hintText: 'Search process or run id'),
+                  onChanged: (v) => ref.read(_runQueryProvider.notifier).state = v,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Wrap(
+                spacing: 6,
+                children: [
+                  for (final st in [null, ...RunStatus.values])
+                    ChoiceChip(
+                      label: Text(st == null ? 'All' : st.name, style: const TextStyle(fontSize: 11.5)),
+                      selected: statusFilter == st,
+                      onSelected: (_) => ref.read(_runStatusFilterProvider.notifier).state = st,
+                    ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           Expanded(
             child: runs.when(
               loading: () => const LoadingView(),
               error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(runsProvider)),
-              data: (list) => list.isEmpty
+              data: (all) => all.isEmpty
                   ? const EmptyState(icon: Icons.play_circle_outline_rounded, title: 'No runs yet', message: 'Publish a process and start it.')
                   : Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -129,7 +167,9 @@ class RunsScreen extends ConsumerWidget {
                           flex: 5,
                           child: ListView(
                             children: [
-                              for (final r in list)
+                              if (filterRuns(all, query, statusFilter).isEmpty)
+                                const Padding(padding: EdgeInsets.all(16), child: Text('No run matches the filter.', style: TextStyle(fontSize: 12))),
+                              for (final r in filterRuns(all, query, statusFilter))
                                 Card(
                                   color: r.id == selected ? AppColors.darkSurfaceRaised : null,
                                   child: ListTile(
