@@ -28,6 +28,7 @@
         <module>wayang-endpoints-sftp</module>
         <module>wayang-endpoints-amqp</module>
         <module>wayang-endpoints-ftp</module>
+        <module>wayang-endpoints-jms</module>
         <module>wayang-rag-pdf</module>
         <module>wayang-publish</module>
         <module>wayang-deployment</module>

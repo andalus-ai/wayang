@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>tech.kayys.wayang</groupId>
+        <artifactId>wayang-parent</artifactId>
+        <version>0.0.1</version>
+    </parent>
+    <artifactId>wayang-endpoints-jms</artifactId>
+    <name>wayang-endpoints-jms</name>
+    <description>Optional extension: JMS sending (jms-send) over an Apache ActiveMQ Artemis broker; needs artemis-jakarta-client</description>
+    <properties>
+        <artemis.version>2.37.0</artemis.version>
+    </properties>
+    <dependencies>
+        <dependency>
+            <groupId>tech.kayys.wayang</groupId>
+            <artifactId>wayang-runtime</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- the only third-party library of this module (the JDK has no JMS provider; this brings jakarta.jms-api too); pinned here -->
+        <dependency>
+            <groupId>org.apache.activemq</groupId>
+            <artifactId>artemis-jakarta-client</artifactId>
+            <version>${artemis.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
