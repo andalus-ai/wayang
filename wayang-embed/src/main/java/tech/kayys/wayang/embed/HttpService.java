@@ -28,7 +28,7 @@ import tech.kayys.wayang.runtime.json.Json;
  * GET  /readyz                       200 when every secret the release needs is present, else 503 (no auth, counts only)
  * GET  /v1/release                   what this release is: project, processes and versions, bundle hash, missing secret names
  * GET  /v1/agents                   the agents that can be talked to directly
- * POST /v1/agents/{id}/chat          {"message": "...", "chatId": "..."} -> {agent, chatId, reply, runId, status}
+ * POST /v1/agents/{id}/chat          {"message": "...", "chatId": "..."} -> {agent, chatId, reply, runId, status}; with Accept: text/event-stream, events delta/done/error
  * POST /v1/processes/{id}/runs       {"input": {...}}  -> the run (201), possibly WAITING with a task token
  * GET  /v1/runs[?processId=&amp;limit=]  newest first
  * GET  /v1/runs/{id}
@@ -252,11 +252,46 @@ public final class HttpService implements AutoCloseable {
             if (run.error() != null) {
                 out.put("error", run.error());
             }
-            send(ex, run.error() != null ? 502 : 200, out);
+            if (wantsEventStream(ex)) {
+                sendEvents(ex, out);
+            } else {
+                send(ex, run.error() != null ? 502 : 200, out);
+            }
         } catch (ReleaseEngine.Unavailable e) {
             throw e;
         } catch (IllegalStateException e) {
             throw new Http(429, "Too many parked runs");
+        }
+    }
+
+    private static boolean wantsEventStream(HttpExchange ex) {
+        String a = ex.getRequestHeaders().getFirst("Accept");
+        return a != null && a.toLowerCase(java.util.Locale.ROOT).contains("text/event-stream");
+    }
+
+    /**
+     * The chat answer as server-sent events, for clients that ask for {@code Accept: text/event-stream}: {@code delta} ({@code {"text":...}}),
+     * then {@code done} (the same JSON the plain endpoint returns), or {@code error} instead of both when the run failed. The model call is not
+     * streamed token by token yet (see docs/STREAMING.md), so today the whole reply is one delta; clients written against this are unchanged
+     * when real deltas arrive. Failures before the run (400, 401, 404, 429) are ordinary JSON responses.
+     */
+    private static void sendEvents(HttpExchange ex, Map<String, Object> out) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        if (out.get("error") != null) {
+            sb.append("event: error\ndata: ").append(Json.write(Map.of("error", String.valueOf(out.get("error"))))).append("\n\n");
+        } else {
+            if (out.get("reply") instanceof String text) {
+                sb.append("event: delta\ndata: ").append(Json.write(Map.of("text", text))).append("\n\n");
+            }
+            sb.append("event: done\ndata: ").append(Json.write(out)).append("\n\n");
+        }
+        byte[] b = sb.toString().getBytes(StandardCharsets.UTF_8);
+        ex.getResponseHeaders().set("Content-Type", "text/event-stream; charset=utf-8");
+        ex.getResponseHeaders().set("Cache-Control", "no-store");
+        ex.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
+        ex.sendResponseHeaders(200, b.length);
+        try (OutputStream o = ex.getResponseBody()) {
+            o.write(b);
         }
     }
 
