@@ -22,6 +22,7 @@
         <module>wayang-connectors</module>
         <module>wayang-multimodal</module>
         <module>wayang-rag</module>
+        <module>wayang-adapter-aqli</module>
         <module>wayang-knowledge</module>
         <module>wayang-endpoints</module>
         <module>wayang-endpoints-kafka</module>
