@@ -163,8 +163,9 @@ public final class AgentPackageArtifactVerifier {
     }
 
     private static void validatePath(String name) {
-        if (name == null || name.isBlank() || name.startsWith("/") || name.startsWith("\\")
-                || name.indexOf('\\') >= 0 || name.indexOf(':') >= 0 || name.indexOf('\0') >= 0) {
+        if (name == null || name.isBlank() || name.length() > 512 || name.startsWith("/") || name.startsWith("\\")
+                || name.indexOf('\\') >= 0 || name.indexOf(':') >= 0
+                || name.chars().anyMatch(Character::isISOControl)) {
             throw invalid("Unsafe Agent Package ZIP path");
         }
         for (String segment : name.split("/", -1)) {
