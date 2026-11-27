@@ -44,6 +44,51 @@ void main() {
       expect(find.text('Published'), findsOneWidget);
     });
 
+    testWidgets('WdsNavigationRail reports destination selection', (tester) async {
+      String? selected;
+      const items = [
+        WdsNavigationItem(key: 'dashboard', label: 'Dashboard', icon: Icons.dashboard_outlined),
+        WdsNavigationItem(key: 'agents', label: 'Agents', icon: Icons.smart_toy_outlined),
+      ];
+      await tester.pumpWidget(MaterialApp(
+        theme: ThemeData(useMaterial3: true, brightness: Brightness.dark),
+        home: Scaffold(
+          body: Row(children: [
+            WdsNavigationRail(
+              items: items,
+              selectedKey: 'dashboard',
+              onSelected: (key) => selected = key,
+            ),
+            const Expanded(child: SizedBox()),
+          ]),
+        ),
+      ));
+      await tester.tap(find.text('Agents'));
+      expect(selected, 'agents');
+      expect(find.text('Wayang'), findsOneWidget);
+    });
+
+    testWidgets('WdsCompactNavigationBar renders supplied destinations', (tester) async {
+      String? selected;
+      const items = [
+        WdsNavigationItem(key: 'dashboard', label: 'Home', icon: Icons.home_outlined),
+        WdsNavigationItem(key: 'runs', label: 'Runs', icon: Icons.play_arrow),
+      ];
+      await tester.pumpWidget(MaterialApp(
+        theme: ThemeData(useMaterial3: true),
+        home: Scaffold(
+          bottomNavigationBar: WdsCompactNavigationBar(
+            items: items,
+            selectedKey: 'dashboard',
+            onSelected: (key) => selected = key,
+          ),
+        ),
+      ));
+      expect(find.text('Home'), findsOneWidget);
+      await tester.tap(find.text('Runs'));
+      expect(selected, 'runs');
+    });
+
     testWidgets('WdsEmptyState uses the supplied icon and action', (tester) async {
       await tester.pumpWidget(MaterialApp(
         theme: ThemeData(useMaterial3: true),
