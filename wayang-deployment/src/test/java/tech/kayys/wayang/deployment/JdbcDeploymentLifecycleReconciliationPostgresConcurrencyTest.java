@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.sql.DriverManager;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -114,8 +115,8 @@ class JdbcDeploymentLifecycleReconciliationPostgresConcurrencyTest {
             statement.setString(3, receipt.commandFingerprint());
             statement.setString(4, receipt.operation());
             statement.setString(5, receipt.targetOperationKey());
-            statement.setObject(6, NOW);
-            statement.setObject(7, NOW);
+            statement.setTimestamp(6, Timestamp.from(NOW));
+            statement.setTimestamp(7, Timestamp.from(NOW));
             statement.executeUpdate();
         }
     }
