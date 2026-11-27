@@ -60,6 +60,7 @@ class _MapperScreenState extends ConsumerState<MapperScreen> {
   bool _busy = false;
   String? _error;
   String? _result;
+  final _resultValue = ValueNotifier<Object?>(null); // the field-mapping result, for the builder's per-row values
   Timer? _debounce;
   int _seq = 0;
 
@@ -74,6 +75,7 @@ class _MapperScreenState extends ConsumerState<MapperScreen> {
   @override
   void dispose() {
     _debounce?.cancel();
+    _resultValue.dispose();
     _spec.dispose();
     _input.dispose();
     super.dispose();
@@ -84,6 +86,7 @@ class _MapperScreenState extends ConsumerState<MapperScreen> {
     _spec.text = s.spec;
     _input.text = s.input;
     _result = null;
+    _resultValue.value = null;
     _error = null;
   }
 
@@ -104,6 +107,7 @@ class _MapperScreenState extends ConsumerState<MapperScreen> {
       setState(() {
         _error = 'Not valid JSON: ${e is FormatException ? e.message : e}';
         _result = null;
+        _resultValue.value = null;
       });
       return;
     }
@@ -118,6 +122,7 @@ class _MapperScreenState extends ConsumerState<MapperScreen> {
         _busy = false;
         _error = null;
         _result = const JsonEncoder.withIndent('  ').convert(_pipeline ? out['messages'] : out['result']);
+        _resultValue.value = _pipeline ? null : out['result'];
       });
     } catch (e) {
       if (!mounted || seq != _seq) return;
@@ -125,6 +130,7 @@ class _MapperScreenState extends ConsumerState<MapperScreen> {
         _busy = false;
         _error = errText(e);
         _result = null;
+        _resultValue.value = null;
       });
     }
   }
@@ -218,7 +224,7 @@ class _MapperScreenState extends ConsumerState<MapperScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        Expanded(child: _fieldBuilder ? FieldMappingBuilder(controller: _spec, sample: _input) : _editor(_spec)),
+        Expanded(child: _fieldBuilder ? FieldMappingBuilder(controller: _spec, sample: _input, result: _resultValue) : _editor(_spec)),
       ]);
 
   Widget _pipelineEditor() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

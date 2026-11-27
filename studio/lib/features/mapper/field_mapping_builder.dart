@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
@@ -23,12 +24,15 @@ const _valueKinds = [SourceKind.field, SourceKind.constant, SourceKind.template,
 /// rows are valid, and re-reads it when it is changed elsewhere (an example, the JSON tab). A spec with features the builder cannot show
 /// (nested objects, `$each`, `$if`) is left untouched and edited as JSON.
 class FieldMappingBuilder extends StatefulWidget {
-  const FieldMappingBuilder({super.key, required this.controller, required this.sample});
+  const FieldMappingBuilder({super.key, required this.controller, required this.sample, this.result});
 
   final TextEditingController controller;
 
   /// The sample variables JSON; its paths feed the source picker and "Auto-map".
   final TextEditingController sample;
+
+  /// The last preview result (null when there is none or it failed); each top-level row shows the value it produced.
+  final ValueListenable<Object?>? result;
 
   @override
   State<FieldMappingBuilder> createState() => _FieldMappingBuilderState();
@@ -46,6 +50,7 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
     super.initState();
     widget.controller.addListener(_external);
     widget.sample.addListener(_samplePathsChanged);
+    widget.result?.addListener(_samplePathsChanged);
     _load();
   }
 
@@ -53,6 +58,7 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
   void dispose() {
     widget.controller.removeListener(_external);
     widget.sample.removeListener(_samplePathsChanged);
+    widget.result?.removeListener(_samplePathsChanged);
     super.dispose();
   }
 
@@ -111,6 +117,67 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
     _changed();
   }
 
+  Future<void> _fromSchema() async {
+    final c = TextEditingController();
+    String? err;
+    final created = await showDialog<List<MappingRow>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => AlertDialog(
+          title: const Text('Rows from a JSON Schema'),
+          content: SizedBox(
+            width: 560,
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text(
+                'Paste the schema of the object you want to produce. Each property becomes a row (nested objects become dotted names, arrays of objects '
+                'become list rows). Fields whose name matches exactly one path in your sample variables are connected for you.',
+                style: TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 260,
+                child: TextField(
+                  controller: c,
+                  expands: true,
+                  maxLines: null,
+                  minLines: null,
+                  textAlignVertical: TextAlignVertical.top,
+                  style: _mono,
+                  decoration: InputDecoration(border: const OutlineInputBorder(), isDense: true, errorText: err, hintText: '{"type": "object", "properties": {...}}'),
+                ),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () {
+                try {
+                  final r = rowsFromSchema(jsonDecode(c.text), sample: _sample);
+                  if (r == null) {
+                    set(() => err = 'No properties to map in this schema.');
+                    return;
+                  }
+                  Navigator.pop(ctx, r);
+                } on FormatException catch (e) {
+                  set(() => err = 'Not valid JSON: ${e.message}');
+                }
+              },
+              child: const Text('Create rows'),
+            ),
+          ],
+        ),
+      ),
+    );
+    c.dispose();
+    final rows = _rows;
+    if (created == null || rows == null || !mounted) return;
+    final have = {for (final r in rows) r.target.trim()};
+    rows.removeWhere((r) => r.target.trim().isEmpty && r.value.trim().isEmpty);
+    rows.addAll(created.where((r) => !have.contains(r.target)));
+    _changed();
+  }
+
   @override
   Widget build(BuildContext context) {
     final rows = _rows;
@@ -145,6 +212,11 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
               label: const Text('Add field'),
             ),
             OutlinedButton.icon(
+              onPressed: _fromSchema,
+              icon: const Icon(Icons.schema_outlined, size: 16),
+              label: const Text('From schema'),
+            ),
+            OutlinedButton.icon(
               onPressed: _samplePaths.isEmpty ? null : _autoMap,
               icon: const Icon(Icons.auto_fix_high, size: 16),
               label: const Text('Map all from sample'),
@@ -164,6 +236,7 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
                     key: ObjectKey(rows[i]),
                     row: rows[i],
                     scope: _sample,
+                    result: widget.result?.value,
                     onChanged: _changed,
                     onRemove: () {
                       rows.removeAt(i);
@@ -180,6 +253,12 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
                   ),
                 ),
         ),
+        if (unmappedRequired(rows).isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('Required by the schema but not mapped yet: ${unmappedRequired(rows).join(', ')}',
+                style: const TextStyle(fontSize: 11.5, color: AppColors.warning)),
+          ),
         if (problems.isNotEmpty) ...[
           const SizedBox(height: 6),
           for (final p in problems.take(3))
@@ -199,6 +278,7 @@ class _RowCard extends StatelessWidget {
     required this.onChanged,
     required this.onRemove,
     required this.onMove,
+    this.result,
     this.depth = 0,
     this.showTarget = true,
     this.title,
@@ -209,6 +289,9 @@ class _RowCard extends StatelessWidget {
 
   /// The variables the source picker draws from: the sample, plus the current item inside a list.
   final Object? scope;
+
+  /// The preview result this row's value is looked up in: the whole result for a top-level row, the first output item for a field inside a list.
+  final Object? result;
   final int depth;
   final bool showTarget;
   final String? title;
@@ -248,7 +331,13 @@ class _RowCard extends StatelessWidget {
                   child: TextFormField(
                     initialValue: row.target,
                     style: _mono,
-                    decoration: const InputDecoration(isDense: true, labelText: 'Output field', hintText: 'customer.name'),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      labelText: row.required ? 'Output field *' : 'Output field',
+                      hintText: 'customer.name',
+                      helperText: row.hint.isEmpty ? null : row.hint,
+                      helperMaxLines: 2,
+                    ),
                     onChanged: (v) {
                       row.target = v;
                       onChanged();
@@ -297,6 +386,7 @@ class _RowCard extends StatelessWidget {
             ),
             if (expr != null) Padding(padding: const EdgeInsets.only(top: 6), child: SelectableText(expr, style: _mono.copyWith(color: AppColors.textMutedDark))),
           ],
+          if (showTarget && result != null) _produced(),
           if (row.kind == SourceKind.list) _listBody(),
           if (row.kind == SourceKind.conditional) _conditionalBody(),
         ],
@@ -320,6 +410,22 @@ class _RowCard extends StatelessWidget {
       case SourceKind.conditional:
         return _plain('Condition', 'body.vip or amount > 100');
     }
+  }
+
+  Widget _produced() {
+    final (found, value) = resultAt(result, row.target);
+    if (row.target.trim().isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(children: [
+        Icon(found ? Icons.subdirectory_arrow_right : Icons.remove_circle_outline, size: 14, color: AppColors.textMutedDark),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(found ? '${depth > 0 ? 'first item: ' : ''}${previewValue(value)}' : 'not in the first item (omitted or the mapping is being edited)',
+              maxLines: 2, overflow: TextOverflow.ellipsis, style: _mono.copyWith(color: found ? AppColors.success : AppColors.textMutedDark)),
+        ),
+      ]),
+    );
   }
 
   Widget _listBody() {
@@ -368,6 +474,7 @@ class _RowCard extends StatelessWidget {
                 key: ObjectKey(row.children[i]),
                 row: row.children[i],
                 scope: inner,
+                result: result == null ? null : firstItemResult(result, row.target),
                 depth: depth + 1,
                 kinds: depth >= 2 ? _valueKinds : SourceKind.values,
                 onChanged: onChanged,
