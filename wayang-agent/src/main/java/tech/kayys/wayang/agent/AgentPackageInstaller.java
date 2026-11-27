@@ -68,6 +68,10 @@ public final class AgentPackageInstaller {
         return upgrade(current, root.resolverArtifact(), verifiedDependencies, bindings, now);
     }
 
+    /**
+     * Low-level install for local/trusted catalog workflows. Network-facing import endpoints must use
+     * {@link #installVerified(String, String, String, AgentPackageArtifactVerifier.VerifiedArtifact, List, Map, Instant)}.
+     */
     public InstalledAgent install(String tenantId, String projectId, String installationId,
             AgentDependencyResolver.PackageArtifact root,
             List<AgentDependencyResolver.PackageArtifact> available,
