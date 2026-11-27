@@ -145,7 +145,7 @@ class _WdsRailItem extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: WdsSpacing.xs),
       child: Tooltip(
-        message: extended ? '' : item.label,
+        message: item.label,
         child: Material(
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(WdsRadius.md),
