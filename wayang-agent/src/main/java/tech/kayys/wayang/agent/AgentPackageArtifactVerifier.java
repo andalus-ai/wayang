@@ -249,7 +249,7 @@ public final class AgentPackageArtifactVerifier {
                 || !(statement.get("subject") instanceof java.util.List<?> subjects)) {
             throw invalid("Provenance resource is not an in-toto Statement v1: " + path);
         }
-        boolean bindsManifest = false;
+        boolean bindsPackageSubject = false;
         for (Object item : subjects) {
             if (!(item instanceof Map<?, ?> subject)
                     || !(subject.get("name") instanceof String name)
@@ -258,10 +258,10 @@ public final class AgentPackageArtifactVerifier {
             }
             Object sha = digest.get("sha256");
             if (packageId.equals(name) && sha instanceof String value && value.matches("(?i)[0-9a-f]{64}")) {
-                bindsManifest = true;
+                bindsPackageSubject = true;
             }
         }
-        if (!bindsManifest) {
+        if (!bindsPackageSubject) {
             throw invalid("Provenance subject does not identify this package with a SHA-256 digest: " + path);
         }
     }
