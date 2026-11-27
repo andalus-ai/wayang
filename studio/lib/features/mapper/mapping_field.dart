@@ -21,11 +21,14 @@ const _mono = TextStyle(fontFamily: 'monospace', fontSize: 12);
 
 /// The editor for a service node's `inputMapping` / `outputMapping`: a one-line summary and an "Edit mapping" button that opens the field mapping
 /// builder with a live preview. [output] mappings are tried against `{variables..., result}`.
-FieldBuilder mappingFieldBuilder({required bool output, required String nodeId, required Map<String, dynamic> props}) =>
-    (context, value, onChanged) => MappingField(value: value, output: output, nodeId: nodeId, props: props, onChanged: onChanged);
+///
+/// [decisionInputs] is the `inputs` of a business rule task: input name to expression, evaluated over the process variables, so only field and
+/// expression sources make sense (a fixed value is written as a quoted expression).
+FieldBuilder mappingFieldBuilder({required bool output, required String nodeId, required Map<String, dynamic> props, bool decisionInputs = false}) =>
+    (context, value, onChanged) => MappingField(value: value, output: output, nodeId: nodeId, props: props, decisionInputs: decisionInputs, onChanged: onChanged);
 
 class MappingField extends ConsumerWidget {
-  const MappingField({super.key, required this.value, required this.output, required this.nodeId, required this.props, required this.onChanged});
+  const MappingField({super.key, required this.value, required this.output, required this.nodeId, required this.props, this.decisionInputs = false, required this.onChanged});
 
   final Object? value;
   final bool output;
@@ -33,6 +36,7 @@ class MappingField extends ConsumerWidget {
 
   /// The node's properties: which connector and operation it runs decides what an input mapping can be filled from.
   final Map<String, dynamic> props;
+  final bool decisionInputs;
   final ValueChanged<Object?> onChanged;
 
   /// "3 fields", "Custom mapping (JSON)", or "Not set".
@@ -51,8 +55,18 @@ class MappingField extends ConsumerWidget {
   }
 
   /// "Fill from ..." offers for an input mapping: the chosen OpenAPI operation's arguments, else the connector component's declared inputs.
-  List<MappingSuggestion> suggestions(WidgetRef ref) {
+  List<MappingSuggestion> suggestions(WidgetRef ref, List<DeclaredInput> decision) {
     if (output) return const [];
+    if (decisionInputs) {
+      if (decision.isEmpty) return const [];
+      return [
+        MappingSuggestion(
+          label: 'Fill from the decision',
+          tooltip: 'The variables the decision table reads (plain inputs only)',
+          build: (sample, existing) => rowsFromInputs(decision, sample: sample, existing: existing),
+        ),
+      ];
+    }
     final connector = props['connector'];
     final opName = props['operation'];
     if (connector == 'openapi' && opName is String) {
@@ -103,6 +117,16 @@ class MappingField extends ConsumerWidget {
 
   Future<void> _edit(BuildContext context, WidgetRef ref) async {
     final last = output ? ref.read(lastNodeTestOutputProvider(nodeId)) : null;
+    var decision = const <DeclaredInput>[];
+    final model = props['model'];
+    if (decisionInputs && model is String && model.isNotEmpty) {
+      try {
+        decision = decisionInputsOf((await ref.read(repositoryProvider).loadForEditing(DefinitionKind.decision, model)).document);
+      } catch (_) {
+        // the decision may not exist yet; the dialog still works without the suggestion
+      }
+      if (!context.mounted) return;
+    }
     final result = await showDialog<Map<String, dynamic>?>(
       context: context,
       barrierDismissible: false,
@@ -111,7 +135,8 @@ class MappingField extends ConsumerWidget {
         output: output,
         sample: sampleText(output, last),
         sampleFromTest: last != null,
-        suggestions: suggestions(ref),
+        suggestions: suggestions(ref, decision),
+        expressionsOnly: decisionInputs,
         processId: ref.read(bpmnControllerProvider).diagram.id,
       ),
     );
@@ -131,13 +156,14 @@ class MappingField extends ConsumerWidget {
 }
 
 class _MappingDialog extends ConsumerStatefulWidget {
-  const _MappingDialog({required this.initial, required this.output, required this.sample, required this.sampleFromTest, required this.suggestions, required this.processId});
+  const _MappingDialog({required this.initial, required this.output, required this.sample, required this.sampleFromTest, required this.suggestions, required this.processId, required this.expressionsOnly});
   final Map<String, dynamic> initial;
   final bool output;
   final String sample;
   final bool sampleFromTest;
   final List<MappingSuggestion> suggestions;
   final String processId;
+  final bool expressionsOnly;
 
   @override
   ConsumerState<_MappingDialog> createState() => _MappingDialogState();
@@ -291,7 +317,7 @@ class _MappingDialogState extends ConsumerState<_MappingDialog> {
     final size = MediaQuery.sizeOf(context);
     final canApply = _specOrNull() != null;
     return AlertDialog(
-      title: Text(widget.output ? 'Output mapping' : 'Input mapping'),
+      title: Text(widget.output ? 'Output mapping' : widget.expressionsOnly ? 'Decision inputs' : 'Input mapping'),
       content: SizedBox(
         width: (size.width * 0.9).clamp(320, 1100).toDouble(),
         height: (size.height * 0.7).clamp(360, 700).toDouble(),
@@ -321,7 +347,7 @@ class _MappingDialogState extends ConsumerState<_MappingDialog> {
             const SizedBox(height: 8),
             Expanded(
               child: _builder
-                  ? FieldMappingBuilder(controller: _spec, sample: _sample, result: _result, onProblems: (p) => setState(() => _problems = p), suggestions: widget.suggestions)
+                  ? FieldMappingBuilder(controller: _spec, sample: _sample, result: _result, onProblems: (p) => setState(() => _problems = p), suggestions: widget.suggestions, kinds: widget.expressionsOnly ? const [SourceKind.field, SourceKind.expression] : SourceKind.values, allowSchema: !widget.expressionsOnly)
                   : TextField(controller: _spec, expands: true, maxLines: null, minLines: null, textAlignVertical: TextAlignVertical.top, style: _mono, decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true)),
             ),
           ]);
