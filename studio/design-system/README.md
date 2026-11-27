@@ -23,6 +23,7 @@ persistence, plugin activation, or execution services.
   breakpoints and layout dimensions.
 - studio/lib/design_system/components.dart: reusable controls and primitives.
 - studio/lib/design_system/navigation.dart: reusable navigation destinations, desktop rail and compact navigation bar.
+- studio/lib/design_system/command_palette.dart: searchable command model, filtering and modal palette.
 - studio/lib/design_system/wds.dart: public import surface.
 - studio/lib/core/theme.dart remains the ThemeData and brand-color source during
   migration. Existing core/widgets.dart APIs remain compatible.
@@ -30,15 +31,15 @@ persistence, plugin activation, or execution services.
 ## Initial component inventory
 
 Implemented: WdsSurface, WdsBadge, WdsButton, WdsIconButton,
-WdsSectionHeader, WdsSearchField, WdsEmptyState, WdsNavigationRail and
-WdsCompactNavigationBar.
+WdsSectionHeader, WdsSearchField, WdsEmptyState, WdsNavigationRail,
+WdsCompactNavigationBar, WdsBreadcrumbs, WdsPageHeader, WdsFilterToolbar and
+WdsCommandPalette.
 
 The navigation widgets accept destination data and selection callbacks. The
 host application remains responsible for plugin discovery, filtering, routing,
 permissions and choosing compact destinations.
 
-Planned follow-up families: command palette,
-data tables, editor chrome, node/port primitives, inspectors, execution
+Planned follow-up families: data tables, editor chrome, node/port primitives, inspectors, execution
 timelines and mode-specific templates. Planned components are not yet shipped.
 
 ## Contribution checklist
@@ -49,3 +50,16 @@ timelines and mode-specific templates. Planned components are not yet shipped.
 4. Verify compact and expanded layout behavior where relevant.
 5. Add widget tests for interaction, disabled/loading states, semantics and theme.
 6. Keep data fetching, business logic and feature navigation outside WDS.
+
+
+## Page composition
+
+Use `WdsPageHeader` for page identity, breadcrumbs and primary actions. Use
+`WdsFilterToolbar` to arrange search, filter controls and contextual actions;
+it wraps controls when the available width is compact. The toolbar intentionally
+accepts widgets rather than owning filter state or query semantics.
+
+Use `WdsCommandItem` and `WdsCommandPalette` for searchable actions or
+destinations. The host supplies items and handles selection. Commands can be
+grouped, described, keyword-indexed and disabled without WDS knowing what
+execution means. The Studio "Go to" flow now uses this shared component.
