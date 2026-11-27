@@ -41,7 +41,7 @@ The current archive is a ZIP containing exactly:
 
 Every packaged resource must declare a SHA-256 digest. The verifier checks the digest of each resource against the manifest and rejects missing or undeclared files. A relative metadata icon must also be a declared resource. HTTPS icon references remain external presentation references; they are not fetched during verification.
 
-The verifier inspects bytes in memory and never extracts or executes content. Current hard limits:
+The verifier snapshots the caller's byte array before hashing and parsing, preventing a caller-side mutation from changing the inspected bytes after digest verification. The verifier inspects bytes in memory and never extracts or executes content. Current hard limits:
 
 | Limit | Value |
 |---|---:|
@@ -82,7 +82,7 @@ If a resource declares role `provenance`, the verifier checks the in-toto Statem
 All evidence files are covered by the archive signature and their manifest resource digests. These checks are deliberately not described as complete supply-chain attestation verification:
 
 - The SBOM is not yet checked against the full CycloneDX JSON Schema or independently reconciled against a resolved dependency lock.
-- The in-toto statement's builder identity, SLSA predicate semantics, certificate chain, transparency log inclusion and independent attestation signature are not verified.
+- The in-toto statement's builder identity, SLSA predicate semantics, certificate chain, transparency log inclusion and independent attestation signature are not verified. The current structural check only requires a Statement v1 with a predicate and a subject named for the package ID carrying a SHA-256 digest.
 - The package publisher's Ed25519 signature authenticates the archive as a whole; it does not prove that the publisher is the builder.
 
 A later supply-chain assurance phase should add independent attestation verification and policy evaluation before marketplace publication or execution.
@@ -95,7 +95,7 @@ A verified package is still not automatically trusted to use every capability it
 - Configuration values remain external secret, connection or config references.
 - Verification does not download dependencies; every dependency candidate passed to `installVerified` must itself be a `VerifiedArtifact`.
 - Verification does not activate, deploy, start or execute the agent.
-- The opaque verified result is an in-process capability, not a durable proof token. Persisted installations must retain the verified archive digest and lock; a future restart/recovery path must re-verify the retained artifact or validate a signed verification receipt.
+- The opaque verified result is an in-process capability, not a reusable trust token. Secure installs persist a verification receipt containing publisher ID, key ID, SHA-256 fingerprint of the signing public key, manifest digest and verification time alongside the package lock. The receipt is audit metadata, not a substitute for re-verification: a future restart/recovery path must re-verify the retained artifact or validate a separately signed verification receipt.
 
 ## 6. Explicit non-goals
 
