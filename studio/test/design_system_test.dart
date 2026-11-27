@@ -222,7 +222,7 @@ void main() {
       ));
       await tester.tap(find.text('Name'));
       expect(sortAscending, isTrue);
-      await tester.tap(find.byType(Checkbox).last);
+      await tester.tap(find.byType(Checkbox).at(1));
       expect(selection, contains('agent-a'));
     });
 
