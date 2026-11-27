@@ -49,13 +49,6 @@ class FieldMappingBuilder extends StatefulWidget {
   /// Extra "fill from ..." buttons.
   final List<MappingSuggestion> suggestions;
 
-  /// Which kinds of source a row may have (a host whose values are plain expressions allows only field and expression). A spec that uses another
-  /// kind is not shown in the builder.
-  final List<SourceKind> kinds;
-
-  /// Whether the "From schema" import is offered (it can create list rows).
-  final bool allowSchema;
-
   @override
   State<FieldMappingBuilder> createState() => _FieldMappingBuilderState();
 }
@@ -276,12 +269,11 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
                   label: Text(sg.label),
                 ),
               ),
-            if (widget.allowSchema)
-              OutlinedButton.icon(
-                onPressed: _fromSchema,
-                icon: const Icon(Icons.schema_outlined, size: 16),
-                label: const Text('From schema'),
-              ),
+            OutlinedButton.icon(
+              onPressed: _fromSchema,
+              icon: const Icon(Icons.schema_outlined, size: 16),
+              label: const Text('From schema'),
+            ),
             OutlinedButton.icon(
               onPressed: _samplePaths.isEmpty ? null : _autoMap,
               icon: const Icon(Icons.auto_fix_high, size: 16),
