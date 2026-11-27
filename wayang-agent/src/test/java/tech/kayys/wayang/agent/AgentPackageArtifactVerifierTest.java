@@ -309,10 +309,10 @@ class AgentPackageArtifactVerifierTest {
                 AgentPackageArtifactVerifier.JSON_MANIFEST, finalManifest.getBytes(StandardCharsets.UTF_8),
                 "evidence/sbom.json", sbomBytes,
                 "evidence/provenance.json", boundProvenanceBytes));
-        byte[] invalidArchive = finalArchive;
+        byte[] archiveWithBoundEvidence = finalArchive;
         assertThrows(AgentPackageArtifactVerifier.VerificationException.class,
-                () -> verifier.verify(invalidArchive,
-                        sign(invalidArchive, "acme:support", "1.2.0", "acme:publisher")));
+                () -> verifier.verify(archiveWithBoundEvidence,
+                        sign(archiveWithBoundEvidence, "acme:support", "1.2.0", "acme:publisher")));
     }
 
 }

@@ -193,5 +193,93 @@ void main() {
       expect(find.text('No workflows'), findsOneWidget);
       expect(find.text('Create'), findsOneWidget);
     });
+
+    testWidgets('WdsDataTable reports controlled sorting and row selection', (tester) async {
+      var sortAscending = false;
+      Set<Object>? selection;
+      const rows = [
+        ('agent-a', 'Alpha'),
+        ('agent-b', 'Beta'),
+      ];
+      await tester.pumpWidget(MaterialApp(
+        theme: ThemeData(useMaterial3: true),
+        home: Scaffold(
+          body: WdsDataTable<(String, String)>(
+            columns: [
+              WdsDataColumn<(String, String)>(
+                label: 'Name',
+                sortable: true,
+                cellBuilder: (context, row) => Text(row.$2),
+              ),
+            ],
+            rows: rows,
+            rowKey: (row) => row.$1,
+            onSelectionChanged: (value) => selection = value,
+            onSort: (_, ascending) => sortAscending = ascending,
+          ),
+        ),
+      ));
+      await tester.tap(find.text('Name'));
+      expect(sortAscending, isTrue);
+      await tester.tap(find.byType(Checkbox).at(1));
+      expect(selection, contains('agent-a'));
+    });
+
+    testWidgets('WdsDataTable renders empty and loading states', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: WdsDataTable<String>(
+            columns: [
+              WdsDataColumn<String>(
+                label: 'Name',
+                cellBuilder: (context, row) => Text(row),
+              ),
+            ],
+            rows: const [],
+            emptyTitle: 'No agents yet',
+          ),
+        ),
+      ));
+      expect(find.text('No agents yet'), findsOneWidget);
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: WdsDataTable<String>(
+            columns: [
+              WdsDataColumn<String>(
+                label: 'Name',
+                cellBuilder: (context, row) => Text(row),
+              ),
+            ],
+            rows: const [],
+            isLoading: true,
+          ),
+        ),
+      ));
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    });
+
+    testWidgets('WDS inspector primitives compose fields and validation messages', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        theme: ThemeData(useMaterial3: true),
+        home: const Scaffold(
+          body: Padding(
+            padding: EdgeInsets.all(16),
+            child: WdsInspectorSection(
+              title: 'Agent settings',
+              description: 'Identity and runtime details',
+              child: WdsFieldGroup(
+                children: [
+                  WdsPropertyRow(label: 'Name', value: Text('Support agent')),
+                  WdsFieldMessage(message: 'A name is required'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ));
+      expect(find.text('Agent settings'), findsOneWidget);
+      expect(find.text('Support agent'), findsOneWidget);
+      expect(find.text('A name is required'), findsOneWidget);
+    });
   });
 }
