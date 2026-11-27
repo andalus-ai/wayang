@@ -39,6 +39,35 @@ public final class AgentPackageInstaller {
                 current.installedAt(), now);
     }
 
+    /**
+     * Installs only an artifact produced by AgentPackageArtifactVerifier. Every dependency candidate
+     * must also have passed the same publisher trust and archive verification gate.
+     */
+    public InstalledAgent installVerified(String tenantId, String projectId, String installationId,
+            AgentPackageArtifactVerifier.VerifiedArtifact root,
+            List<AgentPackageArtifactVerifier.VerifiedArtifact> available,
+            Map<String, InstalledAgent.ConfigurationBinding> bindings, Instant now) {
+        Objects.requireNonNull(root, "root");
+        List<AgentDependencyResolver.PackageArtifact> verifiedDependencies =
+                (available == null ? List.<AgentPackageArtifactVerifier.VerifiedArtifact>of() : available)
+                        .stream().map(artifact -> Objects.requireNonNull(artifact, "verified dependency").resolverArtifact())
+                        .toList();
+        return install(tenantId, projectId, installationId, root.resolverArtifact(), verifiedDependencies, bindings, now);
+    }
+
+    /** Upgrade counterpart to installVerified; the candidate root and every dependency are trust-verified. */
+    public InstalledAgent upgradeVerified(InstalledAgent current,
+            AgentPackageArtifactVerifier.VerifiedArtifact root,
+            List<AgentPackageArtifactVerifier.VerifiedArtifact> available,
+            Map<String, InstalledAgent.ConfigurationBinding> bindings, Instant now) {
+        Objects.requireNonNull(root, "root");
+        List<AgentDependencyResolver.PackageArtifact> verifiedDependencies =
+                (available == null ? List.<AgentPackageArtifactVerifier.VerifiedArtifact>of() : available)
+                        .stream().map(artifact -> Objects.requireNonNull(artifact, "verified dependency").resolverArtifact())
+                        .toList();
+        return upgrade(current, root.resolverArtifact(), verifiedDependencies, bindings, now);
+    }
+
     public InstalledAgent install(String tenantId, String projectId, String installationId,
             AgentDependencyResolver.PackageArtifact root,
             List<AgentDependencyResolver.PackageArtifact> available,
