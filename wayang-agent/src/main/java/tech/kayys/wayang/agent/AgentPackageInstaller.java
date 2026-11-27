@@ -71,11 +71,6 @@ public final class AgentPackageInstaller {
         return withVerificationReceipt(upgraded, root.verificationReceipt());
     }
 
-    /**
-     * Low-level install for local/trusted catalog workflows. Network-facing import endpoints must use
-     * {@link #installVerified(String, String, String, AgentPackageArtifactVerifier.VerifiedArtifact, List, Map, Instant)}.
-     */
-
     private static InstalledAgent withVerificationReceipt(InstalledAgent installed,
             InstalledAgent.VerificationReceipt receipt) {
         return new InstalledAgent(installed.tenantId(), installed.projectId(), installed.installationId(),
@@ -83,6 +78,10 @@ public final class AgentPackageInstaller {
                 installed.installedAt(), installed.updatedAt(), receipt);
     }
 
+    /**
+     * Low-level install for local/trusted catalog workflows. Network-facing import endpoints must use
+     * {@link #installVerified(String, String, String, AgentPackageArtifactVerifier.VerifiedArtifact, List, Map, Instant)}.
+     */
     public InstalledAgent install(String tenantId, String projectId, String installationId,
             AgentDependencyResolver.PackageArtifact root,
             List<AgentDependencyResolver.PackageArtifact> available,
