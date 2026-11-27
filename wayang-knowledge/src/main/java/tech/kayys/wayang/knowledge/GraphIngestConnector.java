@@ -5,6 +5,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 
 import tech.kayys.wayang.rag.Chunk;
 import tech.kayys.wayang.rag.Chunkers;
@@ -40,6 +44,7 @@ final class GraphIngestConnector implements ServiceHandler.Connector {
     static final int MAX_EXISTING_ENTITIES = 2_000;
 
     private final GraphStore graphStore;
+    private final FileStore fileStore;
     private final GraphEntityLookup entityLookup;
     private final EntityExtractor entityExtractor;
     private final RelationshipExtractor relationshipExtractor;
@@ -50,7 +55,14 @@ final class GraphIngestConnector implements ServiceHandler.Connector {
     GraphIngestConnector(GraphStore graphStore, GraphEntityLookup entityLookup,
             EntityExtractor entityExtractor, RelationshipExtractor relationshipExtractor,
             KnowledgeSchema schema) {
+        this(graphStore, null, entityLookup, entityExtractor, relationshipExtractor, schema);
+    }
+
+    GraphIngestConnector(GraphStore graphStore, FileStore fileStore, GraphEntityLookup entityLookup,
+            EntityExtractor entityExtractor, RelationshipExtractor relationshipExtractor,
+            KnowledgeSchema schema) {
         this.graphStore = java.util.Objects.requireNonNull(graphStore, "graphStore");
+        this.fileStore = fileStore;
         this.entityLookup = java.util.Objects.requireNonNull(entityLookup, "entityLookup");
         this.entityExtractor = java.util.Objects.requireNonNull(entityExtractor, "entityExtractor");
         this.relationshipExtractor = java.util.Objects.requireNonNull(relationshipExtractor, "relationshipExtractor");
@@ -60,9 +72,10 @@ final class GraphIngestConnector implements ServiceHandler.Connector {
     @Override
     public List<ConnectorInput> inputs() {
         return List.of(
-                ConnectorInput.required("sourceId", "string", "Stable source document id"),
-                ConnectorInput.required("sourceVersion", "string", "Exact source version used for evidence lifecycle"),
-                ConnectorInput.required("text", "string", "Normalized source text to extract; connect from file-get or RAG preparation"));
+                ConnectorInput.optional("sourceId", "string", "Stable source document id; defaults to fileId when ingesting a stored file"),
+                ConnectorInput.optional("sourceVersion", "string", "Exact source version; defaults to the content SHA-256 when omitted"),
+                ConnectorInput.optional("text", "string", "Normalized UTF-8 text to extract"),
+                ConnectorInput.optional("fileId", "string", "Tenant-owned file id returned by file-put or file-fetch; supported for text files"));
     }
 
     @Override
@@ -80,16 +93,52 @@ final class GraphIngestConnector implements ServiceHandler.Connector {
         Object sourceValue = inputs.get("sourceId");
         Object versionValue = inputs.get("sourceVersion");
         Object textValue = inputs.get("text");
-        if (missing(sourceValue) || missing(versionValue) || missing(textValue)) {
+        Object fileValue = inputs.get("fileId");
+        boolean hasText = !missing(textValue);
+        boolean hasFile = !missing(fileValue);
+        if (hasText == hasFile) {
             return Map.of("ingested", false, "chunksProcessed", 0, "entitiesUpserted", 0,
                     "relationshipsUpserted", 0, "issues", List.of(),
-                    "reason", "sourceId, sourceVersion and text are required; no graph data was changed");
+                    "reason", "provide exactly one of text or fileId; no graph data was changed");
         }
 
-        String sourceId = bounded(sourceValue, "sourceId", 200);
-        String sourceVersion = bounded(versionValue, "sourceVersion", 200);
-        String sourceText = boundedText(textValue);
         String tenant = bounded(config.get("wayang.tenant"), "wayang.tenant", 200);
+        String sourceText;
+        String defaultSourceId;
+        String defaultSourceVersion;
+        if (hasFile) {
+            String fileId = bounded(fileValue, "fileId", 24);
+            if (fileStore == null) {
+                throw new ServiceHandler.ConnectorException("file-backed graph ingestion requires configured Wayang file storage", false);
+            }
+            FileStore.Stored stored = fileStore.get(tenant, fileId);
+            if (stored == null) {
+                return Map.of("ingested", false, "chunksProcessed", 0, "entitiesUpserted", 0,
+                        "relationshipsUpserted", 0, "issues", List.of(),
+                        "reason", "fileId was not found for the current tenant; no graph data was changed");
+            }
+            if (!isTextFile(stored.name())) {
+                throw new ServiceHandler.ConnectorException("graph-ingest fileId supports text files only (.txt, .md, .csv, .html, .htm, .json, .xml, .yaml, .yml, .log)", false);
+            }
+            sourceText = decodeUtf8(stored.bytes());
+            defaultSourceId = stored.id();
+            defaultSourceVersion = stored.sha256();
+        } else {
+            sourceText = boundedText(textValue);
+            defaultSourceId = null;
+            defaultSourceVersion = sha256(sourceText);
+        }
+
+        String sourceId = missing(sourceValue)
+                ? defaultSourceId : bounded(sourceValue, "sourceId", 200);
+        String sourceVersion = missing(versionValue)
+                ? defaultSourceVersion : bounded(versionValue, "sourceVersion", 200);
+        if (sourceId == null) {
+            return Map.of("ingested", false, "chunksProcessed", 0, "entitiesUpserted", 0,
+                    "relationshipsUpserted", 0, "issues", List.of(),
+                    "reason", "sourceId is required when text is supplied; no graph data was changed");
+        }
+        sourceText = boundedText(sourceText);
         String collection = bounded(config.get("graphCollection"), "graphCollection", 200);
         String extractorId = config.get("extractorId") instanceof String id && !id.isBlank()
                 ? bounded(id, "extractorId", 200) : schema.schemaId() + ":" + schema.version();
@@ -149,6 +198,33 @@ final class GraphIngestConnector implements ServiceHandler.Connector {
             return out;
         } catch (RagException | IllegalArgumentException failure) {
             throw new ServiceHandler.ConnectorException(failure.getMessage(), false);
+        }
+    }
+
+    private static boolean isTextFile(String name) {
+        String lower = name.toLowerCase(java.util.Locale.ROOT);
+        return List.of(".txt", ".md", ".csv", ".html", ".htm", ".json", ".xml", ".yaml", ".yml", ".log")
+                .stream().anyMatch(lower::endsWith);
+    }
+
+    private static String decodeUtf8(byte[] bytes) throws ServiceHandler.ConnectorException {
+        try {
+            return StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(bytes)).toString();
+        } catch (CharacterCodingException failure) {
+            throw new ServiceHandler.ConnectorException("stored file is not valid UTF-8 text", false);
+        }
+    }
+
+    private static String sha256(String text) {
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(text.getBytes(StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(digest);
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
         }
     }
 
