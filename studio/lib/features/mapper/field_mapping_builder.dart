@@ -219,7 +219,6 @@ class _RowCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final paths = samplePaths(scope);
     final canTransform = row.kind == SourceKind.field || row.kind == SourceKind.expression;
     String? expr;
     try {
