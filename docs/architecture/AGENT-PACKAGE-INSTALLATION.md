@@ -110,3 +110,9 @@ Before a package can be activated in a production runtime, a future trust gate m
 The implementation adds unit tests for deterministic lock generation, dependency closure, version selection, missing and optional dependencies, cycles, unsupported dependency kinds, configuration-reference validation, project/tenant store isolation, stale updates, upgrade preview and rollback-lock retention.
 
 JDBC persistence is implemented against the repository's PostgreSQL-oriented schema. A passing database integration test is still required before claiming end-to-end JDBC verification. CI results for the pull request are the authoritative build evidence.
+
+## 8. M1.8 verification gate
+
+The M1.8 trust boundary is documented in [Agent Package Trust and Artifact Verification](AGENT-PACKAGE-TRUST.md). Network-facing import flows must use `AgentPackageArtifactVerifier` followed by `AgentPackageInstaller.installVerified` (or `upgradeVerified`). The lower-level `PackageArtifact` install API is retained for local/trusted catalog workflows and is not a safe boundary for arbitrary uploaded packages.
+
+The verifier checks the exact ZIP digest, detached publisher Ed25519 signature, operator-configured publisher key status and namespace, manifest identity, archive path/size limits, and every declared resource digest. It does not extract or execute archive content. See the trust document for evidence-validation limits and capabilities still deferred.
