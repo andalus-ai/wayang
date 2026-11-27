@@ -147,4 +147,21 @@ class AgentPackageReaderTest {
         assertThrows(AgentPackageException.class, () -> reader.read(MINIMAL.replace(
                 "\"triggers\": [\"chat\", \"api\"]", "\"triggers\": [\"shell\"]")));
     }
+    @Test
+    @SuppressWarnings("unchecked")
+    void deeplyFreezesNestedAgentOptionsAndToolConfiguration() {
+        String source = MINIMAL.replace("\\"tools\\": []",
+                "\\"tools\\": [{\\"name\\":\\"crm\\",\\"config\\":{\\"custom\\":{\\"items\\":[\\"safe\\"]}}}]")
+                .replace("\\"tools\\": [{", "\\"tools\\": [{"); // Keep manifest JSON formatting deterministic.
+        source = source.replace("\\"maxSteps\\": 8", "\\"maxSteps\\": 8, \\"options\\":{\\"custom\\":{\\"items\\":[\\"safe\\"]}}");
+        var agent = reader.read(source).agent();
+        Map<String, Object> options = (Map<String, Object>) agent.options().get("custom");
+        List<Object> optionItems = (List<Object>) options.get("items");
+        assertThrows(UnsupportedOperationException.class, () -> optionItems.add("mutated"));
+
+        Map<String, Object> toolConfig = (Map<String, Object>) agent.tools().getFirst().config().get("custom");
+        List<Object> configItems = (List<Object>) toolConfig.get("items");
+        assertThrows(UnsupportedOperationException.class, () -> configItems.add("mutated"));
+    }
+
 }
