@@ -12,4 +12,7 @@ services:
       - "127.0.0.1:8080:8080"   # loopback only: the HTTP layer is open and the key is checked by Wayang itself
     environment:
       WAYANG_AUTH_LOCAL_API_KEY: ${WAYANG_AUTH_LOCAL_API_KEY:?set WAYANG_AUTH_LOCAL_API_KEY to 24+ random characters}
+      # Endpoints (ESB) are off until you permit them; see docs/ENDPOINTS.md "Operator reference". Example:
+      # WAYANG_ENDPOINTS_AMQP_HOSTS: mq.internal:5671
+      # WAYANG_ENDPOINTS_AMQP_EXCHANGE_PREFIXES: wy.
     restart: unless-stopped

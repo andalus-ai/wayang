@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/widgets.dart';
 import '../../data/api_client.dart';
 import '../../providers/app_providers.dart';
+import 'field_mapping_builder.dart';
 import 'pipeline_builder.dart';
 
 const _mono = TextStyle(fontFamily: 'monospace', fontSize: 12);
@@ -55,9 +56,11 @@ class _MapperScreenState extends ConsumerState<MapperScreen> {
   bool _pipeline = false;
   bool _omitNull = false;
   bool _builder = true; // pipeline mode: step builder (true) or raw JSON (false)
+  bool _fieldBuilder = true; // field mapping mode: row builder (true) or raw JSON (false)
   bool _busy = false;
   String? _error;
   String? _result;
+  final _resultValue = ValueNotifier<Object?>(null); // the field-mapping result, for the builder's per-row values
   Timer? _debounce;
   int _seq = 0;
 
@@ -72,6 +75,7 @@ class _MapperScreenState extends ConsumerState<MapperScreen> {
   @override
   void dispose() {
     _debounce?.cancel();
+    _resultValue.dispose();
     _spec.dispose();
     _input.dispose();
     super.dispose();
@@ -82,6 +86,7 @@ class _MapperScreenState extends ConsumerState<MapperScreen> {
     _spec.text = s.spec;
     _input.text = s.input;
     _result = null;
+    _resultValue.value = null;
     _error = null;
   }
 
@@ -102,6 +107,7 @@ class _MapperScreenState extends ConsumerState<MapperScreen> {
       setState(() {
         _error = 'Not valid JSON: ${e is FormatException ? e.message : e}';
         _result = null;
+        _resultValue.value = null;
       });
       return;
     }
@@ -116,6 +122,7 @@ class _MapperScreenState extends ConsumerState<MapperScreen> {
         _busy = false;
         _error = null;
         _result = const JsonEncoder.withIndent('  ').convert(_pipeline ? out['messages'] : out['result']);
+        _resultValue.value = _pipeline ? null : out['result'];
       });
     } catch (e) {
       if (!mounted || seq != _seq) return;
@@ -123,6 +130,7 @@ class _MapperScreenState extends ConsumerState<MapperScreen> {
         _busy = false;
         _error = errText(e);
         _result = null;
+        _resultValue.value = null;
       });
     }
   }
@@ -185,7 +193,7 @@ class _MapperScreenState extends ConsumerState<MapperScreen> {
             child: LayoutBuilder(builder: (context, c) {
               final wide = c.maxWidth > 900;
               final panes = [
-                _pane(_pipeline ? 'Pipeline (JSON)' : 'Mapping spec (JSON)', child: _pipeline ? _pipelineEditor() : _editor(_spec)),
+                _pane(_pipeline ? 'Pipeline' : 'Field mapping', child: _pipeline ? _pipelineEditor() : _fieldEditor()),
                 _pane(_pipeline ? 'Message body (JSON; use a string for text)' : 'Variables (JSON; add "result" to test an output mapping)',
                     child: _editor(_input)),
                 _pane(_pipeline ? 'Output messages' : 'Result', child: _output()),
@@ -201,6 +209,23 @@ class _MapperScreenState extends ConsumerState<MapperScreen> {
       ),
     );
   }
+
+  Widget _fieldEditor() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: SegmentedButton<bool>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: true, label: Text('Builder'), icon: Icon(Icons.table_rows_rounded, size: 16)),
+              ButtonSegment(value: false, label: Text('JSON'), icon: Icon(Icons.code_rounded, size: 16)),
+            ],
+            selected: {_fieldBuilder},
+            onSelectionChanged: (v) => setState(() => _fieldBuilder = v.first),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(child: _fieldBuilder ? FieldMappingBuilder(controller: _spec, sample: _input, result: _resultValue) : _editor(_spec)),
+      ]);
 
   Widget _pipelineEditor() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Align(

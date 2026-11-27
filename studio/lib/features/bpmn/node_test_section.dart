@@ -8,14 +8,16 @@ import '../../core/widgets.dart';
 import '../../data/api_client.dart';
 import '../../data/node_test_model.dart';
 import '../../providers/app_providers.dart';
+import '../../providers/node_test_provider.dart';
 
 const _mono = TextStyle(fontFamily: 'monospace', fontSize: 11.5);
 
 /// "Test node" under a service node whose connector operation only reads. It makes one real call with the tenant's secrets after an
 /// explicit confirmation; the server refuses anything that could send or change something, whatever this widget offers.
 class NodeTestSection extends ConsumerStatefulWidget {
-  const NodeTestSection({super.key, required this.props});
+  const NodeTestSection({super.key, required this.nodeId, required this.props});
 
+  final String nodeId;
   final Map<String, dynamic> props;
 
   @override
@@ -65,6 +67,7 @@ class _NodeTestSectionState extends ConsumerState<NodeTestSection> {
     try {
       final out = await ref.read(repositoryProvider).testConnector(testRequest(widget.props, inputs, confirmed: true));
       if (!mounted) return;
+      ref.read(lastNodeTestOutputProvider(widget.nodeId).notifier).state = out['output'];
       setState(() {
         _busy = false;
         _output = const JsonEncoder.withIndent('  ').convert(out['output']);
