@@ -91,6 +91,71 @@ void main() {
       expect(selected, 'runs');
     });
 
+    test('command filtering matches multiple tokens and keywords', () {
+      const commands = [
+        WdsCommandItem(
+          id: 'new-agent',
+          label: 'Create agent',
+          icon: Icons.smart_toy_outlined,
+          keywords: ['assistant', 'builder'],
+          group: 'Create',
+        ),
+        WdsCommandItem(
+          id: 'runs',
+          label: 'Execution history',
+          icon: Icons.history,
+          group: 'Monitor',
+        ),
+      ];
+      expect(filterWdsCommands(commands, 'create builder').map((e) => e.id), ['new-agent']);
+      expect(filterWdsCommands(commands, 'missing'), isEmpty);
+    });
+
+    testWidgets('WdsCommandPalette reports selected command', (tester) async {
+      WdsCommandItem? selected;
+      const commands = [
+        WdsCommandItem(
+          id: 'new-agent',
+          label: 'Create agent',
+          icon: Icons.smart_toy_outlined,
+          description: 'Start a new agent',
+          group: 'Create',
+        ),
+      ];
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: WdsCommandPalette(items: commands, onSelected: (item) => selected = item),
+        ),
+      ));
+      await tester.tap(find.text('Create agent'));
+      expect(selected?.id, 'new-agent');
+    });
+
+    testWidgets('WdsPageHeader composes breadcrumbs, description and actions', (tester) async {
+      var navigated = false;
+      await tester.pumpWidget(MaterialApp(
+        theme: ThemeData(useMaterial3: true),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: WdsPageHeader(
+              breadcrumbs: [
+                WdsBreadcrumbItem(label: 'Workspace', onTap: () => navigated = true),
+                const WdsBreadcrumbItem(label: 'Agents'),
+              ],
+              eyebrow: 'Agent builder',
+              title: 'Agents',
+              description: 'Design and manage reusable agents.',
+              actions: [FilledButton(onPressed: () {}, child: const Text('Create agent'))],
+            ),
+          ),
+        ),
+      ));
+      expect(find.text('Agents'), findsWidgets);
+      expect(find.text('Design and manage reusable agents.'), findsOneWidget);
+      await tester.tap(find.text('Workspace'));
+      expect(navigated, isTrue);
+    });
+
     testWidgets('WdsEmptyState uses the supplied icon and action', (tester) async {
       await tester.pumpWidget(MaterialApp(
         theme: ThemeData(useMaterial3: true),
