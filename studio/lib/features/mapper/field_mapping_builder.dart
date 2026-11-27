@@ -117,6 +117,67 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
     _changed();
   }
 
+  Future<void> _fromSchema() async {
+    final c = TextEditingController();
+    String? err;
+    final created = await showDialog<List<MappingRow>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => AlertDialog(
+          title: const Text('Rows from a JSON Schema'),
+          content: SizedBox(
+            width: 560,
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text(
+                'Paste the schema of the object you want to produce. Each property becomes a row (nested objects become dotted names, arrays of objects '
+                'become list rows). Fields whose name matches exactly one path in your sample variables are connected for you.',
+                style: TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 260,
+                child: TextField(
+                  controller: c,
+                  expands: true,
+                  maxLines: null,
+                  minLines: null,
+                  textAlignVertical: TextAlignVertical.top,
+                  style: _mono,
+                  decoration: InputDecoration(border: const OutlineInputBorder(), isDense: true, errorText: err, hintText: '{"type": "object", "properties": {...}}'),
+                ),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () {
+                try {
+                  final r = rowsFromSchema(jsonDecode(c.text), sample: _sample);
+                  if (r == null) {
+                    set(() => err = 'No properties to map in this schema.');
+                    return;
+                  }
+                  Navigator.pop(ctx, r);
+                } on FormatException catch (e) {
+                  set(() => err = 'Not valid JSON: ${e.message}');
+                }
+              },
+              child: const Text('Create rows'),
+            ),
+          ],
+        ),
+      ),
+    );
+    c.dispose();
+    final rows = _rows;
+    if (created == null || rows == null || !mounted) return;
+    final have = {for (final r in rows) r.target.trim()};
+    rows.removeWhere((r) => r.target.trim().isEmpty && r.value.trim().isEmpty);
+    rows.addAll(created.where((r) => !have.contains(r.target)));
+    _changed();
+  }
+
   @override
   Widget build(BuildContext context) {
     final rows = _rows;
@@ -149,6 +210,11 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
               },
               icon: const Icon(Icons.add, size: 16),
               label: const Text('Add field'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _fromSchema,
+              icon: const Icon(Icons.schema_outlined, size: 16),
+              label: const Text('From schema'),
             ),
             OutlinedButton.icon(
               onPressed: _samplePaths.isEmpty ? null : _autoMap,
@@ -187,6 +253,12 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
                   ),
                 ),
         ),
+        if (unmappedRequired(rows).isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('Required by the schema but not mapped yet: ${unmappedRequired(rows).join(', ')}',
+                style: const TextStyle(fontSize: 11.5, color: AppColors.warning)),
+          ),
         if (problems.isNotEmpty) ...[
           const SizedBox(height: 6),
           for (final p in problems.take(3))
@@ -259,7 +331,13 @@ class _RowCard extends StatelessWidget {
                   child: TextFormField(
                     initialValue: row.target,
                     style: _mono,
-                    decoration: const InputDecoration(isDense: true, labelText: 'Output field', hintText: 'customer.name'),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      labelText: row.required ? 'Output field *' : 'Output field',
+                      hintText: 'customer.name',
+                      helperText: row.hint.isEmpty ? null : row.hint,
+                      helperMaxLines: 2,
+                    ),
                     onChanged: (v) {
                       row.target = v;
                       onChanged();
