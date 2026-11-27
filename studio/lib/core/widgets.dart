@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/app_providers.dart';
 import 'theme.dart';
+import '../design_system/wds.dart';
 
 /// A soft, bordered surface with optional glow — the base "card" look used
 /// throughout the studio (panels, inspector, dialogs).
@@ -24,16 +25,11 @@ class SurfacePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
+    return WdsSurface(
       padding: padding,
-      decoration: BoxDecoration(
-        color: color ?? (isDark ? AppColors.darkSurfaceAlt : AppColors.lightSurface),
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(
-          color: borderColor ?? (isDark ? AppColors.darkBorder : AppColors.lightBorder),
-        ),
-      ),
+      color: color,
+      borderColor: borderColor,
+      radius: radius,
       child: child,
     );
   }
@@ -335,16 +331,10 @@ class AppSearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
+    return WdsSearchField(
+      hint: hint,
       controller: controller,
       onChanged: onChanged,
-      style: const TextStyle(fontSize: 13),
-      decoration: InputDecoration(
-        hintText: hint,
-        isDense: true,
-        prefixIcon: const Icon(Icons.search_rounded, size: 18),
-        prefixIconConstraints: const BoxConstraints(minWidth: 36),
-      ),
     );
   }
 }

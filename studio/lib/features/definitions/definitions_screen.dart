@@ -1,12 +1,15 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
+import '../../core/unsaved_edits.dart';
 import '../../core/utils.dart';
 import '../../core/widgets.dart';
 import '../../data/api_client.dart';
+import '../../data/definition_edit.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
 import '../mapper/pipeline_builder.dart';
@@ -27,18 +30,42 @@ class _DefinitionsScreenState extends ConsumerState<DefinitionsScreen> {
   int? _revision;
   final _text = TextEditingController();
   bool _loading = false;
+  bool _busy = false; // validate / save / publish in flight
+  String _baseline = ''; // the text as loaded or last saved; differs => unsaved edits
+  String _query = '';
   bool _visualBuilder = true;
   String? _error;
   String? _info;
   List<ValidationItem> _items = const [];
 
   @override
+  void initState() {
+    super.initState();
+    _text.addListener(_edited);
+  }
+
+  void _edited() {
+    if (mounted) setState(() {}); // the dirty marker and the guards read the text
+  }
+
+  bool get _dirty => definitionDirty(_id, _text.text, _baseline);
+
+  @override
   void dispose() {
+    _text.removeListener(_edited);
     _text.dispose();
     super.dispose();
   }
 
+  /// True when it is fine to leave what is open: nothing unsaved, or the person saved or discarded it.
+  Future<bool> _canLeave() async {
+    if (!_dirty) return true;
+    return confirmDiscardEdits(context, save: _save, what: '"$_id"');
+  }
+
   Future<void> _open(String id) async {
+    if (id != _id && !await _canLeave()) return;
+    if (!mounted) return;
     setState(() {
       _id = id;
       _loading = true;
@@ -50,6 +77,7 @@ class _DefinitionsScreenState extends ConsumerState<DefinitionsScreen> {
       final d = await ref.read(repositoryProvider).loadForEditing(widget.kind, id);
       _revision = d.isDraft ? d.revision : null;
       _text.text = const JsonEncoder.withIndent('  ').convert(d.document);
+      _baseline = _text.text;
       setState(() => _loading = false);
     } catch (e) {
       setState(() {
@@ -67,69 +95,101 @@ class _DefinitionsScreenState extends ConsumerState<DefinitionsScreen> {
 
   Future<void> _validate() async {
     final doc = _doc();
-    if (doc == null) return;
+    if (doc == null || _busy) return;
+    setState(() => _busy = true);
     try {
       final r = await ref.read(repositoryProvider).validate(widget.kind, doc);
+      if (!mounted) return;
       setState(() {
         _items = r.items;
         _error = null;
         _info = r.valid ? 'Valid.' : null;
       });
     } catch (e) {
-      setState(() => _error = errText(e));
+      if (mounted) setState(() => _error = errText(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<bool> _save() async {
     final doc = _doc();
     final id = _id;
-    if (doc == null || id == null) return false;
+    if (doc == null || id == null || _busy) return false;
+    final saving = _text.text;
+    setState(() => _busy = true);
     try {
       final saved = await ref.read(repositoryProvider).saveDraft(widget.kind, id, doc, revision: _revision);
       _revision = saved.revision;
+      _baseline = saving; // edits typed while the save ran stay unsaved
       ref.invalidate(definitionsProvider(widget.kind));
-      setState(() {
-        _error = null;
-        _info = 'Draft saved (revision ${saved.revision}).';
-      });
+      if (mounted) {
+        setState(() {
+          _error = null;
+          _info = 'Draft saved (revision ${saved.revision}).';
+        });
+      }
       return true;
     } catch (e) {
-      setState(() => _error = errText(e));
+      if (mounted) setState(() => _error = errText(e));
       return false;
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _publish() async {
-    if (!await _save()) return;
+    if (_busy || !await _save()) return;
+    setState(() => _busy = true);
     try {
       final v = await ref.read(repositoryProvider).publish(widget.kind, _id!);
       ref.invalidate(definitionsProvider(widget.kind));
-      setState(() => _info = 'Published as version ${v.version}.');
+      if (mounted) setState(() => _info = 'Published as version ${v.version}.');
     } catch (e) {
-      setState(() => _error = errText(e));
+      if (mounted) setState(() => _error = errText(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _new() async {
+    if (!await _canLeave() || !mounted) return;
+    final existing = (ref.read(definitionsProvider(widget.kind)).valueOrNull ?? const <DefinitionSummary>[]).map((d) => d.id).toList();
     final ctrl = TextEditingController();
     final id = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('New ${widget.kind.name}'),
-        content: TextField(controller: ctrl, autofocus: true, decoration: const InputDecoration(labelText: 'Id (e.g. support-triage)')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, ctrl.text), child: const Text('Create')),
-        ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) {
+          final problem = ctrl.text.isEmpty ? null : definitionIdProblem(ctrl.text, existing);
+          void submit() {
+            if (definitionIdProblem(ctrl.text, existing) == null) Navigator.pop(ctx, ctrl.text.trim());
+          }
+
+          return AlertDialog(
+            title: Text('New ${widget.kind.name}'),
+            content: TextField(
+              controller: ctrl,
+              autofocus: true,
+              onChanged: (_) => set(() {}),
+              onSubmitted: (_) => submit(),
+              decoration: InputDecoration(labelText: 'Id (e.g. support-triage)', errorText: problem),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              ElevatedButton(onPressed: definitionIdProblem(ctrl.text, existing) == null ? submit : null, child: const Text('Create')),
+            ],
+          );
+        },
       ),
     );
-    if (id == null || id.trim().isEmpty) return;
+    if (id == null || !mounted) return;
     setState(() {
-      _id = id.trim();
+      _id = id;
       _revision = null;
       _items = const [];
       _info = null;
       _error = null;
+      _baseline = ''; // a new document is unsaved until it is saved
       _text.text = const JsonEncoder.withIndent('  ').convert({'id': _id, 'name': _id});
     });
   }
@@ -137,7 +197,13 @@ class _DefinitionsScreenState extends ConsumerState<DefinitionsScreen> {
   @override
   Widget build(BuildContext context) {
     final list = ref.watch(definitionsProvider(widget.kind));
-    return Padding(
+    reportUnsaved(ref, 'definition:${widget.kind.name}', _dirty);
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true): _save,
+        const SingleActivator(LogicalKeyboardKey.keyS, meta: true): _save,
+      },
+      child: Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -162,16 +228,32 @@ class _DefinitionsScreenState extends ConsumerState<DefinitionsScreen> {
                   child: list.when(
                     loading: () => const LoadingView(),
                     error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e)),
-                    data: (items) => ListView(children: [
+                    data: (all) {
+                      final items = filterDefinitions(all, _query);
+                      return Column(children: [
+                        TextField(
+                          decoration: const InputDecoration(isDense: true, prefixIcon: Icon(Icons.search, size: 18), hintText: 'Search'),
+                          onChanged: (v) => setState(() => _query = v),
+                        ),
+                        const SizedBox(height: 8),
+                        if (all.isEmpty)
+                          Padding(padding: const EdgeInsets.all(12), child: Text('No ${widget.kind.label.toLowerCase()} yet. Create one with New.', style: const TextStyle(fontSize: 12)))
+                        else if (items.isEmpty)
+                          const Padding(padding: EdgeInsets.all(12), child: Text('Nothing matches.', style: TextStyle(fontSize: 12))),
+                        Expanded(
+                          child: ListView(children: [
                       for (final d in items)
                         ListTile(
                           dense: true,
                           selected: d.id == _id,
-                          title: Text(d.name, overflow: TextOverflow.ellipsis),
+                          title: Text('${d.id == _id && _dirty ? '• ' : ''}${d.name}', overflow: TextOverflow.ellipsis),
                           subtitle: Text(d.isPublished ? 'v${d.latestVersion}${d.hasDraft ? ' + draft' : ''}' : 'draft only', style: const TextStyle(fontSize: 11)),
                           onTap: () => _open(d.id),
                         ),
-                    ]),
+                          ]),
+                        ),
+                      ]);
+                    },
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -201,11 +283,12 @@ class _DefinitionsScreenState extends ConsumerState<DefinitionsScreen> {
                                     ),
                                     const SizedBox(width: 10),
                                   ],
-                                  OutlinedButton(onPressed: _validate, child: const Text('Validate')),
+                                  if (_busy) const Padding(padding: EdgeInsets.only(right: 10), child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
+                                  OutlinedButton(onPressed: _busy ? null : _validate, child: const Text('Validate')),
                                   const SizedBox(width: 8),
-                                  OutlinedButton(onPressed: _save, child: const Text('Save draft')),
+                                  OutlinedButton(onPressed: _busy ? null : _save, child: Text(_dirty ? 'Save draft *' : 'Save draft')),
                                   const SizedBox(width: 8),
-                                  ElevatedButton(onPressed: _publish, child: const Text('Publish')),
+                                  ElevatedButton(onPressed: _busy ? null : _publish, child: const Text('Publish')),
                                 ]),
                                 if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 12))),
                                 if (_info != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_info!, style: const TextStyle(color: AppColors.success, fontSize: 12))),
@@ -242,6 +325,7 @@ class _DefinitionsScreenState extends ConsumerState<DefinitionsScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../design_system/tokens.dart';
+
 /// Central color palette. The studio is dark-first (developer-tool feel)
 /// with a light theme provided for completeness.
 class AppColors {
@@ -60,12 +62,13 @@ class AppColors {
   }
 }
 
+/// Backwards-compatible aliases; WDS is the canonical radius scale.
 class AppRadius {
   AppRadius._();
-  static const double sm = 8;
-  static const double md = 12;
-  static const double lg = 16;
-  static const double xl = 22;
+  static const double sm = WdsRadius.sm;
+  static const double md = WdsRadius.md;
+  static const double lg = WdsRadius.lg;
+  static const double xl = WdsRadius.xl;
 }
 
 class AppTheme {
