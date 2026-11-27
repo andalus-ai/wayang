@@ -9,7 +9,16 @@ import java.util.Objects;
 /** A project-scoped installation record. It is not a deployed or running agent service. */
 public record InstalledAgent(String tenantId, String projectId, String installationId,
         AgentPackageLock lock, Map<String, ConfigurationBinding> configurationBindings,
-        List<String> requestedPermissions, Instant installedAt, Instant updatedAt) {
+        List<String> requestedPermissions, Instant installedAt, Instant updatedAt,
+        VerificationReceipt verification) {
+
+    /** Source-compatible constructor for local/trusted-catalog installations without a publisher receipt. */
+    public InstalledAgent(String tenantId, String projectId, String installationId,
+            AgentPackageLock lock, Map<String, ConfigurationBinding> configurationBindings,
+            List<String> requestedPermissions, Instant installedAt, Instant updatedAt) {
+        this(tenantId, projectId, installationId, lock, configurationBindings, requestedPermissions,
+                installedAt, updatedAt, null);
+    }
 
     public InstalledAgent {
         require(tenantId, "tenantId", 128);
@@ -26,11 +35,32 @@ public record InstalledAgent(String tenantId, String projectId, String installat
         Objects.requireNonNull(installedAt, "installedAt");
         Objects.requireNonNull(updatedAt, "updatedAt");
         if (updatedAt.isBefore(installedAt)) throw new IllegalArgumentException("updatedAt precedes installedAt");
+        if (verification != null && verification.verifiedAt().isAfter(updatedAt)) {
+            throw new IllegalArgumentException("Verification receipt timestamp cannot follow the installation update");
+        }
     }
 
     private static void require(String value, String name, int maxLength) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " is required");
         if (value.length() > maxLength) throw new IllegalArgumentException(name + " exceeds " + maxLength + " characters");
+    }
+
+    /** Audit metadata for the exact verified package; it is not a reusable trust token. */
+    public record VerificationReceipt(String publisher, String keyId, String signingKeyFingerprint,
+            String manifestSha256, Instant verifiedAt) {
+        public VerificationReceipt {
+            require(publisher, "verification.publisher", 256);
+            require(keyId, "verification.keyId", 128);
+            requireDigest(signingKeyFingerprint, "verification.signingKeyFingerprint");
+            requireDigest(manifestSha256, "verification.manifestSha256");
+            Objects.requireNonNull(verifiedAt, "verifiedAt");
+        }
+    }
+
+    private static void requireDigest(String value, String name) {
+        if (value == null || !value.matches("(?i)[0-9a-f]{64}")) {
+            throw new IllegalArgumentException(name + " must be a SHA-256 digest");
+        }
     }
 
     /** Only references are persisted; secret values and connection credentials never belong here. */

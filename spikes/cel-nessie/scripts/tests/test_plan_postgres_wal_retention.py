@@ -59,6 +59,23 @@ class PostgresWalRetentionPlanTest(unittest.TestCase):
     def range(self, timeline=1, start="0/00000000", end="0/02000000"):
         return {"Timeline": timeline, "Start-LSN": start, "End-LSN": end}
 
+    def test_plan_has_unique_identity_expiry_and_integrity_digest(self):
+        manifest = self.write_manifest("backup.json", [self.range(end="0/00000000")])
+        self.put_archive_file("000000010000000000000000")
+        self.write_catalog([{"backup_id": "base", "retained": True, "manifest": manifest}])
+
+        first = build_plan(self.archive, self.catalog_path, self.cutoff).to_dict()
+        second = build_plan(self.archive, self.catalog_path, self.cutoff, approval_ttl_hours=48).to_dict()
+
+        self.assertNotEqual(first["plan_id"], second["plan_id"])
+        self.assertEqual(24 * 60 * 60, first["expires_at_epoch"] - first["created_at_epoch"])
+        self.assertEqual(48 * 60 * 60, second["expires_at_epoch"] - second["created_at_epoch"])
+        self.assertRegex(first["plan_sha256"], r"^[0-9a-f]{64}$")
+
+    def test_approval_ttl_outside_one_to_168_hours_is_rejected(self):
+        with self.assertRaisesRegex(CatalogError, "between 1 and 168 hours"):
+            build_plan(self.archive, self.catalog_path, self.cutoff, approval_ttl_hours=169)
+
     def test_expands_inclusive_segment_range(self):
         self.assertEqual(
             {

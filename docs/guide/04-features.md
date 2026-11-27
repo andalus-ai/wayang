@@ -67,7 +67,7 @@ Connectors are selected by `config.connector` (or as an agent tool `type`). All 
 | AI and agents | `mcp` (call MCP tools; generate an MCP server from OpenAPI, [MCP](../MCP.md)), A2A, multimodal (image generation, ComfyUI, transcribe, speak, describe: [MULTIMODAL](../MULTIMODAL.md)) |
 | Scripting | CES, JavaScript, Python via JSR-223, with limits ([SCRIPTING](../SCRIPTING.md)) |
 | Endpoints (ESB) | `fs-read`, `fs-write`, `fs-list`, `fs-move`, `fs-delete` the `fs` trigger source, `sql` and the `jdbc` trigger source ([ENDPOINTS](../ENDPOINTS.md)); `camel`, `kafka-publish` and the `kafka` trigger, `sftp-*` and the `sftp` trigger, `ftp-*` (FTPS by default) and the `ftp` trigger, `amqp-publish`, `jms-send` and the `amqp-stream` trigger (optional modules, off until the operator permits hosts) |
-| Knowledge and files | `rag-ingest`, `rag-search`, `rag-forget`, `rag-list`, `file-put`, `file-fetch`, `file-get`, `file-list`, `file-delete`, `file-purge`, `graph-query`, `graph-retract` |
+| Knowledge and files | `rag-ingest`, `rag-search`, `rag-forget`, `rag-list`, `file-put`, `file-fetch`, `file-get`, `file-list`, `file-delete`, `file-purge`, `graph-ingest` (only with deployment-configured extraction providers and schema), `graph-query`, `graph-retract` |
 
 ## Knowledge (RAG) and files
 
@@ -82,7 +82,7 @@ flowchart LR
   idx --- ttl[Retention<br/>ttlDays per document]
 ```
 
-Pick methods per knowledge base to fit the content (legal: clause chunks; research: heading chunks). Files live in reusable storage with per-tenant ids, optional expiry and an HTTP API on releases. Every node input has an advisory *mandatory* flag: a missing one gives an empty input plus a warning, never a failed run. The graph-query component expands tenant-scoped entity ids with hard traversal bounds; graph-retract removes evidence for one exact source version. The default graph store is process-local; production deployments must supply a durable GraphStore adapter. Retrieved text is untrusted data, and graph provenance is not a substitute for source ACL checks. Full references: [RAG](../RAG.md) and [Knowledge Graph](../KNOWLEDGE_GRAPH.md).
+Pick methods per knowledge base to fit the content (legal: clause chunks; research: heading chunks). Files live in reusable storage with per-tenant ids, optional expiry and an HTTP API on releases. Every node input has an advisory *mandatory* flag: a missing one gives an empty input plus a warning, never a failed run. The graph-ingest component is opt-in and requires deployment-injected extractors, entity lookup and a versioned ontology; it consumes normalized text and exact source-version inputs. The graph-query component expands tenant-scoped entity ids with hard traversal bounds; graph-retract removes evidence for one exact source version. The default graph store is process-local; production deployments must supply a durable GraphStore adapter. Retrieved text is untrusted data, and graph provenance is not a substitute for source ACL checks. Full references: [RAG](../RAG.md) and [Knowledge Graph](../KNOWLEDGE_GRAPH.md).
 
 ## Secrets, settings, workspace
 

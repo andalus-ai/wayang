@@ -23,6 +23,7 @@ public record AgentPackageSignature(int formatVersion, String algorithm, String 
         }
         artifactSha256 = artifactSha256.toLowerCase(Locale.ROOT);
         Objects.requireNonNull(signatureBase64, "signatureBase64");
+        if (signatureBase64.length() > 128) throw new IllegalArgumentException("Invalid Ed25519 signature encoding");
         try {
             byte[] decoded = java.util.Base64.getDecoder().decode(signatureBase64);
             if (decoded.length != 64) throw new IllegalArgumentException("Invalid Ed25519 signature length");

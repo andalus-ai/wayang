@@ -63,6 +63,8 @@ public final class AgentPackageArtifactVerifier {
         if (archive.length == 0 || archive.length > MAX_ARCHIVE_BYTES) {
             throw invalid("Agent Package archive is empty or exceeds the 64 MiB limit");
         }
+        // Snapshot caller-owned bytes so the digest and ZIP inspection cannot observe different content.
+        archive = archive.clone();
 
         String archiveSha256 = sha256(archive);
         if (!MessageDigest.isEqual(archiveSha256.getBytes(StandardCharsets.US_ASCII),
@@ -97,8 +99,9 @@ public final class AgentPackageArtifactVerifier {
 
         String manifestSha256 = sha256(manifestBytes);
         Map<String, String> resourceDigests = verifyResources(agentPackage, entries);
+        String keyFingerprint = sha256(trusted.publicKey().getEncoded());
         return new VerifiedArtifact(agentPackage, archiveSha256, manifestSha256,
-                signature.publisher(), signature.keyId(), resourceDigests);
+                signature.publisher(), signature.keyId(), keyFingerprint, now, resourceDigests);
     }
 
     private static void verifySignature(AgentPackageSignature envelope,
@@ -160,8 +163,9 @@ public final class AgentPackageArtifactVerifier {
     }
 
     private static void validatePath(String name) {
-        if (name == null || name.isBlank() || name.startsWith("/") || name.startsWith("\\")
-                || name.indexOf('\\') >= 0 || name.indexOf(':') >= 0 || name.indexOf('\0') >= 0) {
+        if (name == null || name.isBlank() || name.length() > 512 || name.startsWith("/") || name.startsWith("\\")
+                || name.indexOf('\\') >= 0 || name.indexOf(':') >= 0
+                || name.chars().anyMatch(Character::isISOControl)) {
             throw invalid("Unsafe Agent Package ZIP path");
         }
         for (String segment : name.split("/", -1)) {
@@ -190,8 +194,16 @@ public final class AgentPackageArtifactVerifier {
                 throw invalid("Agent Package resource digest mismatch: " + path);
             }
             if ("sbom".equalsIgnoreCase(resource.role())) {
+                if (!"application/vnd.cyclonedx+json".equalsIgnoreCase(resource.mediaType())
+                        && !"application/json".equalsIgnoreCase(resource.mediaType())) {
+                    throw invalid("CycloneDX SBOM must use a JSON media type: " + path);
+                }
                 verifyCycloneDx(content, path);
             } else if ("provenance".equalsIgnoreCase(resource.role())) {
+                if (!"application/vnd.in-toto+json".equalsIgnoreCase(resource.mediaType())
+                        && !"application/json".equalsIgnoreCase(resource.mediaType())) {
+                    throw invalid("In-toto provenance must use a JSON media type: " + path);
+                }
                 verifyInTotoProvenance(content, path, pkg.metadata().id());
             }
             digests.put(path, actual);
@@ -239,7 +251,7 @@ public final class AgentPackageArtifactVerifier {
                 || !(statement.get("subject") instanceof java.util.List<?> subjects)) {
             throw invalid("Provenance resource is not an in-toto Statement v1: " + path);
         }
-        boolean bindsManifest = false;
+        boolean bindsPackageSubject = false;
         for (Object item : subjects) {
             if (!(item instanceof Map<?, ?> subject)
                     || !(subject.get("name") instanceof String name)
@@ -248,10 +260,10 @@ public final class AgentPackageArtifactVerifier {
             }
             Object sha = digest.get("sha256");
             if (packageId.equals(name) && sha instanceof String value && value.matches("(?i)[0-9a-f]{64}")) {
-                bindsManifest = true;
+                bindsPackageSubject = true;
             }
         }
-        if (!bindsManifest) {
+        if (!bindsPackageSubject) {
             throw invalid("Provenance subject does not identify this package with a SHA-256 digest: " + path);
         }
     }
@@ -301,15 +313,20 @@ public final class AgentPackageArtifactVerifier {
         private final String manifestSha256;
         private final String publisher;
         private final String keyId;
+        private final String signingKeyFingerprint;
+        private final Instant verifiedAt;
         private final Map<String, String> resourceSha256;
 
         private VerifiedArtifact(AgentPackageReader.AgentPackage agentPackage, String archiveSha256,
-                String manifestSha256, String publisher, String keyId, Map<String, String> resourceSha256) {
+                String manifestSha256, String publisher, String keyId, String signingKeyFingerprint,
+                Instant verifiedAt, Map<String, String> resourceSha256) {
             this.agentPackage = agentPackage;
             this.archiveSha256 = archiveSha256;
             this.manifestSha256 = manifestSha256;
             this.publisher = publisher;
             this.keyId = keyId;
+            this.signingKeyFingerprint = signingKeyFingerprint;
+            this.verifiedAt = verifiedAt;
             this.resourceSha256 = Map.copyOf(resourceSha256);
         }
 
@@ -318,7 +335,14 @@ public final class AgentPackageArtifactVerifier {
         public String manifestSha256() { return manifestSha256; }
         public String publisher() { return publisher; }
         public String keyId() { return keyId; }
+        public String signingKeyFingerprint() { return signingKeyFingerprint; }
+        public Instant verifiedAt() { return verifiedAt; }
         public Map<String, String> resourceSha256() { return resourceSha256; }
+
+        public InstalledAgent.VerificationReceipt verificationReceipt() {
+            return new InstalledAgent.VerificationReceipt(publisher, keyId, signingKeyFingerprint,
+                    manifestSha256, verifiedAt);
+        }
 
         AgentDependencyResolver.PackageArtifact resolverArtifact() {
             return new AgentDependencyResolver.PackageArtifact(agentPackage, archiveSha256);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/app_providers.dart';
+import '../../design_system/command_palette.dart';
 
 /// One place the "Go to" palette can jump to.
 class GoToEntry {
@@ -24,53 +25,23 @@ List<GoToEntry> filterGoTo(List<GoToEntry> entries, String query) {
   return hits;
 }
 
-/// A small search dialog (Ctrl/Cmd+K) that jumps to a section: type, arrow keys are not needed, Enter opens the first match, Escape closes.
-Future<void> showGoTo(BuildContext context, WidgetRef ref, List<GoToEntry> entries) {
-  return showDialog<void>(
+/// Opens the shared WDS command palette for application navigation.
+Future<void> showGoTo(BuildContext context, WidgetRef ref, List<GoToEntry> entries) async {
+  await showWdsCommandPalette<void>(
     context: context,
-    builder: (ctx) {
-      var query = '';
-      return StatefulBuilder(builder: (ctx, setState) {
-        final hits = filterGoTo(entries, query);
-        void open(GoToEntry e) {
-          ref.read(selectedNavKeyProvider.notifier).state = e.key;
-          Navigator.pop(ctx);
-        }
-
-        return AlertDialog(
-          title: const Text('Go to'),
-          content: SizedBox(
-            width: 380,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  autofocus: true,
-                  decoration: const InputDecoration(hintText: 'Type a section name', prefixIcon: Icon(Icons.search_rounded)),
-                  onChanged: (v) => setState(() => query = v),
-                  onSubmitted: (_) {
-                    if (hits.isNotEmpty) open(hits.first);
-                  },
-                ),
-                const SizedBox(height: 8),
-                if (hits.isEmpty)
-                  const Padding(padding: EdgeInsets.all(12), child: Text('No section matches'))
-                else
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 320),
-                    child: ListView(
-                      shrinkWrap: true,
-                      children: [
-                        for (final e in hits)
-                          ListTile(dense: true, leading: Icon(e.icon, size: 18), title: Text(e.label), onTap: () => open(e)),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
-      });
+    title: 'Go to',
+    hintText: 'Type a section name',
+    items: [
+      for (final entry in entries)
+        WdsCommandItem(
+          id: entry.key,
+          label: entry.label,
+          icon: entry.icon,
+          group: 'Navigate',
+        ),
+    ],
+    onSelected: (item) {
+      ref.read(selectedNavKeyProvider.notifier).state = item.id;
     },
   );
 }

@@ -29,9 +29,11 @@ class JdbcInstalledAgentStoreIT {
         Instant installedAt = Instant.parse("2026-11-24T00:00:00Z");
         var dependency = new AgentPackageLock.LockedDependency("agent", "acme:search", "1.1.0", "b".repeat(64));
         var lock = AgentPackageLock.create("acme:support", "1.2.0", "a".repeat(64), List.of(dependency));
+        var receipt = new InstalledAgent.VerificationReceipt("acme:publisher", "publisher-key-1",
+                "c".repeat(64), "d".repeat(64), installedAt);
         var installed = new InstalledAgent("tenant-a", "project-a", "support", lock,
                 Map.of("crm-token", new InstalledAgent.ConfigurationBinding("secret-reference", "secret://crm/token")),
-                List.of("secret:crm"), installedAt, installedAt);
+                List.of("secret:crm"), installedAt, installedAt, receipt);
 
         var store = new JdbcInstalledAgentStore(dataSource);
         store.save(installed);
