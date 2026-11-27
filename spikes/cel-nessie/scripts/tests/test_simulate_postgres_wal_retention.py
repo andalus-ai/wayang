@@ -78,7 +78,8 @@ class WalRetentionSimulationTest(unittest.TestCase):
         self.assertEqual(report["removed_candidate_files"], [CANDIDATE])
 
     def test_expired_plan_fails_before_destination_creation(self):
-        self.write_plan(expires_at_epoch=int(time.time()) - 1)
+        self.write_plan(created_at_epoch=int(time.time()) - 60 * 60,
+                        expires_at_epoch=int(time.time()) - 1)
         with self.assertRaisesRegex(SimulationError, "retention plan has expired"):
             simulate(self.archive, self.plan, self.catalog, self.root / "expired")
         self.assertFalse((self.root / "expired").exists())
