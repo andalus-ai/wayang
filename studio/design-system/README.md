@@ -22,16 +22,22 @@ persistence, plugin activation, or execution services.
 - studio/lib/design_system/tokens.dart: spacing, radius, control sizes, motion,
   breakpoints and layout dimensions.
 - studio/lib/design_system/components.dart: reusable controls and primitives.
+- studio/lib/design_system/navigation.dart: reusable navigation destinations, desktop rail and compact navigation bar.
 - studio/lib/design_system/wds.dart: public import surface.
 - studio/lib/core/theme.dart remains the ThemeData and brand-color source during
   migration. Existing core/widgets.dart APIs remain compatible.
 
 ## Initial component inventory
 
-Implemented in the first increment: WdsSurface, WdsBadge, WdsButton,
-WdsIconButton, WdsSectionHeader, WdsSearchField and WdsEmptyState.
+Implemented: WdsSurface, WdsBadge, WdsButton, WdsIconButton,
+WdsSectionHeader, WdsSearchField, WdsEmptyState, WdsNavigationRail and
+WdsCompactNavigationBar.
 
-Planned follow-up families: application shell and navigation, command palette,
+The navigation widgets accept destination data and selection callbacks. The
+host application remains responsible for plugin discovery, filtering, routing,
+permissions and choosing compact destinations.
+
+Planned follow-up families: command palette,
 data tables, editor chrome, node/port primitives, inspectors, execution
 timelines and mode-specific templates. Planned components are not yet shipped.
 
