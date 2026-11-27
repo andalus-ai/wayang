@@ -390,3 +390,40 @@ List<String> itemPaths(Object? sample, String listPath, String itemName) {
   if (first is! Map) return [name];
   return [for (final p in samplePaths(first)) '$name.$p'];
 }
+
+/// The value a row produced in a preview [result] (a dotted target is a nested path): `(found, value)`, with found false when the field is
+/// absent (for example dropped by "Omit nulls") or [result] is not an object.
+(bool, Object?) resultAt(Object? result, String target) {
+  Object? cur = result;
+  for (final part in target.trim().split('.')) {
+    if (cur is! Map || !cur.containsKey(part)) return (false, null);
+    cur = cur[part];
+  }
+  return (true, cur);
+}
+
+/// One line for a value in a row: text quoted, small structures as JSON, large ones summarised, everything cut at [max] characters.
+String previewValue(Object? v, {int max = 80}) {
+  String clip(String s) => s.length <= max ? s : '${s.substring(0, max - 1)}…';
+  if (v == null) return 'null';
+  if (v is String) return clip(_quote(v));
+  if (v is List) {
+    final t = _compact(v);
+    return t.length <= max ? t : '[${v.length} items]';
+  }
+  if (v is Map) {
+    final t = _compact(v);
+    return t.length <= max ? t : '{${v.length} fields}';
+  }
+  return clip('$v');
+}
+
+String _quote(String s) => '"${s.replaceAll(r'\', r'\\').replaceAll('"', r'\"').replaceAll('\n', r'\n')}"';
+
+String _compact(Object? v) {
+  if (v == null) return 'null';
+  if (v is String) return _quote(v);
+  if (v is List) return '[${v.map(_compact).join(', ')}]';
+  if (v is Map) return '{${v.entries.map((e) => '${e.key}: ${_compact(e.value)}').join(', ')}}';
+  return '$v';
+}

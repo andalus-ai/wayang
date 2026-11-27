@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
@@ -23,12 +24,15 @@ const _valueKinds = [SourceKind.field, SourceKind.constant, SourceKind.template,
 /// rows are valid, and re-reads it when it is changed elsewhere (an example, the JSON tab). A spec with features the builder cannot show
 /// (nested objects, `$each`, `$if`) is left untouched and edited as JSON.
 class FieldMappingBuilder extends StatefulWidget {
-  const FieldMappingBuilder({super.key, required this.controller, required this.sample});
+  const FieldMappingBuilder({super.key, required this.controller, required this.sample, this.result});
 
   final TextEditingController controller;
 
   /// The sample variables JSON; its paths feed the source picker and "Auto-map".
   final TextEditingController sample;
+
+  /// The last preview result (null when there is none or it failed); each top-level row shows the value it produced.
+  final ValueListenable<Object?>? result;
 
   @override
   State<FieldMappingBuilder> createState() => _FieldMappingBuilderState();
@@ -46,6 +50,7 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
     super.initState();
     widget.controller.addListener(_external);
     widget.sample.addListener(_samplePathsChanged);
+    widget.result?.addListener(_samplePathsChanged);
     _load();
   }
 
@@ -53,6 +58,7 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
   void dispose() {
     widget.controller.removeListener(_external);
     widget.sample.removeListener(_samplePathsChanged);
+    widget.result?.removeListener(_samplePathsChanged);
     super.dispose();
   }
 
@@ -164,6 +170,7 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
                     key: ObjectKey(rows[i]),
                     row: rows[i],
                     scope: _sample,
+                    result: widget.result?.value,
                     onChanged: _changed,
                     onRemove: () {
                       rows.removeAt(i);
@@ -199,6 +206,7 @@ class _RowCard extends StatelessWidget {
     required this.onChanged,
     required this.onRemove,
     required this.onMove,
+    this.result,
     this.depth = 0,
     this.showTarget = true,
     this.title,
@@ -209,6 +217,9 @@ class _RowCard extends StatelessWidget {
 
   /// The variables the source picker draws from: the sample, plus the current item inside a list.
   final Object? scope;
+
+  /// The preview result, for top-level rows only.
+  final Object? result;
   final int depth;
   final bool showTarget;
   final String? title;
@@ -297,6 +308,7 @@ class _RowCard extends StatelessWidget {
             ),
             if (expr != null) Padding(padding: const EdgeInsets.only(top: 6), child: SelectableText(expr, style: _mono.copyWith(color: AppColors.textMutedDark))),
           ],
+          if (showTarget && depth == 0 && result != null) _produced(),
           if (row.kind == SourceKind.list) _listBody(),
           if (row.kind == SourceKind.conditional) _conditionalBody(),
         ],
@@ -320,6 +332,22 @@ class _RowCard extends StatelessWidget {
       case SourceKind.conditional:
         return _plain('Condition', 'body.vip or amount > 100');
     }
+  }
+
+  Widget _produced() {
+    final (found, value) = resultAt(result, row.target);
+    if (row.target.trim().isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(children: [
+        Icon(found ? Icons.subdirectory_arrow_right : Icons.remove_circle_outline, size: 14, color: AppColors.textMutedDark),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(found ? previewValue(value) : 'not in the result (omitted or the mapping is being edited)',
+              maxLines: 2, overflow: TextOverflow.ellipsis, style: _mono.copyWith(color: found ? AppColors.success : AppColors.textMutedDark)),
+        ),
+      ]),
+    );
   }
 
   Widget _listBody() {

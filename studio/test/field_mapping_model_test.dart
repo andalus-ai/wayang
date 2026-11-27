@@ -186,4 +186,25 @@ void main() {
     expect(itemPaths(sample, 'body.tags', ''), ['item']);
     expect(itemPaths(sample, 'body.missing', 'l'), isEmpty);
   });
+
+  test('a row finds its value in the preview result, by dotted path', () {
+    final result = {'tier': 'gold', 'customer': {'ok': true, 'n': null}};
+    expect(resultAt(result, 'tier'), (true, 'gold'));
+    expect(resultAt(result, 'customer.ok'), (true, true));
+    expect(resultAt(result, 'customer.n'), (true, null));
+    expect(resultAt(result, 'customer.x'), (false, null));
+    expect(resultAt(result, 'tier.x'), (false, null));
+    expect(resultAt('text', 'a'), (false, null));
+  });
+
+  test('values are previewed on one line, long ones summarised', () {
+    expect(previewValue(null), 'null');
+    expect(previewValue('Ada "L"'), r'"Ada \"L\""');
+    expect(previewValue(3), '3');
+    expect(previewValue([1, 'a']), '[1, "a"]');
+    expect(previewValue({'a': 1}), '{a: 1}');
+    expect(previewValue(List.generate(50, (i) => i)), '[50 items]');
+    expect(previewValue({for (var i = 0; i < 30; i++) 'k$i': i}), '{30 fields}');
+    expect(previewValue('x' * 200, max: 10), '"xxxxxxxx…');
+  });
 }
