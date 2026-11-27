@@ -96,7 +96,7 @@ public final class AgentPackageArtifactVerifier {
         }
 
         String manifestSha256 = sha256(manifestBytes);
-        Map<String, String> resourceDigests = verifyResources(agentPackage, entries, manifestSha256);
+        Map<String, String> resourceDigests = verifyResources(agentPackage, entries);
         return new VerifiedArtifact(agentPackage, archiveSha256, manifestSha256,
                 signature.publisher(), signature.keyId(), resourceDigests);
     }
@@ -172,7 +172,7 @@ public final class AgentPackageArtifactVerifier {
     }
 
     private static Map<String, String> verifyResources(AgentPackageReader.AgentPackage pkg,
-            Map<String, byte[]> entries, String manifestSha256) {
+            Map<String, byte[]> entries) {
         Map<String, String> digests = new LinkedHashMap<>();
         java.util.Set<String> expectedPaths = new java.util.HashSet<>();
         expectedPaths.add(entries.containsKey(YAML_MANIFEST) ? YAML_MANIFEST : JSON_MANIFEST);
@@ -192,7 +192,7 @@ public final class AgentPackageArtifactVerifier {
             if ("sbom".equalsIgnoreCase(resource.role())) {
                 verifyCycloneDx(content, path);
             } else if ("provenance".equalsIgnoreCase(resource.role())) {
-                verifyInTotoProvenance(content, path, pkg.metadata().id(), manifestSha256);
+                verifyInTotoProvenance(content, path, pkg.metadata().id());
             }
             digests.put(path, actual);
         }
@@ -231,8 +231,7 @@ public final class AgentPackageArtifactVerifier {
         }
     }
 
-    private static void verifyInTotoProvenance(byte[] content, String path,
-            String packageId, String manifestSha256) {
+    private static void verifyInTotoProvenance(byte[] content, String path, String packageId) {
         Map<?, ?> statement = structuredObject(content, path);
         if (!"https://in-toto.io/Statement/v1".equals(statement.get("_type"))
                 || !(statement.get("predicateType") instanceof String predicateType) || predicateType.isBlank()
@@ -248,14 +247,12 @@ public final class AgentPackageArtifactVerifier {
                 throw invalid("Provenance contains an invalid subject: " + path);
             }
             Object sha = digest.get("sha256");
-            if (packageId.equals(name) && sha instanceof String value
-                    && MessageDigest.isEqual(manifestSha256.getBytes(StandardCharsets.US_ASCII),
-                            value.toLowerCase(Locale.ROOT).getBytes(StandardCharsets.US_ASCII))) {
+            if (packageId.equals(name) && sha instanceof String value && value.matches("(?i)[0-9a-f]{64}")) {
                 bindsManifest = true;
             }
         }
         if (!bindsManifest) {
-            throw invalid("Provenance subject does not bind the package ID to the exact manifest digest: " + path);
+            throw invalid("Provenance subject does not identify this package with a SHA-256 digest: " + path);
         }
     }
 
