@@ -32,7 +32,7 @@ List<WdsCommandItem> filterWdsCommands(
   List<WdsCommandItem> items,
   String query,
 ) {
-  final tokens = query.toLowerCase().trim().split(RegExp(r'\\s+'))
+  final tokens = query.toLowerCase().trim().split(RegExp(r'\s+'))
       .where((token) => token.isNotEmpty).toList();
   if (tokens.isEmpty) return items;
   return items.where((item) {
