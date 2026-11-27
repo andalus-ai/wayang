@@ -190,8 +190,16 @@ public final class AgentPackageArtifactVerifier {
                 throw invalid("Agent Package resource digest mismatch: " + path);
             }
             if ("sbom".equalsIgnoreCase(resource.role())) {
+                if (!"application/vnd.cyclonedx+json".equalsIgnoreCase(resource.mediaType())
+                        && !"application/json".equalsIgnoreCase(resource.mediaType())) {
+                    throw invalid("CycloneDX SBOM must use a JSON media type: " + path);
+                }
                 verifyCycloneDx(content, path);
             } else if ("provenance".equalsIgnoreCase(resource.role())) {
+                if (!"application/vnd.in-toto+json".equalsIgnoreCase(resource.mediaType())
+                        && !"application/json".equalsIgnoreCase(resource.mediaType())) {
+                    throw invalid("In-toto provenance must use a JSON media type: " + path);
+                }
                 verifyInTotoProvenance(content, path, pkg.metadata().id());
             }
             digests.put(path, actual);
