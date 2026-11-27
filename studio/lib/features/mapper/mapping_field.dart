@@ -9,6 +9,7 @@ import '../../data/api_client.dart';
 import '../../data/field_mapping_model.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
+import '../../providers/bpmn_provider.dart';
 import '../../providers/node_test_provider.dart';
 import '../../providers/openapi_operations_provider.dart';
 import '../../data/component_inputs.dart';
@@ -84,6 +85,22 @@ class MappingField extends ConsumerWidget {
     ];
   }
 
+  /// [current] sample text with [variables] (a run's) merged in: the run's values win, except a non-empty `result` already in the sample
+  /// (an output mapping's test output) is kept. An unreadable [current] is replaced.
+  static String mergeVariables(String current, Map<String, dynamic> variables) {
+    Map<String, dynamic> base;
+    try {
+      final v = jsonDecode(current.trim().isEmpty ? '{}' : current);
+      base = v is Map ? Map<String, dynamic>.from(v) : <String, dynamic>{};
+    } on FormatException {
+      base = <String, dynamic>{};
+    }
+    final keep = base['result'];
+    final out = <String, dynamic>{...variables};
+    if (keep != null && !(keep is Map && keep.isEmpty)) out['result'] = keep;
+    return const JsonEncoder.withIndent('  ').convert(out);
+  }
+
   Future<void> _edit(BuildContext context, WidgetRef ref) async {
     final last = output ? ref.read(lastNodeTestOutputProvider(nodeId)) : null;
     final result = await showDialog<Map<String, dynamic>?>(
@@ -95,6 +112,7 @@ class MappingField extends ConsumerWidget {
         sample: sampleText(output, last),
         sampleFromTest: last != null,
         suggestions: suggestions(ref),
+        processId: ref.read(bpmnControllerProvider).diagram.id,
       ),
     );
     if (result == null) return; // cancelled
@@ -113,12 +131,13 @@ class MappingField extends ConsumerWidget {
 }
 
 class _MappingDialog extends ConsumerStatefulWidget {
-  const _MappingDialog({required this.initial, required this.output, required this.sample, required this.sampleFromTest, required this.suggestions});
+  const _MappingDialog({required this.initial, required this.output, required this.sample, required this.sampleFromTest, required this.suggestions, required this.processId});
   final Map<String, dynamic> initial;
   final bool output;
   final String sample;
   final bool sampleFromTest;
   final List<MappingSuggestion> suggestions;
+  final String processId;
 
   @override
   ConsumerState<_MappingDialog> createState() => _MappingDialogState();
@@ -131,6 +150,8 @@ class _MappingDialogState extends ConsumerState<_MappingDialog> {
   bool _builder = true;
   bool _omitNull = false;
   List<String> _problems = const [];
+  bool _loadingRun = false;
+  String? _runNote;
   String? _error;
   String? _preview;
   Timer? _debounce;
@@ -219,6 +240,43 @@ class _MappingDialogState extends ConsumerState<_MappingDialog> {
     Navigator.pop(context);
   }
 
+  Future<void> _loadRunVariables() async {
+    setState(() {
+      _loadingRun = true;
+      _runNote = null;
+    });
+    try {
+      final runs = await ref.read(repositoryProvider).listRuns(processId: widget.processId, limit: 1);
+      if (!mounted) return;
+      if (runs.isEmpty) {
+        setState(() {
+          _loadingRun = false;
+          _runNote = 'No run of this process yet.';
+        });
+        return;
+      }
+      final text = MappingField.mergeVariables(_sample.text, runs.first.variables);
+      if (text.length > 512 * 1024) {
+        setState(() {
+          _loadingRun = false;
+          _runNote = 'The last run\'s variables are too large to use as a sample.';
+        });
+        return;
+      }
+      _sample.text = text;
+      setState(() {
+        _loadingRun = false;
+        _runNote = 'Loaded the final variables of the latest run (${runs.first.status.name}); some may be set after this node.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingRun = false;
+        _runNote = errText(e);
+      });
+    }
+  }
+
   Map<String, dynamic>? _specOrNull() {
     try {
       final v = jsonDecode(_spec.text);
@@ -270,6 +328,15 @@ class _MappingDialogState extends ConsumerState<_MappingDialog> {
           final right = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Text(widget.output ? 'Sample (process variables plus "result")' : 'Sample (process variables)', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
             if (widget.sampleFromTest) const Text('"result" is the output of this node\'s last test.', style: TextStyle(fontSize: 11, color: AppColors.textMutedDark)),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _loadingRun ? null : _loadRunVariables,
+                icon: _loadingRun ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.history_rounded, size: 16),
+                label: const Text('Use variables of the latest run', style: TextStyle(fontSize: 12)),
+              ),
+            ),
+            if (_runNote != null) Text(_runNote!, style: const TextStyle(fontSize: 11, color: AppColors.textMutedDark)),
             const SizedBox(height: 4),
             Expanded(
               child: TextField(controller: _sample, expands: true, maxLines: null, minLines: null, textAlignVertical: TextAlignVertical.top, style: _mono, decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true)),
