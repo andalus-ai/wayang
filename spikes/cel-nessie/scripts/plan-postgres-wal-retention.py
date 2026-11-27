@@ -12,6 +12,7 @@ import json
 import re
 import sys
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -37,9 +38,15 @@ class RetentionPlan:
     missing_required_files: tuple[str, ...]
     catalog_snapshot_sha256: str
     archive_snapshot_sha256: str
+    plan_id: str
+    created_at_epoch: int
+    expires_at_epoch: int
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
+            "plan_id": self.plan_id,
+            "created_at_epoch": self.created_at_epoch,
+            "expires_at_epoch": self.expires_at_epoch,
             "retained_backup_ids": list(self.retained_backup_ids),
             "archive_file_count": len(self.archive_files),
             "required_wal_files": list(self.required_wal_files),
@@ -51,6 +58,9 @@ class RetentionPlan:
             "archive_snapshot_sha256": self.archive_snapshot_sha256,
             "deletion_performed": False,
         }
+        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        payload["plan_sha256"] = hashlib.sha256(canonical).hexdigest()
+        return payload
 
 
 def parse_lsn(value: str) -> int:
@@ -247,7 +257,11 @@ def archive_inventory_fingerprint(files: dict[str, Path]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def build_plan(archive_dir: Path, catalog_path: Path, cutoff_epoch: float) -> RetentionPlan:
+def build_plan(archive_dir: Path, catalog_path: Path, cutoff_epoch: float,
+               approval_ttl_hours: int = 24) -> RetentionPlan:
+    if not isinstance(approval_ttl_hours, int) or isinstance(approval_ttl_hours, bool) or not 1 <= approval_ttl_hours <= 168:
+        raise CatalogError("approval TTL must be between 1 and 168 hours")
+    created_at = int(time.time())
     retained, segment_size, snapshot_sha256 = _load_catalog(catalog_path)
     if not archive_dir.is_dir():
         raise CatalogError("WAL archive directory does not exist")
@@ -338,6 +352,9 @@ def build_plan(archive_dir: Path, catalog_path: Path, cutoff_epoch: float) -> Re
         missing_required_files=tuple(missing),
         catalog_snapshot_sha256=snapshot_sha256,
         archive_snapshot_sha256=archive_inventory_fingerprint(files),
+        plan_id=str(uuid.uuid4()),
+        created_at_epoch=created_at,
+        expires_at_epoch=created_at + approval_ttl_hours * 60 * 60,
     )
 
 
@@ -353,6 +370,8 @@ def main() -> int:
     parser.add_argument("--archive-dir", required=True, type=Path)
     parser.add_argument("--catalog", required=True, type=Path)
     parser.add_argument("--older-than-days", required=True, type=float)
+    parser.add_argument("--approval-ttl-hours", type=int, default=24,
+                        help="approval-plan validity in hours (1-168; default: 24)")
     parser.add_argument(
         "--expected-snapshot-sha256",
         help="refuse if the current catalog/manifests differ from this planned snapshot",
@@ -362,7 +381,7 @@ def main() -> int:
         parser.error("--older-than-days must not be negative")
     cutoff = time.time() - args.older_than_days * 24 * 60 * 60
     try:
-        plan = build_plan(args.archive_dir, args.catalog, cutoff)
+        plan = build_plan(args.archive_dir, args.catalog, cutoff, args.approval_ttl_hours)
         if args.expected_snapshot_sha256:
             require_snapshot_match(plan, args.expected_snapshot_sha256)
     except CatalogError as exc:
