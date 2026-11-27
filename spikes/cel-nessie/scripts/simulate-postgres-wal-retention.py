@@ -15,6 +15,8 @@ import re
 import shutil
 import stat
 import sys
+import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -70,6 +72,30 @@ def load_plan(path: Path) -> dict[str, Any]:
         raise SimulationError(f"cannot read retention plan: {exc}") from exc
     if not isinstance(plan, dict) or plan.get("deletion_performed") is not False:
         raise SimulationError("input must be an explicit dry-run retention plan")
+    plan_id = plan.get("plan_id")
+    try:
+        if not isinstance(plan_id, str) or str(uuid.UUID(plan_id)) != plan_id:
+            raise ValueError("invalid UUID")
+    except (ValueError, AttributeError) as exc:
+        raise SimulationError("plan must contain a valid plan_id UUID") from exc
+    created_at = plan.get("created_at_epoch")
+    expires_at = plan.get("expires_at_epoch")
+    if (not isinstance(created_at, int) or isinstance(created_at, bool)
+            or not isinstance(expires_at, int) or isinstance(expires_at, bool)
+            or created_at <= 0 or expires_at <= created_at
+            or expires_at - created_at > 168 * 60 * 60):
+        raise SimulationError("plan must contain valid creation and expiry timestamps")
+    if created_at > int(time.time()) + 300:
+        raise SimulationError("plan creation timestamp is in the future")
+    if int(time.time()) >= expires_at:
+        raise SimulationError("retention plan has expired; re-plan and re-approve")
+    supplied_digest = plan.get("plan_sha256")
+    if not isinstance(supplied_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", supplied_digest):
+        raise SimulationError("plan must contain a valid plan_sha256 integrity digest")
+    canonical_plan = {key: value for key, value in plan.items() if key != "plan_sha256"}
+    canonical = json.dumps(canonical_plan, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    if hashlib.sha256(canonical).hexdigest() != supplied_digest:
+        raise SimulationError("retention plan integrity check failed; re-plan and re-approve")
     for key in ("eligible_wal_files", "required_wal_files"):
         values = plan.get(key)
         if not isinstance(values, list) or any(
