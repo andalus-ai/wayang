@@ -8,6 +8,7 @@ import '../../core/theme.dart';
 import '../../data/api_client.dart';
 import '../../data/field_mapping_model.dart';
 import '../../providers/app_providers.dart';
+import '../../providers/node_test_provider.dart';
 import '../common/schema_form.dart';
 import 'field_mapping_builder.dart';
 
@@ -15,14 +16,15 @@ const _mono = TextStyle(fontFamily: 'monospace', fontSize: 12);
 
 /// The editor for a service node's `inputMapping` / `outputMapping`: a one-line summary and an "Edit mapping" button that opens the field mapping
 /// builder with a live preview. [output] mappings are tried against `{variables..., result}`.
-FieldBuilder mappingFieldBuilder({required bool output}) =>
-    (context, value, onChanged) => MappingField(value: value, output: output, onChanged: onChanged);
+FieldBuilder mappingFieldBuilder({required bool output, required String nodeId}) =>
+    (context, value, onChanged) => MappingField(value: value, output: output, nodeId: nodeId, onChanged: onChanged);
 
-class MappingField extends StatelessWidget {
-  const MappingField({super.key, required this.value, required this.output, required this.onChanged});
+class MappingField extends ConsumerWidget {
+  const MappingField({super.key, required this.value, required this.output, required this.nodeId, required this.onChanged});
 
   final Object? value;
   final bool output;
+  final String nodeId;
   final ValueChanged<Object?> onChanged;
 
   /// "3 fields", "Custom mapping (JSON)", or "Not set".
@@ -33,30 +35,45 @@ class MappingField extends StatelessWidget {
     return rows.length == 1 ? '1 field' : '${rows.length} fields';
   }
 
-  Future<void> _edit(BuildContext context) async {
+  /// The starting sample: for an output mapping, `{"result": <the last test output>}` when this node was tested, otherwise an empty one.
+  static String sampleText(bool output, Object? lastTestOutput) {
+    const enc = JsonEncoder.withIndent('  ');
+    if (!output) return '{}';
+    return enc.convert({'result': lastTestOutput ?? <String, dynamic>{}});
+  }
+
+  Future<void> _edit(BuildContext context, WidgetRef ref) async {
+    final last = output ? ref.read(lastNodeTestOutputProvider(nodeId)) : null;
     final result = await showDialog<Map<String, dynamic>?>(
       context: context,
-      builder: (_) => _MappingDialog(initial: value is Map ? Map<String, dynamic>.from(value as Map) : <String, dynamic>{}, output: output),
+      builder: (_) => _MappingDialog(
+        initial: value is Map ? Map<String, dynamic>.from(value as Map) : <String, dynamic>{},
+        output: output,
+        sample: sampleText(output, last),
+        sampleFromTest: last != null,
+      ),
     );
     if (result == null) return; // cancelled
     onChanged(result.isEmpty ? null : result);
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final set = !(value == null || (value is Map && (value as Map).isEmpty));
     return Row(children: [
       Expanded(child: Text(summary(value), style: TextStyle(fontSize: 12, color: set ? null : AppColors.textMutedDark))),
-      OutlinedButton.icon(onPressed: () => _edit(context), icon: const Icon(Icons.swap_horiz_rounded, size: 16), label: Text(set ? 'Edit mapping' : 'Add mapping')),
+      OutlinedButton.icon(onPressed: () => _edit(context, ref), icon: const Icon(Icons.swap_horiz_rounded, size: 16), label: Text(set ? 'Edit mapping' : 'Add mapping')),
       if (set) IconButton(tooltip: 'Remove the mapping', visualDensity: VisualDensity.compact, icon: const Icon(Icons.close, size: 16), onPressed: () => onChanged(null)),
     ]);
   }
 }
 
 class _MappingDialog extends ConsumerStatefulWidget {
-  const _MappingDialog({required this.initial, required this.output});
+  const _MappingDialog({required this.initial, required this.output, required this.sample, required this.sampleFromTest});
   final Map<String, dynamic> initial;
   final bool output;
+  final String sample;
+  final bool sampleFromTest;
 
   @override
   ConsumerState<_MappingDialog> createState() => _MappingDialogState();
@@ -64,7 +81,7 @@ class _MappingDialog extends ConsumerStatefulWidget {
 
 class _MappingDialogState extends ConsumerState<_MappingDialog> {
   late final _spec = TextEditingController(text: const JsonEncoder.withIndent('  ').convert(widget.initial));
-  late final _sample = TextEditingController(text: widget.output ? '{\n  "result": {}\n}' : '{}');
+  late final _sample = TextEditingController(text: widget.sample);
   final _result = ValueNotifier<Object?>(null);
   bool _builder = true;
   bool _omitNull = false;
@@ -183,6 +200,7 @@ class _MappingDialogState extends ConsumerState<_MappingDialog> {
           ]);
           final right = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Text(widget.output ? 'Sample (process variables plus "result")' : 'Sample (process variables)', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
+            if (widget.sampleFromTest) const Text('"result" is the output of this node\'s last test.', style: TextStyle(fontSize: 11, color: AppColors.textMutedDark)),
             const SizedBox(height: 4),
             Expanded(
               child: TextField(controller: _sample, expands: true, maxLines: null, minLines: null, textAlignVertical: TextAlignVertical.top, style: _mono, decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true)),
