@@ -20,12 +20,20 @@ String _kindLabel(SourceKind k) => switch (k) {
 
 const _valueKinds = [SourceKind.field, SourceKind.constant, SourceKind.template, SourceKind.expression];
 
+/// A ready-made set of rows a host can offer ("fill from the connector's inputs"): [build] gets the sample and the rows already there.
+class MappingSuggestion {
+  const MappingSuggestion({required this.label, required this.tooltip, required this.build});
+  final String label;
+  final String tooltip;
+  final List<MappingRow> Function(Object? sample, List<MappingRow> existing) build;
+}
+
 /// Visual field mapping: one row per output field, each fed by a source field (picked from the sample input), a fixed value, a text template
 /// or an expression, with a chain of transformations. The JSON in [controller] stays the source of truth: the builder writes it whenever the
 /// rows are valid, and re-reads it when it is changed elsewhere (an example, the JSON tab). A spec with features the builder cannot show
 /// (nested objects, `$each`, `$if`) is left untouched and edited as JSON.
 class FieldMappingBuilder extends StatefulWidget {
-  const FieldMappingBuilder({super.key, required this.controller, required this.sample, this.result, this.onProblems});
+  const FieldMappingBuilder({super.key, required this.controller, required this.sample, this.result, this.onProblems, this.suggestions = const []});
 
   final TextEditingController controller;
 
@@ -37,6 +45,9 @@ class FieldMappingBuilder extends StatefulWidget {
 
   /// Told the current problems after every change (empty when the rows are fine), so a host can refuse to save a spec that is out of date.
   final ValueChanged<List<String>>? onProblems;
+
+  /// Extra "fill from ..." buttons.
+  final List<MappingSuggestion> suggestions;
 
   @override
   State<FieldMappingBuilder> createState() => _FieldMappingBuilderState();
@@ -179,8 +190,14 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
       ),
     );
     // c is not disposed here: the dialog is still animating out and its field may still read it; it has no listeners to leak.
+    if (created == null || !mounted) return;
+    _addCreated(created);
+  }
+
+  /// Adds [created] rows whose target is not there yet (blank placeholder rows make room), within the row limit.
+  void _addCreated(List<MappingRow> created) {
     final rows = _rows;
-    if (created == null || rows == null || !mounted) return;
+    if (rows == null) return;
     final have = {for (final r in rows) r.target.trim()};
     rows.removeWhere((r) => r.target.trim().isEmpty && r.value.trim().isEmpty);
     rows.addAll(created.where((r) => !have.contains(r.target)).take(kMaxMappingRows - rows.length));
@@ -242,6 +259,15 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
                 label: const Text('Add field'),
               ),
             ),
+            for (final sg in widget.suggestions)
+              Tooltip(
+                message: sg.tooltip,
+                child: OutlinedButton.icon(
+                  onPressed: () => _addCreated(sg.build(_sample, _rows!)),
+                  icon: const Icon(Icons.input_rounded, size: 16),
+                  label: Text(sg.label),
+                ),
+              ),
             OutlinedButton.icon(
               onPressed: _fromSchema,
               icon: const Icon(Icons.schema_outlined, size: 16),

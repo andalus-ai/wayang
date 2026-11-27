@@ -6,12 +6,14 @@ import '../../core/widgets.dart';
 import '../../data/api_client.dart';
 import '../../data/openapi_model.dart';
 import '../../providers/app_providers.dart';
+import '../../providers/openapi_operations_provider.dart';
 
 /// Under an `openapi` service node: read the operations from the node's spec (a link or the text) and pick one. Only the spec and
 /// the filters are sent to the server; headers and credentials never are. Picking a mutating operation also allows its method.
 class OpenApiSection extends ConsumerStatefulWidget {
-  const OpenApiSection({super.key, required this.props, required this.onChanged});
+  const OpenApiSection({super.key, required this.nodeId, required this.props, required this.onChanged});
 
+  final String nodeId;
   final Map<String, dynamic> props;
   final ValueChanged<Map<String, dynamic>> onChanged;
 
@@ -39,9 +41,11 @@ class _OpenApiSectionState extends ConsumerState<OpenApiSection> {
     try {
       final out = await ref.read(repositoryProvider).describeConnector(request);
       if (!mounted) return;
+      final ops = parseOpenApiOperations(out);
+      ref.read(openApiOperationsProvider(widget.nodeId).notifier).state = ops;
       setState(() {
         _busy = false;
-        _ops = parseOpenApiOperations(out);
+        _ops = ops;
         _title = out['title'] as String?;
         _warnings = [for (final w in (out['warnings'] as List? ?? const [])) '$w'];
       });

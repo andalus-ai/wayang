@@ -385,15 +385,15 @@ class _NodeInspectorState extends ConsumerState<_NodeInspector> {
             overrides: {
               if (node.type == BpmnElementType.businessRuleTask) 'model': _definitionPicker(DefinitionKind.decision),
               if (node.type == BpmnElementType.agentTask) 'agent': _definitionPicker(DefinitionKind.agent),
-              if (node.type == BpmnElementType.serviceTask) 'inputMapping': mappingFieldBuilder(output: false, nodeId: node.id),
-              if (node.type == BpmnElementType.serviceTask) 'outputMapping': mappingFieldBuilder(output: true, nodeId: node.id),
+              if (node.type == BpmnElementType.serviceTask) 'inputMapping': mappingFieldBuilder(output: false, nodeId: node.id, props: node.properties),
+              if (node.type == BpmnElementType.serviceTask) 'outputMapping': mappingFieldBuilder(output: true, nodeId: node.id, props: node.properties),
             },
             onChanged: (props) => controller.updateNodeProperties(node.id, props),
           ),
         if (node.type == BpmnElementType.serviceTask && node.properties['connector'] == 'soap')
           SoapSection(props: node.properties, onChanged: (props) => controller.updateNodeProperties(node.id, props)),
         if (node.type == BpmnElementType.serviceTask && node.properties['connector'] == 'openapi')
-          OpenApiSection(props: node.properties, onChanged: (props) => controller.updateNodeProperties(node.id, props)),
+          OpenApiSection(nodeId: node.id, props: node.properties, onChanged: (props) => controller.updateNodeProperties(node.id, props)),
         if (node.type == BpmnElementType.serviceTask) _ExpectedInputsSection(key: ValueKey('inputs-${node.id}'), props: node.properties),
         if (node.type == BpmnElementType.serviceTask) NodeTestSection(key: ValueKey('test-${node.id}'), nodeId: node.id, props: node.properties),
       ],

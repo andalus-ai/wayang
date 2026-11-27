@@ -317,4 +317,27 @@ void main() {
     expect(copyTarget('a', [MappingRow(target: 'a'), MappingRow(target: 'a_copy'), MappingRow(target: 'a_copy2')]), 'a_copy3');
     expect(copyTarget('', []), 'field_copy');
   });
+
+  test('declared inputs become rows: required marked, hints, sample matches, existing skipped', () {
+    final rows = rowsFromInputs(
+      [
+        (name: 'url', type: 'string', mandatory: true, description: 'Target'),
+        (name: 'qty', type: 'number', mandatory: false, description: ''),
+        (name: 'id', type: 'string', mandatory: false, description: ''),
+        (name: 'taken', type: 'any', mandatory: false, description: ''),
+      ],
+      sample: {
+        'order': {'qty': 2, 'id': 9},
+        'other': {'id': 1}
+      },
+      existing: [MappingRow(target: 'taken', value: 'x')],
+    );
+    expect(rows.map((r) => r.target), ['url', 'qty', 'id']);
+    expect(rows[0].required, isTrue);
+    expect(rows[0].hint, 'string, required - Target');
+    expect(rows[1].hint, 'number');
+    expect(rows[1].value, 'order.qty');
+    expect(rows[2].value, isEmpty, reason: 'id matches two paths');
+    expect(unmappedRequired(rows), ['url']);
+  });
 }
