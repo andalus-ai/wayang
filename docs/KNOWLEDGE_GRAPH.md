@@ -1,6 +1,6 @@
 # Knowledge graph and hybrid retrieval
 
-**Status: graph foundation, extraction SPIs, schema validation, conservative alias resolution, evidence lifecycle, PostgreSQL persistence, graph-aware retrieval and the first query-time entity-linking path are implemented.** Workflow nodes and production-grade model-backed query understanding remain planned. This document distinguishes implemented contracts from the intended architecture. A type or SPI is not evidence that a complete graph pipeline exists.
+**Status: graph foundation, extraction SPIs, schema validation, conservative alias resolution, evidence lifecycle, PostgreSQL persistence, graph-aware retrieval, query-time entity linking, bounded graph query/retraction workflow nodes and an opt-in graph ingestion workflow component are implemented. Production-grade model-backed query understanding and schema/provider management remain planned. This document distinguishes implemented contracts from the intended architecture. A type or SPI is not evidence that a complete graph pipeline exists.
 
 ## Goals and non-goals
 
@@ -76,7 +76,13 @@ Evidence identifies a source document, its version, an optional chunk and option
 
 A source deletion or reprocessing must retract only the evidence contributed by that source version. Do not delete a canonical entity or relationship while other valid evidence still supports it. Manually curated facts need an explicit ownership/lifecycle marker before automated cleanup is allowed.
 
-## Extraction and entity resolution pipeline (planned)
+## Extraction and entity resolution pipeline
+
+**Workflow integration status: implemented as an opt-in `graph-ingest` component.** A deployment may register it by constructing `KnowledgeExtension` with a `GraphStore`, a tenant/collection-scoped `GraphEntityLookup`, an `EntityExtractor`, a `RelationshipExtractor` and an explicit `KnowledgeSchema`. The default extension deliberately does not advertise `graph-ingest`: it has no invented ontology or extraction provider.
+
+The component accepts `sourceId`, exact `sourceVersion` and normalized `text` inputs. It applies bounded paragraph chunking (20,000 characters per chunk, at most 100 chunks and 200,000 source characters), runs the configured extraction SPIs, validates candidates against the supplied schema, resolves exact canonical names/aliases within the tenant and collection, then delegates evidence writes to `KnowledgeGraphIngestionService`. Missing source inputs are advisory and return a no-op result. Ambiguous aliases are not merged; malformed candidates are reported as issues; source-version evidence remains idempotent and retractable.
+
+This is a provider-injection seam, not a marketplace or model-provider registry. The current component does not fetch source files itself, does not infer a schema, does not invoke a model SDK, and does not claim to provide human review for ambiguous candidates. A workflow should connect an upstream extraction/text-normalization step and preserve the original source identity/version.
 
 1. Consume a normalized document and stable source version from the existing ingestion path.
 2. Produce entity and relationship candidates through replaceable extractors.
@@ -159,7 +165,7 @@ The resolver never fuzzy-matches, writes to the graph, creates canonical IDs or 
 
 For source replacement, the caller should ingest and verify the new source version first, then retract the old version. The current port does not promise a cross-operation transaction, so persistent adapters must define transaction behavior before production use. The in-memory adapter is process-local and does not provide durability or crash atomicity.
 
-The service does not invoke extractors or resolvers itself. The caller supplies validated candidates and resolution decisions, making the boundary explicit and allowing human review for ambiguous candidates. The returned result reports upsert counts, unresolved mentions, skipped relationships and structured issues.
+The service does not invoke extractors or resolvers itself. The workflow connector composes the injected extractor/resolver/validator with the service; the service itself still receives validated candidates and explicit resolution decisions. The returned result reports upsert counts, unresolved mentions, skipped relationships and structured issues.
 
 ## Graph storage and query
 
