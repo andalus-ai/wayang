@@ -17,7 +17,7 @@ A graph database is not a prerequisite for basic RAG. The public contract is ven
 
 ## Current repository baseline
 
-The current implementation in `wayang-rag` provides bounded document chunking and BM25/vector/hybrid retrieval. `wayang-knowledge` exposes ingestion and search connectors, tenant-scoped named knowledge bases, source persistence and a vector cache. It does not currently contain an entity graph, extraction pipeline, graph persistence adapter or graph-aware retriever.
+The current implementation in `wayang-rag` provides bounded document chunking, BM25/vector/hybrid retrieval, graph contracts, extraction SPIs, schema validation, conservative entity resolution and graph-aware retrieval. `wayang-knowledge` exposes RAG/file connectors plus bounded graph query and evidence-retraction workflow components; `graph-ingest` is available only when a deployment injects its extraction providers, tenant-scoped lookup and explicit schema. PostgreSQL graph persistence is supplied by the JDBC adapter.
 
 This first graph slice adds the following JDK-only contracts to `wayang-rag`:
 
