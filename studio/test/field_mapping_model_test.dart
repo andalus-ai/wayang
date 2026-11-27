@@ -59,10 +59,10 @@ void main() {
   test('problems are reported instead of building a wrong spec', () {
     expect(rowProblems([MappingRow(target: 'a', value: 'x'), MappingRow(target: 'a', value: 'y')]).single, contains('mapped twice'));
     expect(rowProblems([MappingRow(value: 'x')]).single, contains('no target'));
-    expect(rowProblems([MappingRow(target: 'a')]).single, contains('no source'));
     expect(rowProblems([MappingRow(target: 'a', value: 'x'), MappingRow(target: 'a.b', value: 'y')]).single, contains('parent'));
     expect(rowProblems([MappingRow(target: 'a..b', value: 'x')]).single, contains('not a valid field path'));
-    expect(specFromRows([MappingRow(target: 'a')]), isNull);
+    expect(rowProblems([MappingRow(target: 'a')]), isEmpty, reason: 'not mapped yet is not an error');
+    expect(specFromRows([MappingRow(target: 'a'), MappingRow(target: 'b', value: 'x')]), {'b': 'x'}, reason: 'unmapped rows are left out');
     expect(rowProblems([MappingRow()]), isEmpty);
   });
 
@@ -163,8 +163,6 @@ void main() {
     final p = rowProblems([l]);
     expect(p.any((m) => m.contains('item name')), isTrue);
     expect(p.any((m) => m.contains('Row 1 ("lines") > Row 2') && m.contains('mapped twice')), isTrue);
-    expect(rowProblems([MappingRow(target: 'l', kind: SourceKind.list)]).single, contains('no list'));
-    expect(rowProblems([MappingRow(target: 'c', kind: SourceKind.conditional)]).single, contains('no condition'));
     final c = MappingRow(target: 'c', kind: SourceKind.conditional, value: 'x');
     c.thenRow = MappingRow(target: '-', value: 'y', transforms: [TransformStep('round', ['two'])]);
     expect(rowProblems([c]).single, contains('then'));
@@ -206,5 +204,96 @@ void main() {
     expect(previewValue(List.generate(50, (i) => i)), '[50 items]');
     expect(previewValue({for (var i = 0; i < 30; i++) 'k$i': i}), '{30 fields}');
     expect(previewValue('x' * 200, max: 10), '"xxxxxxxx…');
+  });
+
+  test('rows come from a JSON Schema: flattened objects, list rows, required fields, refs', () {
+    final schema = {
+      'type': 'object',
+      'required': ['id'],
+      r'$defs': {
+        'line': {
+          'type': 'object',
+          'properties': {'sku': {'type': 'string'}, 'qty': {'type': 'integer'}}
+        }
+      },
+      'properties': {
+        'id': {'type': 'string', 'description': 'Order id'},
+        'customer': {
+          'type': 'object',
+          'properties': {'name': {'type': 'string'}, 'email': {'type': 'string', 'format': 'email'}}
+        },
+        'lines': {'type': 'array', 'items': {r'$ref': '#/\$defs/line'}},
+        'tags': {'type': 'array', 'items': {'type': 'string'}},
+      }
+    };
+    final rows = rowsFromSchema(schema)!;
+    expect(rows.map((r) => r.target), ['id', 'customer.name', 'customer.email', 'lines', 'tags']);
+    expect(rows[0].required, isTrue);
+    expect(rows[0].hint, 'string, required - Order id');
+    expect(rows[2].hint, 'string, email');
+    expect(rows[3].kind, SourceKind.list);
+    expect(rows[3].children.map((c) => c.target), ['sku', 'qty']);
+    expect(rows[4].kind, SourceKind.field, reason: 'an array of scalars is one value');
+    expect(unmappedRequired(rows), ['id']);
+    expect(specFromRows(rows), isEmpty, reason: 'nothing is connected yet');
+  });
+
+  test('a sample connects fields whose name matches exactly one path, also inside lists', () {
+    final schema = {
+      'properties': {
+        'id': {'type': 'string'},
+        'name': {'type': 'string'},
+        'lines': {
+          'type': 'array',
+          'items': {
+            'properties': {'sku': {'type': 'string'}}
+          }
+        },
+      }
+    };
+    final sample = {
+      'order': {'id': 7, 'name': 'a'},
+      'customer': {'name': 'Ada'},
+      'lines': [
+        {'sku': 's1'}
+      ]
+    };
+    final rows = rowsFromSchema(schema, sample: sample)!;
+    expect(rows[0].value, 'order.id');
+    expect(rows[1].value, isEmpty, reason: 'name matches two paths');
+    expect(rows[2].value, 'lines');
+    expect(rows[2].children.single.value, 'item.sku');
+    expect(specFromRows(rows), {
+      'id': 'order.id',
+      'lines': {r'$each': 'lines', r'$map': {'sku': 'item.sku'}},
+    });
+  });
+
+  test('schemas without properties, or with broken refs, give nothing', () {
+    expect(rowsFromSchema({'type': 'string'}), isNull);
+    expect(rowsFromSchema('x'), isNull);
+    expect(rowsFromSchema({'properties': {'a': {r'$ref': '#/\$defs/missing'}}}), isNull);
+  });
+
+  test('the first output item of a list row gives its fields something to show', () {
+    final result = {
+      'lines': [
+        {'sku': 'a', 'qty': 1},
+        {'sku': 'b', 'qty': 2}
+      ],
+      'order': {
+        'items': [
+          {'n': 1}
+        ]
+      },
+      'empty': [],
+      'scalars': [1, 2],
+    };
+    expect(firstItemResult(result, 'lines'), {'sku': 'a', 'qty': 1});
+    expect(firstItemResult(result, 'order.items'), {'n': 1});
+    expect(firstItemResult(result, 'empty'), isNull);
+    expect(firstItemResult(result, 'scalars'), isNull);
+    expect(firstItemResult(result, 'missing'), isNull);
+    expect(resultAt(firstItemResult(result, 'lines'), 'sku'), (true, 'a'));
   });
 }

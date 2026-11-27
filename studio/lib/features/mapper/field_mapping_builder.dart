@@ -117,6 +117,67 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
     _changed();
   }
 
+  Future<void> _fromSchema() async {
+    final c = TextEditingController();
+    String? err;
+    final created = await showDialog<List<MappingRow>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => AlertDialog(
+          title: const Text('Rows from a JSON Schema'),
+          content: SizedBox(
+            width: 560,
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text(
+                'Paste the schema of the object you want to produce. Each property becomes a row (nested objects become dotted names, arrays of objects '
+                'become list rows). Fields whose name matches exactly one path in your sample variables are connected for you.',
+                style: TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 260,
+                child: TextField(
+                  controller: c,
+                  expands: true,
+                  maxLines: null,
+                  minLines: null,
+                  textAlignVertical: TextAlignVertical.top,
+                  style: _mono,
+                  decoration: InputDecoration(border: const OutlineInputBorder(), isDense: true, errorText: err, hintText: '{"type": "object", "properties": {...}}'),
+                ),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () {
+                try {
+                  final r = rowsFromSchema(jsonDecode(c.text), sample: _sample);
+                  if (r == null) {
+                    set(() => err = 'No properties to map in this schema.');
+                    return;
+                  }
+                  Navigator.pop(ctx, r);
+                } on FormatException catch (e) {
+                  set(() => err = 'Not valid JSON: ${e.message}');
+                }
+              },
+              child: const Text('Create rows'),
+            ),
+          ],
+        ),
+      ),
+    );
+    c.dispose();
+    final rows = _rows;
+    if (created == null || rows == null || !mounted) return;
+    final have = {for (final r in rows) r.target.trim()};
+    rows.removeWhere((r) => r.target.trim().isEmpty && r.value.trim().isEmpty);
+    rows.addAll(created.where((r) => !have.contains(r.target)));
+    _changed();
+  }
+
   @override
   Widget build(BuildContext context) {
     final rows = _rows;
@@ -149,6 +210,11 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
               },
               icon: const Icon(Icons.add, size: 16),
               label: const Text('Add field'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _fromSchema,
+              icon: const Icon(Icons.schema_outlined, size: 16),
+              label: const Text('From schema'),
             ),
             OutlinedButton.icon(
               onPressed: _samplePaths.isEmpty ? null : _autoMap,
@@ -187,6 +253,12 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
                   ),
                 ),
         ),
+        if (unmappedRequired(rows).isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('Required by the schema but not mapped yet: ${unmappedRequired(rows).join(', ')}',
+                style: const TextStyle(fontSize: 11.5, color: AppColors.warning)),
+          ),
         if (problems.isNotEmpty) ...[
           const SizedBox(height: 6),
           for (final p in problems.take(3))
@@ -218,7 +290,7 @@ class _RowCard extends StatelessWidget {
   /// The variables the source picker draws from: the sample, plus the current item inside a list.
   final Object? scope;
 
-  /// The preview result, for top-level rows only.
+  /// The preview result this row's value is looked up in: the whole result for a top-level row, the first output item for a field inside a list.
   final Object? result;
   final int depth;
   final bool showTarget;
@@ -259,7 +331,13 @@ class _RowCard extends StatelessWidget {
                   child: TextFormField(
                     initialValue: row.target,
                     style: _mono,
-                    decoration: const InputDecoration(isDense: true, labelText: 'Output field', hintText: 'customer.name'),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      labelText: row.required ? 'Output field *' : 'Output field',
+                      hintText: 'customer.name',
+                      helperText: row.hint.isEmpty ? null : row.hint,
+                      helperMaxLines: 2,
+                    ),
                     onChanged: (v) {
                       row.target = v;
                       onChanged();
@@ -308,7 +386,7 @@ class _RowCard extends StatelessWidget {
             ),
             if (expr != null) Padding(padding: const EdgeInsets.only(top: 6), child: SelectableText(expr, style: _mono.copyWith(color: AppColors.textMutedDark))),
           ],
-          if (showTarget && depth == 0 && result != null) _produced(),
+          if (showTarget && result != null) _produced(),
           if (row.kind == SourceKind.list) _listBody(),
           if (row.kind == SourceKind.conditional) _conditionalBody(),
         ],
@@ -343,7 +421,7 @@ class _RowCard extends StatelessWidget {
         Icon(found ? Icons.subdirectory_arrow_right : Icons.remove_circle_outline, size: 14, color: AppColors.textMutedDark),
         const SizedBox(width: 6),
         Expanded(
-          child: Text(found ? previewValue(value) : 'not in the result (omitted or the mapping is being edited)',
+          child: Text(found ? '${depth > 0 ? 'first item: ' : ''}${previewValue(value)}' : 'not in the first item (omitted or the mapping is being edited)',
               maxLines: 2, overflow: TextOverflow.ellipsis, style: _mono.copyWith(color: found ? AppColors.success : AppColors.textMutedDark)),
         ),
       ]),
@@ -396,6 +474,7 @@ class _RowCard extends StatelessWidget {
                 key: ObjectKey(row.children[i]),
                 row: row.children[i],
                 scope: inner,
+                result: result == null ? null : firstItemResult(result, row.target),
                 depth: depth + 1,
                 kinds: depth >= 2 ? _valueKinds : SourceKind.values,
                 onChanged: onChanged,

@@ -87,6 +87,10 @@ class MappingRow {
   String target;
   SourceKind kind;
 
+  /// From a schema: a short description (type, required) shown under the field name, and whether the schema requires the field.
+  String hint = '';
+  bool required = false;
+
   /// A source path, a literal, template text with `${...}`, or a raw expression, by [kind].
   String value;
   final List<TransformStep> transforms;
@@ -238,7 +242,7 @@ Map<String, dynamic>? specFromRows(List<MappingRow> rows) {
   if (rowProblems(rows).isNotEmpty) return null;
   final spec = <String, dynamic>{};
   for (final r in rows) {
-    if (r.target.trim().isEmpty && r.value.trim().isEmpty && r.children.isEmpty) continue;
+    if (r.target.trim().isEmpty || r.value.trim().isEmpty) continue;
     spec[r.target.trim()] = specValue(r);
   }
   return spec;
@@ -426,4 +430,87 @@ String _compact(Object? v) {
   if (v is List) return '[${v.map(_compact).join(', ')}]';
   if (v is Map) return '{${v.entries.map((e) => '${e.key}: ${_compact(e.value)}').join(', ')}}';
   return '$v';
+}
+
+/// Targets the schema requires that have no source yet (they are left out of the spec, so the output would miss them).
+List<String> unmappedRequired(List<MappingRow> rows) => [
+      for (final r in rows)
+        if (r.required && r.target.trim().isNotEmpty && r.value.trim().isEmpty) r.target.trim(),
+    ];
+
+/// Rows for the properties of a JSON Schema: objects are flattened into dotted targets, arrays of objects become list rows with the item's
+/// properties as children, `$ref` to `#/$defs/..` or `#/definitions/..` is followed. When [sample] is given, a field whose name matches exactly
+/// one sample path (by last segment, ignoring case) is already connected to it. Returns null when [schema] has no properties to map.
+/// Bounded: depth 4, 200 rows.
+List<MappingRow>? rowsFromSchema(Object? schema, {Object? sample}) {
+  if (schema is! Map) return null;
+  var count = 0;
+  Map? resolve(Object? s, int hops) {
+    if (s is! Map) return null;
+    final ref = s[r'$ref'];
+    if (ref is String && hops < 8) {
+      final m = RegExp(r'^#/(\$defs|definitions)/([^/]+)$').firstMatch(ref);
+      final defs = m == null ? null : schema[m.group(1)];
+      return defs is Map ? resolve(defs[m!.group(2)], hops + 1) : null;
+    }
+    return s;
+  }
+
+  String describe(Map p, bool req) {
+    final t = p['type'];
+    final parts = [if (t is String) t else if (t is List) t.join(' | '), if (p['format'] is String) p['format'] as String, if (req) 'required'];
+    final d = p['description'];
+    return [parts.join(', '), if (d is String && d.trim().isNotEmpty) d.trim()].where((x) => x.isNotEmpty).join(' - ');
+  }
+
+  String? unique(List<String> paths, String name) {
+    final hits = paths.where((p) => !p.contains('[') && p.split('.').last.toLowerCase() == name.toLowerCase()).toList();
+    return hits.length == 1 ? hits.single : null;
+  }
+
+  List<MappingRow> walk(Map obj, String prefix, int depth, List<String> paths, Object? scope) {
+    final out = <MappingRow>[];
+    final props = obj['properties'];
+    if (props is! Map) return out;
+    final required = obj['required'] is List ? (obj['required'] as List).map((e) => '$e').toSet() : <String>{};
+    for (final e in props.entries) {
+      if (count >= 200) break;
+      final name = '${e.key}';
+      final p = resolve(e.value, 0);
+      if (p == null) continue;
+      final req = required.contains(name);
+      final type = p['type'];
+      final props2 = p['properties'];
+      if ((type == 'object' || props2 is Map) && props2 is Map && depth < 4) {
+        out.addAll(walk(p, '$prefix$name.', depth + 1, paths, scope));
+        continue;
+      }
+      final row = MappingRow(target: '$prefix$name', value: unique(paths, name) ?? '')..hint = describe(p, req)..required = req;
+      count++;
+      final items = type == 'array' ? resolve(p['items'], 0) : null;
+      if (items != null && items['properties'] is Map && depth < 4) {
+        row.kind = SourceKind.list;
+        final listPath = row.value;
+        final itemScope = listPath.isEmpty ? null : sampleAt(scope, listPath);
+        final first = itemScope is List && itemScope.isNotEmpty ? itemScope.first : null;
+        final itemSample = {'item': first};
+        row.children.addAll(walk(items, '', depth + 1, first is Map ? [for (final q in samplePaths(first)) 'item.$q'] : const [], itemSample));
+      }
+      out.add(row);
+    }
+    return out;
+  }
+
+  final root = resolve(schema, 0);
+  if (root == null) return null;
+  final rows = walk(root, '', 0, samplePaths(sample), sample);
+  return rows.isEmpty ? null : rows;
+}
+
+/// The first item of the list a list row produced in a preview [result], when that item is an object (its fields are the row's children);
+/// null when the row produced no list, an empty one, or items that are not objects.
+Map<String, dynamic>? firstItemResult(Object? result, String target) {
+  final (found, v) = resultAt(result, target);
+  if (!found || v is! List || v.isEmpty || v.first is! Map) return null;
+  return Map<String, dynamic>.from(v.first as Map);
 }
