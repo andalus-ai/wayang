@@ -47,7 +47,8 @@ class JdbcDeploymentLifecycleReconciliationPostgresConcurrencyTest {
             var workerB = new JdbcDeploymentLifecycleReconciliationWorkStore(source);
             var ready = new CountDownLatch(2);
             var start = new CountDownLatch(1);
-            try (var executor = Executors.newFixedThreadPool(2)) {
+            var executor = Executors.newFixedThreadPool(2);
+            try {
                 var first = executor.submit(() -> claim(workerA, receipt, ready, start));
                 var second = executor.submit(() -> claim(workerB, receipt, ready, start));
                 assertTrue(ready.await(10, TimeUnit.SECONDS), "both workers should reach the claim barrier");
@@ -55,6 +56,8 @@ class JdbcDeploymentLifecycleReconciliationPostgresConcurrencyTest {
                 int winners = (first.get(20, TimeUnit.SECONDS) ? 1 : 0)
                         + (second.get(20, TimeUnit.SECONDS) ? 1 : 0);
                 assertEquals(1, winners, "the unique work key must have exactly one claim winner");
+            } finally {
+                executor.shutdownNow();
             }
         } finally {
             try (var connection = DriverManager.getConnection(jdbcUrl);
