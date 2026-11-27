@@ -99,8 +99,9 @@ public final class AgentPackageArtifactVerifier {
 
         String manifestSha256 = sha256(manifestBytes);
         Map<String, String> resourceDigests = verifyResources(agentPackage, entries);
+        String keyFingerprint = sha256(trusted.publicKey().getEncoded());
         return new VerifiedArtifact(agentPackage, archiveSha256, manifestSha256,
-                signature.publisher(), signature.keyId(), resourceDigests);
+                signature.publisher(), signature.keyId(), keyFingerprint, now, resourceDigests);
     }
 
     private static void verifySignature(AgentPackageSignature envelope,
@@ -311,15 +312,20 @@ public final class AgentPackageArtifactVerifier {
         private final String manifestSha256;
         private final String publisher;
         private final String keyId;
+        private final String signingKeyFingerprint;
+        private final Instant verifiedAt;
         private final Map<String, String> resourceSha256;
 
         private VerifiedArtifact(AgentPackageReader.AgentPackage agentPackage, String archiveSha256,
-                String manifestSha256, String publisher, String keyId, Map<String, String> resourceSha256) {
+                String manifestSha256, String publisher, String keyId, String signingKeyFingerprint,
+                Instant verifiedAt, Map<String, String> resourceSha256) {
             this.agentPackage = agentPackage;
             this.archiveSha256 = archiveSha256;
             this.manifestSha256 = manifestSha256;
             this.publisher = publisher;
             this.keyId = keyId;
+            this.signingKeyFingerprint = signingKeyFingerprint;
+            this.verifiedAt = verifiedAt;
             this.resourceSha256 = Map.copyOf(resourceSha256);
         }
 
@@ -328,7 +334,14 @@ public final class AgentPackageArtifactVerifier {
         public String manifestSha256() { return manifestSha256; }
         public String publisher() { return publisher; }
         public String keyId() { return keyId; }
+        public String signingKeyFingerprint() { return signingKeyFingerprint; }
+        public Instant verifiedAt() { return verifiedAt; }
         public Map<String, String> resourceSha256() { return resourceSha256; }
+
+        public InstalledAgent.VerificationReceipt verificationReceipt() {
+            return new InstalledAgent.VerificationReceipt(publisher, keyId, signingKeyFingerprint,
+                    manifestSha256, verifiedAt);
+        }
 
         AgentDependencyResolver.PackageArtifact resolverArtifact() {
             return new AgentDependencyResolver.PackageArtifact(agentPackage, archiveSha256);
