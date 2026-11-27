@@ -10,4 +10,11 @@ void main() {
     expect(MappingField.summary({'a': {'b': 'c'}}), 'Custom mapping (edit as JSON)');
     expect(MappingField.summary('text'), 'Custom mapping (edit as JSON)');
   });
+
+  test('the sample of an output mapping carries the last test output as result', () {
+    expect(MappingField.sampleText(false, {'a': 1}), '{}');
+    expect(MappingField.sampleText(true, null), '{\n  "result": {}\n}');
+    expect(MappingField.sampleText(true, {'status': 200}), '{\n  "result": {\n    "status": 200\n  }\n}');
+    expect(MappingField.sampleText(true, [1]), contains('"result": ['));
+  });
 }

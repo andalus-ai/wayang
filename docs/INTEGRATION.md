@@ -32,7 +32,7 @@ config:
 ```
 Mapping errors fail the node without retry.
 
-In the BPMN designer, a service task's `inputMapping` and `outputMapping` show a summary ("3 fields", "Custom mapping (edit as JSON)", "Not set") and an **Add/Edit mapping** button that opens the same field mapping builder in a dialog, with a sample pane (for the output mapping: the process variables plus `result`) and the live preview; **Apply** writes the spec into the node, Cancel leaves it as it was. Not wired to the sample of a previous test run of the node yet: you paste the sample.
+In the BPMN designer, a service task's `inputMapping` and `outputMapping` show a summary ("3 fields", "Custom mapping (edit as JSON)", "Not set") and an **Add/Edit mapping** button that opens the same field mapping builder in a dialog, with a sample pane (for the output mapping: the process variables plus `result`) and the live preview; **Apply** writes the spec into the node, Cancel leaves it as it was. For an output mapping, if you ran **Test node** on that node in this session, `result` in the sample is that test's real output (the dialog says so); otherwise you paste the sample. The test output is remembered per node for the session only.
 
 ## Pipeline steps (`EIP_TASK`)
 
