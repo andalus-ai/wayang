@@ -156,6 +156,28 @@ void main() {
       expect(navigated, isTrue);
     });
 
+    testWidgets('WdsFilterToolbar wraps controls at compact widths', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        theme: ThemeData(useMaterial3: true),
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 320,
+              child: WdsFilterToolbar(
+                search: const TextField(decoration: InputDecoration(hintText: 'Search')),
+                filters: [FilterChip(label: const Text('Active'), selected: false, onSelected: (_) {})],
+                actions: [FilledButton(onPressed: () {}, child: const Text('Create'))],
+              ),
+            ),
+          ),
+        ),
+      ));
+      expect(find.text('Search'), findsOneWidget);
+      expect(find.text('Active'), findsOneWidget);
+      expect(find.text('Create'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('WdsEmptyState uses the supplied icon and action', (tester) async {
       await tester.pumpWidget(MaterialApp(
         theme: ThemeData(useMaterial3: true),
