@@ -33,7 +33,7 @@ class MappingSuggestion {
 /// rows are valid, and re-reads it when it is changed elsewhere (an example, the JSON tab). A spec with features the builder cannot show
 /// (nested objects, `$each`, `$if`) is left untouched and edited as JSON.
 class FieldMappingBuilder extends StatefulWidget {
-  const FieldMappingBuilder({super.key, required this.controller, required this.sample, this.result, this.onProblems, this.suggestions = const []});
+  const FieldMappingBuilder({super.key, required this.controller, required this.sample, this.result, this.onProblems, this.suggestions = const [], this.kinds = SourceKind.values, this.allowSchema = true});
 
   final TextEditingController controller;
 
@@ -48,6 +48,13 @@ class FieldMappingBuilder extends StatefulWidget {
 
   /// Extra "fill from ..." buttons.
   final List<MappingSuggestion> suggestions;
+
+  /// Which kinds of source a row may have (a host whose values are plain expressions allows only field and expression). A spec that uses another
+  /// kind is not shown in the builder.
+  final List<SourceKind> kinds;
+
+  /// Whether the "From schema" import is offered (it can create list rows).
+  final bool allowSchema;
 
   @override
   State<FieldMappingBuilder> createState() => _FieldMappingBuilderState();
@@ -88,7 +95,8 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
 
   void _load() {
     try {
-      _rows = rowsFromSpec(jsonDecode(widget.controller.text));
+      final rows = rowsFromSpec(jsonDecode(widget.controller.text));
+      _rows = rows != null && rows.every((r) => widget.kinds.contains(r.kind)) ? rows : null;
     } catch (_) {
       _rows = null;
     }
@@ -229,7 +237,7 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
         child: Padding(
           padding: EdgeInsets.all(16),
           child: Text(
-            'This mapping uses features the builder does not show (nested objects, lists, \$each, \$if, or the JSON is not valid yet). '
+            'This mapping uses features the builder does not show (nested objects, lists, fixed values or templates where only expressions are allowed, \$each, \$if, or the JSON is not valid yet). '
             'Edit it on the JSON tab; the builder works again once it is a flat list of fields.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12),
@@ -268,11 +276,12 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
                   label: Text(sg.label),
                 ),
               ),
-            OutlinedButton.icon(
-              onPressed: _fromSchema,
-              icon: const Icon(Icons.schema_outlined, size: 16),
-              label: const Text('From schema'),
-            ),
+            if (widget.allowSchema)
+              OutlinedButton.icon(
+                onPressed: _fromSchema,
+                icon: const Icon(Icons.schema_outlined, size: 16),
+                label: const Text('From schema'),
+              ),
             OutlinedButton.icon(
               onPressed: _samplePaths.isEmpty ? null : _autoMap,
               icon: const Icon(Icons.auto_fix_high, size: 16),
@@ -312,6 +321,7 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
                     key: ObjectKey(rows[i]),
                     row: rows[i],
                     scope: _sample,
+                    kinds: widget.kinds,
                     result: widget.result?.value,
                     onChanged: _changed,
                     onRemove: () {

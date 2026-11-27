@@ -385,6 +385,7 @@ class _NodeInspectorState extends ConsumerState<_NodeInspector> {
             overrides: {
               if (node.type == BpmnElementType.businessRuleTask) 'model': _definitionPicker(DefinitionKind.decision),
               if (node.type == BpmnElementType.agentTask) 'agent': _definitionPicker(DefinitionKind.agent),
+              if (node.type == BpmnElementType.businessRuleTask) 'inputs': mappingFieldBuilder(output: false, nodeId: node.id, props: node.properties, decisionInputs: true),
               if (node.type == BpmnElementType.serviceTask) 'inputMapping': mappingFieldBuilder(output: false, nodeId: node.id, props: node.properties),
               if (node.type == BpmnElementType.serviceTask) 'outputMapping': mappingFieldBuilder(output: true, nodeId: node.id, props: node.properties),
             },
