@@ -274,4 +274,26 @@ void main() {
     expect(rowsFromSchema('x'), isNull);
     expect(rowsFromSchema({'properties': {'a': {r'$ref': '#/\$defs/missing'}}}), isNull);
   });
+
+  test('the first output item of a list row gives its fields something to show', () {
+    final result = {
+      'lines': [
+        {'sku': 'a', 'qty': 1},
+        {'sku': 'b', 'qty': 2}
+      ],
+      'order': {
+        'items': [
+          {'n': 1}
+        ]
+      },
+      'empty': [],
+      'scalars': [1, 2],
+    };
+    expect(firstItemResult(result, 'lines'), {'sku': 'a', 'qty': 1});
+    expect(firstItemResult(result, 'order.items'), {'n': 1});
+    expect(firstItemResult(result, 'empty'), isNull);
+    expect(firstItemResult(result, 'scalars'), isNull);
+    expect(firstItemResult(result, 'missing'), isNull);
+    expect(resultAt(firstItemResult(result, 'lines'), 'sku'), (true, 'a'));
+  });
 }

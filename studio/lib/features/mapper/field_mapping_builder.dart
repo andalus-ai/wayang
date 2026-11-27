@@ -290,7 +290,7 @@ class _RowCard extends StatelessWidget {
   /// The variables the source picker draws from: the sample, plus the current item inside a list.
   final Object? scope;
 
-  /// The preview result, for top-level rows only.
+  /// The preview result this row's value is looked up in: the whole result for a top-level row, the first output item for a field inside a list.
   final Object? result;
   final int depth;
   final bool showTarget;
@@ -386,7 +386,7 @@ class _RowCard extends StatelessWidget {
             ),
             if (expr != null) Padding(padding: const EdgeInsets.only(top: 6), child: SelectableText(expr, style: _mono.copyWith(color: AppColors.textMutedDark))),
           ],
-          if (showTarget && depth == 0 && result != null) _produced(),
+          if (showTarget && result != null) _produced(),
           if (row.kind == SourceKind.list) _listBody(),
           if (row.kind == SourceKind.conditional) _conditionalBody(),
         ],
@@ -421,7 +421,7 @@ class _RowCard extends StatelessWidget {
         Icon(found ? Icons.subdirectory_arrow_right : Icons.remove_circle_outline, size: 14, color: AppColors.textMutedDark),
         const SizedBox(width: 6),
         Expanded(
-          child: Text(found ? previewValue(value) : 'not in the result (omitted or the mapping is being edited)',
+          child: Text(found ? '${depth > 0 ? 'first item: ' : ''}${previewValue(value)}' : 'not in the first item (omitted or the mapping is being edited)',
               maxLines: 2, overflow: TextOverflow.ellipsis, style: _mono.copyWith(color: found ? AppColors.success : AppColors.textMutedDark)),
         ),
       ]),
@@ -474,6 +474,7 @@ class _RowCard extends StatelessWidget {
                 key: ObjectKey(row.children[i]),
                 row: row.children[i],
                 scope: inner,
+                result: result == null ? null : firstItemResult(result, row.target),
                 depth: depth + 1,
                 kinds: depth >= 2 ? _valueKinds : SourceKind.values,
                 onChanged: onChanged,

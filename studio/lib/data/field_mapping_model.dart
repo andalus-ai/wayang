@@ -503,3 +503,11 @@ List<MappingRow>? rowsFromSchema(Object? schema, {Object? sample}) {
   final rows = walk(root, '', 0, samplePaths(sample), sample);
   return rows.isEmpty ? null : rows;
 }
+
+/// The first item of the list a list row produced in a preview [result], when that item is an object (its fields are the row's children);
+/// null when the row produced no list, an empty one, or items that are not objects.
+Map<String, dynamic>? firstItemResult(Object? result, String target) {
+  final (found, v) = resultAt(result, target);
+  if (!found || v is! List || v.isEmpty || v.first is! Map) return null;
+  return Map<String, dynamic>.from(v.first as Map);
+}
