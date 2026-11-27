@@ -1,13 +1,18 @@
 package tech.kayys.wayang.knowledge;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import tech.kayys.wayang.connectors.UrlGuard;
+import tech.kayys.wayang.rag.EntityExtractor;
+import tech.kayys.wayang.rag.GraphEntityLookup;
 import tech.kayys.wayang.rag.GraphStore;
 import tech.kayys.wayang.rag.InMemoryGraphStore;
+import tech.kayys.wayang.rag.KnowledgeSchema;
+import tech.kayys.wayang.rag.RelationshipExtractor;
 import tech.kayys.wayang.runtime.ComponentDescriptor;
 import tech.kayys.wayang.runtime.ConnectorInput;
 import tech.kayys.wayang.runtime.Profile;
@@ -15,13 +20,12 @@ import tech.kayys.wayang.runtime.ServiceHandler;
 import tech.kayys.wayang.runtime.WayangExtension;
 
 /**
- * Adds the knowledge connectors ({@code rag-ingest}, {@code rag-search}, {@code rag-forget}, {@code graph-query}, {@code graph-retract}) and the reusable file storage steps ({@code file-put},
- * {@code file-get}, {@code file-list}, {@code file-delete}); loaded only when the profile enables the KNOWLEDGE feature.
+ * Adds knowledge, graph and reusable file-storage workflow components. Graph ingestion
+ * is published only when a deployment explicitly supplies extraction providers and schema.
  */
 public final class KnowledgeExtension implements WayangExtension {
 
     private final KnowledgeRegistry registry;
-    private final FileStore files;
     private final Map<String, ServiceHandler.Connector> connectors;
 
     public KnowledgeExtension() {
@@ -37,30 +41,49 @@ public final class KnowledgeExtension implements WayangExtension {
         this(files, guard, new InMemoryGraphStore());
     }
 
-    /**
-     * Allows a deployment to supply its configured GraphStore adapter (for example PostgreSQL).
-     * The no-argument extension uses a bounded process-local store for development and standalone use.
-     */
+    /** Uses a bounded process-local graph store for local development and standalone use. */
     public KnowledgeExtension(FileStore files, UrlGuard guard, GraphStore graphStore) {
+        this(files, guard, graphStore, null, null, null, null);
+    }
+
+    /**
+     * Adds graph ingestion when all deployment-owned extraction dependencies are supplied.
+     * No default ontology or extraction provider is invented by the generic extension.
+     */
+    public KnowledgeExtension(FileStore files, UrlGuard guard, GraphStore graphStore,
+            GraphEntityLookup entityLookup, EntityExtractor entityExtractor,
+            RelationshipExtractor relationshipExtractor, KnowledgeSchema schema) {
         this.registry = new KnowledgeRegistry(
                 guard,
                 files == null ? null : new KnowledgePersistence(files.root().resolve("knowledge")),
                 files == null ? java.time.Clock.systemUTC() : files.clock());
-        this.files = files;
         java.util.Objects.requireNonNull(graphStore, "graphStore");
-        this.connectors = Map.ofEntries(
-                Map.entry("rag-ingest", new RagIngest(registry, files)),
-                Map.entry("rag-search", new RagSearch(registry)),
-                Map.entry("rag-forget", new RagForget(registry)),
-                Map.entry("rag-list", new RagList(registry)),
-                Map.entry("file-put", new FileConnectors.Put(files)),
-                Map.entry("file-fetch", new FileConnectors.Fetch(files, guard)),
-                Map.entry("file-get", new FileConnectors.Get(files)),
-                Map.entry("file-list", new FileConnectors.ListFiles(files)),
-                Map.entry("file-delete", new FileConnectors.Delete(files)),
-                Map.entry("file-purge", new FileConnectors.Purge(files)),
-                Map.entry("graph-query", new GraphQueryConnector(graphStore)),
-                Map.entry("graph-retract", new GraphRetractConnector(graphStore)));
+        boolean anyExtractionDependency = entityLookup != null || entityExtractor != null
+                || relationshipExtractor != null || schema != null;
+        boolean allExtractionDependencies = entityLookup != null && entityExtractor != null
+                && relationshipExtractor != null && schema != null;
+        if (anyExtractionDependency && !allExtractionDependencies) {
+            throw new IllegalArgumentException("graph ingestion requires entity lookup, both extractors and a schema");
+        }
+
+        Map<String, ServiceHandler.Connector> registered = new LinkedHashMap<>();
+        registered.put("rag-ingest", new RagIngest(registry, files));
+        registered.put("rag-search", new RagSearch(registry));
+        registered.put("rag-forget", new RagForget(registry));
+        registered.put("rag-list", new RagList(registry));
+        registered.put("file-put", new FileConnectors.Put(files));
+        registered.put("file-fetch", new FileConnectors.Fetch(files, guard));
+        registered.put("file-get", new FileConnectors.Get(files));
+        registered.put("file-list", new FileConnectors.ListFiles(files));
+        registered.put("file-delete", new FileConnectors.Delete(files));
+        registered.put("file-purge", new FileConnectors.Purge(files));
+        registered.put("graph-query", new GraphQueryConnector(graphStore));
+        registered.put("graph-retract", new GraphRetractConnector(graphStore));
+        if (allExtractionDependencies) {
+            registered.put("graph-ingest", new GraphIngestConnector(graphStore, entityLookup,
+                    entityExtractor, relationshipExtractor, schema));
+        }
+        this.connectors = Map.copyOf(registered);
     }
 
     @Override
@@ -81,7 +104,7 @@ public final class KnowledgeExtension implements WayangExtension {
     @Override
     public List<ComponentDescriptor> components() {
         Map<String, Object> knowledge = Map.of("type", "string", "description", "Name of the knowledge base (letters, digits, - and _)");
-        return List.of(
+        List<ComponentDescriptor> result = new ArrayList<>(List.of(
                 component("rag-ingest", "Add documents to knowledge", "Add documents (files from storage, text, txt, md, html, csv, docx, xlsx, pptx, pdf) to a knowledge base",
                         "knowledge.ingest", "rag",
                         Map.of("knowledge", knowledge, "chunking", Map.of("type", "object"), "embedder", Map.of("type", "object"),
@@ -110,7 +133,14 @@ public final class KnowledgeExtension implements WayangExtension {
                                 "graphMaxEdges", Map.of("type", "integer", "minimum", 1, "maximum", 2000)), List.of("graphCollection")),
                 component("graph-retract", "Retract graph evidence", "Remove evidence for an exact source version while preserving facts supported by other sources",
                         "knowledge.graph.retract", "knowledge-graph",
-                        Map.of("graphCollection", Map.of("type", "string", "minLength", 1, "maxLength", 200)), List.of("graphCollection")));
+                        Map.of("graphCollection", Map.of("type", "string", "minLength", 1, "maxLength", 200)), List.of("graphCollection"))));
+        if (connectors.containsKey("graph-ingest")) {
+            result.add(component("graph-ingest", "Extract knowledge graph", "Extract and validate entities and relationships from source text using deployment-configured providers and ontology",
+                    "knowledge.graph.ingest", "knowledge-graph",
+                    Map.of("graphCollection", Map.of("type", "string", "minLength", 1, "maxLength", 200),
+                            "extractorId", Map.of("type", "string", "maxLength", 200)), List.of("graphCollection")));
+        }
+        return List.copyOf(result);
     }
 
     private ComponentDescriptor component(String connector, String title, String description, String capability, String category,
@@ -121,7 +151,7 @@ public final class KnowledgeExtension implements WayangExtension {
         if (!required.isEmpty()) {
             schema.put("required", required);
         }
-        schema.put("additionalProperties", true); // retries, timeouts, inputs, outputMapping... are node-level keys
+        schema.put("additionalProperties", true);
         List<Map<String, Object>> inputs = connectors.get(connector).inputs().stream().map(ConnectorInput::toMap).toList();
         return new ComponentDescriptor("wayang.knowledge." + connector, "0.0.1", ComponentDescriptor.Kind.CONNECTOR, "wayang-service",
                 description, Set.of(Profile.Feature.KNOWLEDGE), List.of(), ComponentDescriptor.IsolationLevel.IN_PROCESS, Set.of(capability),
