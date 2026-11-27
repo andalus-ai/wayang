@@ -134,6 +134,15 @@ public final class JdbcInstalledAgentStore implements InstalledAgentStore {
         installed.configurationBindings().forEach((id, binding) -> bindings.put(id,
                 Map.of("kind", binding.kind(), "reference", binding.reference())));
         root.put("configurationBindings", bindings);
+        if (installed.verification() != null) {
+            var receipt = installed.verification();
+            root.put("verification", Map.of(
+                    "publisher", receipt.publisher(),
+                    "keyId", receipt.keyId(),
+                    "signingKeyFingerprint", receipt.signingKeyFingerprint(),
+                    "manifestSha256", receipt.manifestSha256(),
+                    "verifiedAt", receipt.verifiedAt().toString()));
+        }
         return root;
     }
 
@@ -159,8 +168,19 @@ public final class JdbcInstalledAgentStore implements InstalledAgentStore {
                     if (!(item instanceof String text)) throw new IllegalArgumentException("requested permission must be a string");
                     return text;
                 }).toList();
+        InstalledAgent.VerificationReceipt receipt = null;
+        if (root.get("verification") != null) {
+            Map<String, Object> rawReceipt = object(root.get("verification"), "verification");
+            receipt = new InstalledAgent.VerificationReceipt(
+                    string(rawReceipt, "publisher"),
+                    string(rawReceipt, "keyId"),
+                    string(rawReceipt, "signingKeyFingerprint"),
+                    string(rawReceipt, "manifestSha256"),
+                    Instant.parse(string(rawReceipt, "verifiedAt")));
+        }
         return new InstalledAgent(string(root, "tenantId"), string(root, "projectId"), string(root, "installationId"),
-                lock, bindings, permissions, Instant.parse(string(root, "installedAt")), Instant.parse(string(root, "updatedAt")));
+                lock, bindings, permissions, Instant.parse(string(root, "installedAt")),
+                Instant.parse(string(root, "updatedAt")), receipt);
     }
 
     @SuppressWarnings("unchecked")

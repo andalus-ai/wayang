@@ -147,4 +147,33 @@ class AgentPackageReaderTest {
         assertThrows(AgentPackageException.class, () -> reader.read(MINIMAL.replace(
                 "\"triggers\": [\"chat\", \"api\"]", "\"triggers\": [\"shell\"]")));
     }
+    @Test
+    @SuppressWarnings("unchecked")
+    void deeplyFreezesNestedAgentOptionsAndToolConfiguration() {
+        String source = """
+                {
+                  "apiVersion":"1.0","kind":"AgentPackage",
+                  "metadata":{"id":"acme:immutable","version":"1.0.0","publisher":"acme:publisher","displayName":"Immutable"},
+                  "spec":{
+                    "agentApiRange":"^1.0",
+                    "agent":{
+                      "id":"immutable","model":"local/test","maxSteps":8,
+                      "tools":[{"name":"crm","config":{"custom":{"items":["safe"]}}}],
+                      "options":{"custom":{"items":["safe"]}}
+                    },
+                    "interface":{"inputSchema":{"type":"object"},"outputSchema":{"type":"object"}},
+                    "dependencies":[],"configuration":[],"requestedPermissions":[]
+                  }
+                }
+                """;
+        var agent = reader.read(source).agent();
+        Map<String, Object> options = (Map<String, Object>) agent.options().get("custom");
+        List<Object> optionItems = (List<Object>) options.get("items");
+        assertThrows(UnsupportedOperationException.class, () -> optionItems.add("mutated"));
+
+        Map<String, Object> toolConfig = (Map<String, Object>) agent.tools().getFirst().config().get("custom");
+        List<Object> configItems = (List<Object>) toolConfig.get("items");
+        assertThrows(UnsupportedOperationException.class, () -> configItems.add("mutated"));
+    }
+
 }
