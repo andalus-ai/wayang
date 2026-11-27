@@ -41,8 +41,7 @@ class AgentPackageArtifactVerifierTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        var generator = KeyPairGenerator.getInstance("Ed25519");
-        keyPair = generator.generateKeyPair();
+        keyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
         trustStore = new AgentPackageTrustStore.InMemory();
         trust("acme:", false, NOW.minusSeconds(60), NOW.plusSeconds(3600));
         verifier = new AgentPackageArtifactVerifier(new AgentPackageReader(), trustStore,
@@ -54,7 +53,6 @@ class AgentPackageArtifactVerifierTest {
         byte[] archive = archive(Map.of(AgentPackageArtifactVerifier.JSON_MANIFEST,
                 MINIMAL.getBytes(StandardCharsets.UTF_8)));
         var verified = verifier.verify(archive, sign(archive, "acme:support", "1.2.0", "acme:publisher"));
-
         assertEquals("acme:support", verified.agentPackage().metadata().id());
         assertEquals(sha256(archive), verified.archiveSha256());
         assertEquals("acme:publisher", verified.publisher());
@@ -71,10 +69,8 @@ class AgentPackageArtifactVerifierTest {
         modified[modified.length - 1] ^= 0x01;
         assertThrows(AgentPackageArtifactVerifier.VerificationException.class,
                 () -> verifier.verify(modified, signature));
-
-        var wrongIdentity = sign(archive, "acme:other", "1.2.0", "acme:publisher");
         assertThrows(AgentPackageArtifactVerifier.VerificationException.class,
-                () -> verifier.verify(archive, wrongIdentity));
+                () -> verifier.verify(archive, sign(archive, "acme:other", "1.2.0", "acme:publisher")));
     }
 
     @Test
@@ -82,7 +78,6 @@ class AgentPackageArtifactVerifierTest {
         byte[] archive = archive(Map.of(AgentPackageArtifactVerifier.JSON_MANIFEST,
                 MINIMAL.getBytes(StandardCharsets.UTF_8)));
         var signature = sign(archive, "acme:support", "1.2.0", "acme:publisher");
-
         var empty = new AgentPackageArtifactVerifier(new AgentPackageTrustStore.InMemory(),
                 Clock.fixed(NOW, ZoneOffset.UTC));
         assertThrows(AgentPackageArtifactVerifier.VerificationException.class, () -> empty.verify(archive, signature));
@@ -90,21 +85,17 @@ class AgentPackageArtifactVerifierTest {
         trustStore.revoke("acme:publisher", "key-1");
         assertThrows(AgentPackageArtifactVerifier.VerificationException.class, () -> verifier.verify(archive, signature));
 
-        trustStore.trust(new AgentPackageTrustStore.TrustedPublisherKey("acme:publisher", "key-1",
-                keyPair.getPublic(), List.of("other:"), NOW.minusSeconds(60), NOW.plusSeconds(3600), false));
+        trust("other:", false, NOW.minusSeconds(60), NOW.plusSeconds(3600));
         assertThrows(AgentPackageArtifactVerifier.VerificationException.class, () -> verifier.verify(archive, signature));
 
-        trustStore.trust(new AgentPackageTrustStore.TrustedPublisherKey("acme:publisher", "key-1",
-                keyPair.getPublic(), List.of("acme:"), NOW.minusSeconds(3600), NOW, false));
+        trust("acme:", false, NOW.minusSeconds(3600), NOW);
         assertThrows(AgentPackageArtifactVerifier.VerificationException.class, () -> verifier.verify(archive, signature));
     }
 
     @Test
-    void verifiesDeclaredResourceDigestAndRejectsUndeclaredOrMissingResources() throws Exception {
+    void verifiesDeclaredResourceDigestsAndRejectsMissingOrUndeclaredResources() throws Exception {
         byte[] resource = "hello resource".getBytes(StandardCharsets.UTF_8);
-        String manifest = MINIMAL.replace("\"requestedPermissions\":[]",
-                "\"requestedPermissions\":[],\"resources\":[{\"path\":\"resources/prompt.txt\","
-                + "\"mediaType\":\"text/plain\",\"sha256\":\"" + sha256(resource) + "\"}]");
+        String manifest = withResources(List.of(resource("resources/prompt.txt", "text/plain", sha256(resource), "prompt")));
         byte[] valid = archive(Map.of(
                 AgentPackageArtifactVerifier.JSON_MANIFEST, manifest.getBytes(StandardCharsets.UTF_8),
                 "resources/prompt.txt", resource));
@@ -123,6 +114,48 @@ class AgentPackageArtifactVerifierTest {
     }
 
     @Test
+    void validatesCycloneDxAndInTotoEvidenceDocuments() throws Exception {
+        byte[] sbom = """
+                {"bomFormat":"CycloneDX","specVersion":"1.5","serialNumber":"urn:uuid:00000000-0000-0000-0000-000000000001",
+                 "version":1,"components":[{"type":"application","name":"support-agent","version":"1.2.0"}]}
+                """.getBytes(StandardCharsets.UTF_8);
+        byte[] provenance = """
+                {"_type":"https://in-toto.io/Statement/v1",
+                 "subject":[{"name":"acme:support","digest":{"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}],
+                 "predicateType":"https://slsa.dev/provenance/v1","predicate":{"buildDefinition":{},"runDetails":{}}}
+                """.getBytes(StandardCharsets.UTF_8);
+        String manifest = withResources(List.of(
+                resource("evidence/sbom.json", "application/vnd.cyclonedx+json", sha256(sbom), "sbom"),
+                resource("evidence/provenance.json", "application/vnd.in-toto+json", sha256(provenance), "provenance")));
+        byte[] valid = archive(Map.of(
+                AgentPackageArtifactVerifier.JSON_MANIFEST, manifest.getBytes(StandardCharsets.UTF_8),
+                "evidence/sbom.json", sbom,
+                "evidence/provenance.json", provenance));
+        assertDoesNotThrow(() -> verifier.verify(valid, sign(valid, "acme:support", "1.2.0", "acme:publisher")));
+
+        byte[] invalidSbom = "{\"bomFormat\":\"NotCycloneDX\"}".getBytes(StandardCharsets.UTF_8);
+        String badManifest = withResources(List.of(resource(
+                "evidence/sbom.json", "application/vnd.cyclonedx+json", sha256(invalidSbom), "sbom")));
+        byte[] invalid = archive(Map.of(
+                AgentPackageArtifactVerifier.JSON_MANIFEST, badManifest.getBytes(StandardCharsets.UTF_8),
+                "evidence/sbom.json", invalidSbom));
+        assertThrows(AgentPackageArtifactVerifier.VerificationException.class,
+                () -> verifier.verify(invalid, sign(invalid, "acme:support", "1.2.0", "acme:publisher")));
+
+        byte[] invalidProvenance = """
+                {"_type":"https://in-toto.io/Statement/v1","subject":[{"name":"different-package","digest":{"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}],
+                 "predicateType":"https://slsa.dev/provenance/v1","predicate":{}}
+                """.getBytes(StandardCharsets.UTF_8);
+        String badProvenanceManifest = withResources(List.of(resource(
+                "evidence/provenance.json", "application/vnd.in-toto+json", sha256(invalidProvenance), "provenance")));
+        byte[] invalidAttestation = archive(Map.of(
+                AgentPackageArtifactVerifier.JSON_MANIFEST, badProvenanceManifest.getBytes(StandardCharsets.UTF_8),
+                "evidence/provenance.json", invalidProvenance));
+        assertThrows(AgentPackageArtifactVerifier.VerificationException.class,
+                () -> verifier.verify(invalidAttestation, sign(invalidAttestation, "acme:support", "1.2.0", "acme:publisher")));
+    }
+
+    @Test
     void rejectsTraversalPathsAndOversizedArchives() throws Exception {
         byte[] traversal = archive(Map.of(
                 AgentPackageArtifactVerifier.JSON_MANIFEST, MINIMAL.getBytes(StandardCharsets.UTF_8),
@@ -137,7 +170,7 @@ class AgentPackageArtifactVerifierTest {
     }
 
     @Test
-    void verifiedArtifactIsRequiredBySecureInstallerPath() throws Exception {
+    void verifiedArtifactIsAcceptedBySecureInstallerPath() throws Exception {
         byte[] archive = archive(Map.of(AgentPackageArtifactVerifier.JSON_MANIFEST,
                 MINIMAL.getBytes(StandardCharsets.UTF_8)));
         var verified = verifier.verify(archive, sign(archive, "acme:support", "1.2.0", "acme:publisher"));
@@ -145,6 +178,16 @@ class AgentPackageArtifactVerifierTest {
                 verified, List.of(), Map.of(), NOW);
         assertEquals(verified.archiveSha256(), installed.lock().artifactSha256());
         assertEquals("acme:support", installed.lock().packageId());
+    }
+
+    private static String resource(String path, String mediaType, String digest, String role) {
+        return "{\"path\":\"" + path + "\",\"mediaType\":\"" + mediaType
+                + "\",\"sha256\":\"" + digest + "\",\"role\":\"" + role + "\"}";
+    }
+
+    private static String withResources(List<String> resources) {
+        return MINIMAL.replace("\"requestedPermissions\":[]",
+                "\"requestedPermissions\":[],\"resources\":[" + String.join(",", resources) + "]");
     }
 
     private void trust(String prefix, boolean revoked, Instant from, Instant until) {
@@ -178,77 +221,4 @@ class AgentPackageArtifactVerifierTest {
     private static String sha256(byte[] bytes) throws Exception {
         return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
     }
-    @Test
-    void validatesCycloneDxSbomAndInTotoProvenanceEvidence() throws Exception {
-        String manifestBase = MINIMAL.replace("\\"requestedPermissions\\":[]",
-                "\\"requestedPermissions\\":[],\\"resources\\":["
-                + "{\\"path\\":\\"evidence/sbom.json\\",\\"mediaType\\":\\"application/vnd.cyclonedx+json\\","
-                + "\\"sha256\\":\\"%SBOM%\\",\\"role\\":\\"sbom\\"},"
-                + "{\\"path\\":\\"evidence/provenance.json\\",\\"mediaType\\":\\"application/vnd.in-toto+json\\","
-                + "\\"sha256\\":\\"%PROVENANCE%\\",\\"role\\":\\"provenance\\"}]");
-        String sbom = """
-                {"bomFormat":"CycloneDX","specVersion":"1.5","serialNumber":"urn:uuid:00000000-0000-0000-0000-000000000001",
-                 "version":1,"components":[{"type":"application","name":"acme:support","version":"1.2.0"}]}
-                """;
-        byte[] manifestBytes = manifestBase.replace("%SBOM%", "0".repeat(64))
-                .replace("%PROVENANCE%", "0".repeat(64)).getBytes(StandardCharsets.UTF_8);
-        String manifestDigest = sha256(manifestBytes);
-        String provenance = """
-                {"_type":"https://in-toto.io/Statement/v1","subject":[{"name":"acme:support","digest":{"sha256":"%s"}}],
-                 "predicateType":"https://slsa.dev/provenance/v1","predicate":{"buildDefinition":{},"runDetails":{}}}
-                """.formatted(manifestDigest);
-        byte[] sbomBytes = sbom.getBytes(StandardCharsets.UTF_8);
-        byte[] provenanceBytes = provenance.getBytes(StandardCharsets.UTF_8);
-        String manifest = MINIMAL.replace("\\"requestedPermissions\\":[]",
-                "\\"requestedPermissions\\":[],\\"resources\\":["
-                + "{\\"path\\":\\"evidence/sbom.json\\",\\"mediaType\\":\\"application/vnd.cyclonedx+json\\","
-                + "\\"sha256\\":\\"" + sha256(sbomBytes) + "\\",\\"role\\":\\"sbom\\"},"
-                + "{\\"path\\":\\"evidence/provenance.json\\",\\"mediaType\\":\\"application/vnd.in-toto+json\\","
-                + "\\"sha256\\":\\"" + sha256(provenanceBytes) + "\\",\\"role\\":\\"provenance\\"}]");
-        byte[] exactManifest = manifest.getBytes(StandardCharsets.UTF_8);
-        // Rebind the in-toto subject to the final manifest bytes.
-        String exactProvenance = provenance.replace(manifestDigest, sha256(exactManifest));
-        byte[] exactProvenanceBytes = exactProvenance.getBytes(StandardCharsets.UTF_8);
-        manifest = MINIMAL.replace("\\"requestedPermissions\\":[]",
-                "\\"requestedPermissions\\":[],\\"resources\\":["
-                + "{\\"path\\":\\"evidence/sbom.json\\",\\"mediaType\\":\\"application/vnd.cyclonedx+json\\","
-                + "\\"sha256\\":\\"" + sha256(sbomBytes) + "\\",\\"role\\":\\"sbom\\"},"
-                + "{\\"path\\":\\"evidence/provenance.json\\",\\"mediaType\\":\\"application/vnd.in-toto+json\\","
-                + "\\"sha256\\":\\"" + sha256(exactProvenanceBytes) + "\\",\\"role\\":\\"provenance\\"}]");
-        exactManifest = manifest.getBytes(StandardCharsets.UTF_8);
-        exactProvenance = provenance.replace(manifestDigest, sha256(exactManifest));
-        exactProvenanceBytes = exactProvenance.getBytes(StandardCharsets.UTF_8);
-        // The final manifest includes the provenance digest, so the provenance subject binds its own enclosing manifest.
-        // A fixed-point self-reference is intentionally not required: attest the manifest payload before evidence declarations.
-        String payloadManifest = MINIMAL;
-        exactProvenance = provenance.replace(manifestDigest, sha256(payloadManifest.getBytes(StandardCharsets.UTF_8)));
-        exactProvenanceBytes = exactProvenance.getBytes(StandardCharsets.UTF_8);
-        String finalManifest = MINIMAL.replace("\\"requestedPermissions\\":[]",
-                "\\"requestedPermissions\\":[],\\"resources\\":["
-                + "{\\"path\\":\\"evidence/sbom.json\\",\\"mediaType\\":\\"application/vnd.cyclonedx+json\\","
-                + "\\"sha256\\":\\"" + sha256(sbomBytes) + "\\",\\"role\\":\\"sbom\\"},"
-                + "{\\"path\\":\\"evidence/provenance.json\\",\\"mediaType\\":\\"application/vnd.in-toto+json\\","
-                + "\\"sha256\\":\\"" + sha256(exactProvenanceBytes) + "\\",\\"role\\":\\"provenance\\"}]");
-        byte[] finalArchive = archive(Map.of(
-                AgentPackageArtifactVerifier.JSON_MANIFEST, finalManifest.getBytes(StandardCharsets.UTF_8),
-                "evidence/sbom.json", sbomBytes,
-                "evidence/provenance.json", exactProvenanceBytes));
-        // The provenance verifier expects the digest of the actual manifest; rebuild the archive after calculating it.
-        String actualManifestDigest = sha256(finalManifest.getBytes(StandardCharsets.UTF_8));
-        String boundProvenance = provenance.replace(manifestDigest, actualManifestDigest);
-        byte[] boundProvenanceBytes = boundProvenance.getBytes(StandardCharsets.UTF_8);
-        finalManifest = MINIMAL.replace("\\"requestedPermissions\\":[]",
-                "\\"requestedPermissions\\":[],\\"resources\\":["
-                + "{\\"path\\":\\"evidence/sbom.json\\",\\"mediaType\\":\\"application/vnd.cyclonedx+json\\","
-                + "\\"sha256\\":\\"" + sha256(sbomBytes) + "\\",\\"role\\":\\"sbom\\"},"
-                + "{\\"path\\":\\"evidence/provenance.json\\",\\"mediaType\\":\\"application/vnd.in-toto+json\\","
-                + "\\"sha256\\":\\"" + sha256(boundProvenanceBytes) + "\\",\\"role\\":\\"provenance\\"}]");
-        finalArchive = archive(Map.of(
-                AgentPackageArtifactVerifier.JSON_MANIFEST, finalManifest.getBytes(StandardCharsets.UTF_8),
-                "evidence/sbom.json", sbomBytes,
-                "evidence/provenance.json", boundProvenanceBytes));
-        assertThrows(AgentPackageArtifactVerifier.VerificationException.class,
-                () -> verifier.verify(finalArchive, sign(finalArchive, "acme:support", "1.2.0", "acme:publisher")));
-    }
-
 }
