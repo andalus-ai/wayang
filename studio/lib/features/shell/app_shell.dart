@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
+import '../../design_system/navigation.dart';
 import '../../plugins/plugin.dart';
 import '../../plugins/registry.dart';
 import '../../providers/app_providers.dart';
@@ -122,7 +123,14 @@ class AppShell extends ConsumerWidget {
       body: Row(
         children: [
           if (!compact)
-            _NavRail(items: navItems, selectedKey: navItems[effectiveIndex].key, extended: extended)
+            WdsNavigationRail(
+              items: [for (final item in navItems)
+                WdsNavigationItem(key: item.key, label: item.label, icon: item.icon)],
+              selectedKey: navItems[effectiveIndex].key,
+              extended: extended,
+              sectionLabel: 'Compose workspace',
+              onSelected: (key) => ref.read(selectedNavKeyProvider.notifier).state = key,
+            )
           else
             const SizedBox.shrink(),
           Expanded(
@@ -140,152 +148,24 @@ class AppShell extends ConsumerWidget {
           ),
         ],
       ),
-      bottomNavigationBar: compact ? _CompactNav(items: navItems, selectedKey: navItems[effectiveIndex].key) : null,
+      bottomNavigationBar: compact
+          ? WdsCompactNavigationBar(
+              items: [
+                for (final key in _compactVisibleKeys)
+                  for (final item in navItems.where((item) => item.key == key))
+                    WdsNavigationItem(key: item.key, label: item.label, icon: item.icon),
+              ],
+              selectedKey: navItems[effectiveIndex].key,
+              onSelected: (key) => ref.read(selectedNavKeyProvider.notifier).state = key,
+            )
+          : null,
         ),
       ),
     );
   }
 }
 
-class _NavRail extends ConsumerWidget {
-  const _NavRail({required this.items, required this.selectedKey, required this.extended});
-  final List<_NavItem> items;
-  final String selectedKey;
-  final bool extended;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.darkSurface,
-        border: Border(right: BorderSide(color: AppColors.darkBorder)),
-      ),
-      child: SafeArea(
-        child: SizedBox(
-          width: extended ? 232 : 84,
-          child: Column(
-            children: [
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 18),
-                child: Row(
-                  mainAxisAlignment: extended ? MainAxisAlignment.start : MainAxisAlignment.center,
-                  children: [
-                    if (extended) const SizedBox(width: 20),
-                    Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(colors: AppColors.brandGradient),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.hub_rounded, color: Colors.white, size: 19),
-                    ),
-                    if (extended) ...[
-                      const SizedBox(width: 12),
-                      const Text('Wayang', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                    ],
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              if (extended)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-                  child: Row(
-                    children: const [
-                      Icon(Icons.edit_note_rounded, size: 15, color: AppColors.primaryBright),
-                      SizedBox(width: 7),
-                      Text(
-                        'COMPOSE WORKSPACE',
-                        style: TextStyle(
-                          color: AppColors.textMutedDark,
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-                  children: items.map((s) {
-                    final selected = s.key == selectedKey;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                          onTap: () => ref.read(selectedNavKeyProvider.notifier).state = s.key,
-                          child: Container(
-                            padding: EdgeInsets.symmetric(horizontal: extended ? 12 : 0, vertical: 11),
-                            alignment: extended ? Alignment.centerLeft : Alignment.center,
-                            decoration: BoxDecoration(
-                              color: selected ? AppColors.primary.withValues(alpha: 0.16) : null,
-                              borderRadius: BorderRadius.circular(AppRadius.md),
-                              border: selected
-                                  ? Border.all(color: AppColors.primary.withValues(alpha: 0.4))
-                                  : null,
-                            ),
-                            child: Row(
-                              mainAxisSize: extended ? MainAxisSize.max : MainAxisSize.min,
-                              children: [
-                                Icon(s.icon,
-                                    size: 19, color: selected ? AppColors.primaryBright : AppColors.textMutedDark),
-                                if (extended) ...[
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    s.label,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                                      color: selected ? AppColors.textPrimaryDark : AppColors.textMutedDark,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CompactNav extends ConsumerWidget {
-  const _CompactNav({required this.items, required this.selectedKey});
-  final List<_NavItem> items;
-  final String selectedKey;
-
-  static const _visibleKeys = ['dashboard', 'bpmn', 'runs', 'tasks', 'settings'];
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final visible = [
-      for (final key in _visibleKeys) ...items.where((i) => i.key == key),
-    ];
-    final activeIndex = visible.indexWhere((i) => i.key == selectedKey);
-    return NavigationBar(
-      backgroundColor: AppColors.darkSurface,
-      selectedIndex: activeIndex >= 0 ? activeIndex : 0,
-      onDestinationSelected: (i) => ref.read(selectedNavKeyProvider.notifier).state = visible[i].key,
-      destinations: visible
-          .map((s) => NavigationDestination(icon: Icon(s.icon, size: 20), label: s.label))
-          .toList(),
-    );
-  }
-}
+const _compactVisibleKeys = ['dashboard', 'bpmn', 'runs', 'tasks', 'settings'];
 
 class _TopBar extends ConsumerWidget {
   const _TopBar({required this.title, required this.onGoTo});

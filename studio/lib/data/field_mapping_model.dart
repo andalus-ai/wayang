@@ -561,3 +561,23 @@ List<MappingRow> rowsFromInputs(Iterable<DeclaredInput> inputs, {Object? sample,
   }
   return out;
 }
+
+/// The process variables a decision model reads, as declared inputs for [rowsFromInputs]: for every decision table input that is a plain path
+/// (`age`, `customer.tier`) the first segment, once each, in order. Inputs that are computed expressions are skipped (they cannot be named
+/// without parsing the expression), so the list can be shorter than the table's inputs.
+List<DeclaredInput> decisionInputsOf(Object? document) {
+  final out = <DeclaredInput>[];
+  final seen = <String>{};
+  if (document is! Map || document['decisions'] is! List) return out;
+  final path = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$');
+  for (final d in document['decisions'] as List) {
+    if (d is! Map || d['inputs'] is! List) continue;
+    for (final e in d['inputs'] as List) {
+      final expr = '$e'.trim();
+      if (!path.hasMatch(expr)) continue;
+      final name = expr.split('.').first;
+      if (seen.add(name)) out.add((name: name, type: 'any', mandatory: false, description: 'read by the decision as $expr'));
+    }
+  }
+  return out;
+}
