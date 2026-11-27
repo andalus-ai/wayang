@@ -71,6 +71,13 @@ class AgentPackageArtifactVerifierTest {
                 () -> verifier.verify(modified, signature));
         assertThrows(AgentPackageArtifactVerifier.VerificationException.class,
                 () -> verifier.verify(archive, sign(archive, "acme:other", "1.2.0", "acme:publisher")));
+
+        var valid = sign(archive, "acme:support", "1.2.0", "acme:publisher");
+        String alteredSignature = (valid.signatureBase64().startsWith("A") ? "B" : "A")
+                + valid.signatureBase64().substring(1);
+        var altered = new AgentPackageSignature(1, "Ed25519", valid.packageId(), valid.version(),
+                valid.publisher(), valid.keyId(), valid.artifactSha256(), alteredSignature);
+        assertThrows(AgentPackageArtifactVerifier.VerificationException.class, () -> verifier.verify(archive, altered));
     }
 
     @Test
@@ -105,6 +112,14 @@ class AgentPackageArtifactVerifierTest {
         byte[] missing = archive(Map.of(AgentPackageArtifactVerifier.JSON_MANIFEST, manifest.getBytes(StandardCharsets.UTF_8)));
         assertThrows(AgentPackageArtifactVerifier.VerificationException.class,
                 () -> verifier.verify(missing, sign(missing, "acme:support", "1.2.0", "acme:publisher")));
+
+        String wrongDigestManifest = withResources(List.of(resource(
+                "resources/prompt.txt", "text/plain", "0".repeat(64), "prompt")));
+        byte[] wrongDigest = archive(Map.of(
+                AgentPackageArtifactVerifier.JSON_MANIFEST, wrongDigestManifest.getBytes(StandardCharsets.UTF_8),
+                "resources/prompt.txt", resource));
+        assertThrows(AgentPackageArtifactVerifier.VerificationException.class,
+                () -> verifier.verify(wrongDigest, sign(wrongDigest, "acme:support", "1.2.0", "acme:publisher")));
 
         byte[] undeclared = archive(Map.of(
                 AgentPackageArtifactVerifier.JSON_MANIFEST, MINIMAL.getBytes(StandardCharsets.UTF_8),
