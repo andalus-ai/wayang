@@ -1,7 +1,7 @@
 /// One operation of an OpenAPI/Swagger document as the server lists it (`POST /api/v1/connectors/describe` with
 /// `connector: openapi`; the connector's `listOperations` shape).
 class OpenApiOperation {
-  const OpenApiOperation({required this.name, required this.description, required this.method, required this.path, required this.args, required this.required});
+  const OpenApiOperation({required this.name, required this.description, required this.method, required this.path, required this.args, required this.required, this.inputSchema = const {}});
 
   factory OpenApiOperation.fromJson(Map<String, dynamic> j) {
     final schema = j['inputSchema'] is Map ? Map<String, dynamic>.from(j['inputSchema'] as Map) : <String, dynamic>{};
@@ -13,6 +13,7 @@ class OpenApiOperation {
       path: '${j['path'] ?? ''}',
       args: props.keys.toList(),
       required: [for (final r in (schema['required'] as List? ?? const [])) '$r'],
+      inputSchema: schema,
     );
   }
 
@@ -22,6 +23,9 @@ class OpenApiOperation {
   final String path;
   final List<String> args;
   final List<String> required;
+
+  /// The JSON Schema of the operation's arguments as the server lists it (`inputSchema`); what an input mapping has to produce.
+  final Map<String, dynamic> inputSchema;
 
   /// Anything but GET/HEAD changes something on the other side; the picker marks it so it is not chosen by accident.
   bool get changesData => method != 'GET' && method != 'HEAD';

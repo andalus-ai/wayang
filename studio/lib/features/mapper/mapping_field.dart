@@ -7,8 +7,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme.dart';
 import '../../data/api_client.dart';
 import '../../data/field_mapping_model.dart';
+import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/node_test_provider.dart';
+import '../../providers/openapi_operations_provider.dart';
+import '../../data/component_inputs.dart';
+import '../../data/openapi_model.dart';
 import '../common/schema_form.dart';
 import 'field_mapping_builder.dart';
 
@@ -16,15 +20,18 @@ const _mono = TextStyle(fontFamily: 'monospace', fontSize: 12);
 
 /// The editor for a service node's `inputMapping` / `outputMapping`: a one-line summary and an "Edit mapping" button that opens the field mapping
 /// builder with a live preview. [output] mappings are tried against `{variables..., result}`.
-FieldBuilder mappingFieldBuilder({required bool output, required String nodeId}) =>
-    (context, value, onChanged) => MappingField(value: value, output: output, nodeId: nodeId, onChanged: onChanged);
+FieldBuilder mappingFieldBuilder({required bool output, required String nodeId, required Map<String, dynamic> props}) =>
+    (context, value, onChanged) => MappingField(value: value, output: output, nodeId: nodeId, props: props, onChanged: onChanged);
 
 class MappingField extends ConsumerWidget {
-  const MappingField({super.key, required this.value, required this.output, required this.nodeId, required this.onChanged});
+  const MappingField({super.key, required this.value, required this.output, required this.nodeId, required this.props, required this.onChanged});
 
   final Object? value;
   final bool output;
   final String nodeId;
+
+  /// The node's properties: which connector and operation it runs decides what an input mapping can be filled from.
+  final Map<String, dynamic> props;
   final ValueChanged<Object?> onChanged;
 
   /// "3 fields", "Custom mapping (JSON)", or "Not set".
@@ -42,6 +49,41 @@ class MappingField extends ConsumerWidget {
     return enc.convert({'result': lastTestOutput ?? <String, dynamic>{}});
   }
 
+  /// "Fill from ..." offers for an input mapping: the chosen OpenAPI operation's arguments, else the connector component's declared inputs.
+  List<MappingSuggestion> suggestions(WidgetRef ref) {
+    if (output) return const [];
+    final connector = props['connector'];
+    final opName = props['operation'];
+    if (connector == 'openapi' && opName is String) {
+      final ops = ref.read(openApiOperationsProvider(nodeId)) ?? const <OpenApiOperation>[];
+      for (final op in ops) {
+        if (op.name != opName || op.inputSchema.isEmpty) continue;
+        return [
+          MappingSuggestion(
+            label: 'Fill from operation',
+            tooltip: 'The arguments of ${op.method} ${op.path}',
+            build: (sample, existing) => rowsFromSchema(op.inputSchema, sample: sample) ?? const [],
+          ),
+        ];
+      }
+    }
+    final components = ref.read(componentCatalogProvider).valueOrNull ?? const <ComponentCatalogEntry>[];
+    final entry = componentForNode(components, props);
+    final inputs = entry == null ? const <ComponentInput>[] : componentInputs(entry);
+    if (inputs.isEmpty) return const [];
+    return [
+      MappingSuggestion(
+        label: 'Fill from connector inputs',
+        tooltip: 'The inputs ${entry!.displayName} declares (required ones first)',
+        build: (sample, existing) => rowsFromInputs(
+          [for (final i in inputs) (name: i.name, type: i.type, mandatory: i.mandatory, description: i.description)],
+          sample: sample,
+          existing: existing,
+        ),
+      ),
+    ];
+  }
+
   Future<void> _edit(BuildContext context, WidgetRef ref) async {
     final last = output ? ref.read(lastNodeTestOutputProvider(nodeId)) : null;
     final result = await showDialog<Map<String, dynamic>?>(
@@ -52,6 +94,7 @@ class MappingField extends ConsumerWidget {
         output: output,
         sample: sampleText(output, last),
         sampleFromTest: last != null,
+        suggestions: suggestions(ref),
       ),
     );
     if (result == null) return; // cancelled
@@ -70,11 +113,12 @@ class MappingField extends ConsumerWidget {
 }
 
 class _MappingDialog extends ConsumerStatefulWidget {
-  const _MappingDialog({required this.initial, required this.output, required this.sample, required this.sampleFromTest});
+  const _MappingDialog({required this.initial, required this.output, required this.sample, required this.sampleFromTest, required this.suggestions});
   final Map<String, dynamic> initial;
   final bool output;
   final String sample;
   final bool sampleFromTest;
+  final List<MappingSuggestion> suggestions;
 
   @override
   ConsumerState<_MappingDialog> createState() => _MappingDialogState();
@@ -219,7 +263,7 @@ class _MappingDialogState extends ConsumerState<_MappingDialog> {
             const SizedBox(height: 8),
             Expanded(
               child: _builder
-                  ? FieldMappingBuilder(controller: _spec, sample: _sample, result: _result, onProblems: (p) => setState(() => _problems = p))
+                  ? FieldMappingBuilder(controller: _spec, sample: _sample, result: _result, onProblems: (p) => setState(() => _problems = p), suggestions: widget.suggestions)
                   : TextField(controller: _spec, expands: true, maxLines: null, minLines: null, textAlignVertical: TextAlignVertical.top, style: _mono, decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true)),
             ),
           ]);

@@ -540,3 +540,24 @@ String copyTarget(String target, List<MappingRow> rows) {
   }
   return candidate;
 }
+
+/// One declared input of a connector or component, for [rowsFromInputs].
+typedef DeclaredInput = ({String name, String type, bool mandatory, String description});
+
+/// Rows for declared inputs (a component's `uiHints.inputs`): one per input, required marked, the type and description as the hint. A name that
+/// matches exactly one path of [sample] (by last segment, ignoring case) is connected to it. Names already used in [existing] are skipped.
+List<MappingRow> rowsFromInputs(Iterable<DeclaredInput> inputs, {Object? sample, List<MappingRow> existing = const []}) {
+  final paths = samplePaths(sample).where((p) => !p.contains('[')).toList();
+  final used = {for (final r in existing) r.target.trim()};
+  final out = <MappingRow>[];
+  for (final i in inputs) {
+    if (out.length + existing.length >= kMaxMappingRows) break;
+    if (i.name.isEmpty || used.contains(i.name)) continue;
+    final hits = paths.where((p) => p.split('.').last.toLowerCase() == i.name.toLowerCase()).toList();
+    final hint = [i.type + (i.mandatory ? ', required' : ''), if (i.description.trim().isNotEmpty) i.description.trim()].join(' - ');
+    out.add(MappingRow(target: i.name, value: hits.length == 1 ? hits.single : '')
+      ..hint = hint
+      ..required = i.mandatory);
+  }
+  return out;
+}

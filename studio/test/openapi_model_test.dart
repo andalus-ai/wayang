@@ -51,4 +51,20 @@ void main() {
     expect(out['methods'], ['GET', 'DELETE']);
     expect(withOpenApiOperation({}, del)['methods'], ['GET', 'HEAD', 'DELETE']);
   });
+
+  test('an operation keeps its input schema, which is what an input mapping must produce', () {
+    final op = OpenApiOperation.fromJson({
+      'name': 'getPet',
+      'method': 'get',
+      'path': '/pets/{id}',
+      'inputSchema': {
+        'type': 'object',
+        'required': ['id'],
+        'properties': {'id': {'type': 'string'}, 'verbose': {'type': 'boolean'}}
+      },
+    });
+    expect(op.inputSchema['required'], ['id']);
+    expect((op.inputSchema['properties'] as Map).keys, ['id', 'verbose']);
+    expect(op.args, ['id', 'verbose']);
+  });
 }
