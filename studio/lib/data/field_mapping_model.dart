@@ -200,10 +200,7 @@ List<String> rowProblems(List<MappingRow> rows, [String where = '']) {
     }
     if (!target.split('.').every((p) => p.isNotEmpty)) out.add('$n: "$target" is not a valid field path.');
     if (!seen.add(target)) out.add('$n: "$target" is mapped twice.');
-    if (r.value.trim().isEmpty) {
-      out.add('$n ("$target") has ${r.kind == SourceKind.list ? 'no list' : r.kind == SourceKind.conditional ? 'no condition' : 'no source'}.');
-      continue;
-    }
+    if (r.value.trim().isEmpty) continue; // not mapped yet: left out of the spec, listed by unmappedRequired when the schema needs it
     switch (r.kind) {
       case SourceKind.list:
         if (!_identifier.hasMatch(r.itemName.trim())) out.add('$n ("$target"): the item name must be a plain name such as item.');
