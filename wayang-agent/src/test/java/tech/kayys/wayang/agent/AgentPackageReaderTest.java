@@ -150,10 +150,22 @@ class AgentPackageReaderTest {
     @Test
     @SuppressWarnings("unchecked")
     void deeplyFreezesNestedAgentOptionsAndToolConfiguration() {
-        String source = MINIMAL.replace("\\"tools\\": []",
-                "\\"tools\\": [{\\"name\\":\\"crm\\",\\"config\\":{\\"custom\\":{\\"items\\":[\\"safe\\"]}}}]")
-                .replace("\\"tools\\": [{", "\\"tools\\": [{"); // Keep manifest JSON formatting deterministic.
-        source = source.replace("\\"maxSteps\\": 8", "\\"maxSteps\\": 8, \\"options\\":{\\"custom\\":{\\"items\\":[\\"safe\\"]}}");
+        String source = """
+                {
+                  "apiVersion":"1.0","kind":"AgentPackage",
+                  "metadata":{"id":"acme:immutable","version":"1.0.0","publisher":"acme:publisher","displayName":"Immutable"},
+                  "spec":{
+                    "agentApiRange":"^1.0",
+                    "agent":{
+                      "id":"immutable","model":"local/test","maxSteps":8,
+                      "tools":[{"name":"crm","config":{"custom":{"items":["safe"]}}}],
+                      "options":{"custom":{"items":["safe"]}}
+                    },
+                    "interface":{"inputSchema":{"type":"object"},"outputSchema":{"type":"object"}},
+                    "dependencies":[],"configuration":[],"requestedPermissions":[]
+                  }
+                }
+                """;
         var agent = reader.read(source).agent();
         Map<String, Object> options = (Map<String, Object>) agent.options().get("custom");
         List<Object> optionItems = (List<Object>) options.get("items");
