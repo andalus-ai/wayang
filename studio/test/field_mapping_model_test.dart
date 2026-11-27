@@ -340,4 +340,25 @@ void main() {
     expect(rows[2].value, isEmpty, reason: 'id matches two paths');
     expect(unmappedRequired(rows), ['url']);
   });
+
+  test('a decision model tells which process variables it reads (plain inputs only, once each)', () {
+    final doc = {
+      'decisions': [
+        {
+          'inputs': ['age', 'customer.tier', 'customer.region', 'income * 12', 'age'],
+        },
+        {
+          'inputs': ['score']
+        },
+        'junk',
+      ]
+    };
+    final names = decisionInputsOf(doc);
+    expect(names.map((n) => n.name), ['age', 'customer', 'score']);
+    expect(names[1].description, 'read by the decision as customer.tier');
+    expect(decisionInputsOf(null), isEmpty);
+    expect(decisionInputsOf({'decisions': 'x'}), isEmpty);
+    final rows = rowsFromInputs(names, sample: {'age': 30, 'applicant': {'score': 7}});
+    expect(rows.map((r) => '${r.target}<-${r.value}'), ['age<-age', 'customer<-', 'score<-applicant.score']);
+  });
 }

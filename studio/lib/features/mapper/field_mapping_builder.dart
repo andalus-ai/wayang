@@ -33,7 +33,7 @@ class MappingSuggestion {
 /// rows are valid, and re-reads it when it is changed elsewhere (an example, the JSON tab). A spec with features the builder cannot show
 /// (nested objects, `$each`, `$if`) is left untouched and edited as JSON.
 class FieldMappingBuilder extends StatefulWidget {
-  const FieldMappingBuilder({super.key, required this.controller, required this.sample, this.result, this.onProblems, this.suggestions = const []});
+  const FieldMappingBuilder({super.key, required this.controller, required this.sample, this.result, this.onProblems, this.suggestions = const [], this.kinds = SourceKind.values, this.allowSchema = true});
 
   final TextEditingController controller;
 
@@ -88,7 +88,8 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
 
   void _load() {
     try {
-      _rows = rowsFromSpec(jsonDecode(widget.controller.text));
+      final rows = rowsFromSpec(jsonDecode(widget.controller.text));
+      _rows = rows != null && rows.every((r) => widget.kinds.contains(r.kind)) ? rows : null;
     } catch (_) {
       _rows = null;
     }
@@ -229,7 +230,7 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
         child: Padding(
           padding: EdgeInsets.all(16),
           child: Text(
-            'This mapping uses features the builder does not show (nested objects, lists, \$each, \$if, or the JSON is not valid yet). '
+            'This mapping uses features the builder does not show (nested objects, lists, fixed values or templates where only expressions are allowed, \$each, \$if, or the JSON is not valid yet). '
             'Edit it on the JSON tab; the builder works again once it is a flat list of fields.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12),
@@ -312,6 +313,7 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
                     key: ObjectKey(rows[i]),
                     row: rows[i],
                     scope: _sample,
+                    kinds: widget.kinds,
                     result: widget.result?.value,
                     onChanged: _changed,
                     onRemove: () {
