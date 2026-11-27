@@ -178,6 +178,10 @@ class AgentPackageArtifactVerifierTest {
                 verified, List.of(), Map.of(), NOW);
         assertEquals(verified.archiveSha256(), installed.lock().artifactSha256());
         assertEquals("acme:support", installed.lock().packageId());
+        assertNotNull(installed.verification());
+        assertEquals("acme:publisher", installed.verification().publisher());
+        assertEquals(verified.signingKeyFingerprint(), installed.verification().signingKeyFingerprint());
+        assertEquals(verified.manifestSha256(), installed.verification().manifestSha256());
     }
 
     private static String resource(String path, String mediaType, String digest, String role) {
