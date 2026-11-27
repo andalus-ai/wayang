@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wayang_studio/design_system/wds.dart';
 
+void _ignoreSelection(String key) {}
+
 void main() {
   group('Wayang Design System', () {
     test('exposes a consistent spacing and responsive scale', () {
@@ -87,6 +89,19 @@ void main() {
       expect(find.text('Home'), findsOneWidget);
       await tester.tap(find.text('Runs'));
       expect(selected, 'runs');
+    });
+
+    testWidgets('WdsCompactNavigationBar handles an empty destination list', (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(
+          bottomNavigationBar: WdsCompactNavigationBar(
+            items: [],
+            selectedKey: '',
+            onSelected: _ignoreSelection,
+          ),
+        ),
+      ));
+      expect(find.byType(NavigationBar), findsNothing);
     });
 
     testWidgets('WdsEmptyState uses the supplied icon and action', (tester) async {
