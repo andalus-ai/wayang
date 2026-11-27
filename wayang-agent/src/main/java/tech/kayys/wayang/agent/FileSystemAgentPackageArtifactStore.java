@@ -78,7 +78,9 @@ public final class FileSystemAgentPackageArtifactStore implements AgentPackageAr
                 verifyObject(object, digest);
                 return reference;
             }
+            boolean acquired = false;
             try (FileChannel ignored = FileChannel.open(lock, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+                acquired = true;
                 existing = find(packageId, version);
                 if (existing.isPresent()) {
                     if (!existing.get().sha256().equals(digest)) throw conflict();
@@ -92,7 +94,7 @@ public final class FileSystemAgentPackageArtifactStore implements AgentPackageAr
             } catch (FileAlreadyExistsException busy) {
                 throw new IllegalStateException("Another writer is publishing this coordinate; retry the operation", busy);
             } finally {
-                Files.deleteIfExists(lock);
+                if (acquired) Files.deleteIfExists(lock);
             }
         } catch (IOException e) {
             throw new IllegalStateException("Agent Package artifact could not be stored", e);
@@ -109,7 +111,7 @@ public final class FileSystemAgentPackageArtifactStore implements AgentPackageAr
             if (size <= 0 || size > MAX_ARCHIVE_BYTES) throw new IllegalStateException("Stored artifact has an invalid size");
             byte[] bytes = Files.readAllBytes(object);
             if (!sha256(bytes).equals(digest)) throw new IllegalStateException("Stored artifact failed its SHA-256 integrity check");
-            return Optional.of(new StoredArtifact(new ArtifactReference("local:content", "0.0.0", digest), bytes));
+            return Optional.of(new StoredArtifact(digest, bytes));
         } catch (IOException e) {
             throw new IllegalStateException("Agent Package artifact could not be read", e);
         }
