@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import stat
+import time
+import uuid
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -43,7 +46,11 @@ class WalRetentionSimulationTest(unittest.TestCase):
         self.temp.cleanup()
 
     def write_plan(self, **overrides):
+        now = int(time.time())
         plan = {
+            "plan_id": str(uuid.uuid4()),
+            "created_at_epoch": now,
+            "expires_at_epoch": now + 24 * 60 * 60,
             "deletion_performed": False,
             "eligible_wal_files": [CANDIDATE],
             "required_wal_files": [REQUIRED],
@@ -52,6 +59,9 @@ class WalRetentionSimulationTest(unittest.TestCase):
             "catalog_snapshot_sha256": MODULE.catalog_snapshot_fingerprint(self.catalog),
         }
         plan.update(overrides)
+        plan.pop("plan_sha256", None)
+        canonical = json.dumps(plan, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        plan["plan_sha256"] = hashlib.sha256(canonical).hexdigest()
         self.plan.write_text(json.dumps(plan), encoding="utf-8")
 
     def test_candidates_removed_only_from_copy_and_required_wal_retained(self):
@@ -66,6 +76,27 @@ class WalRetentionSimulationTest(unittest.TestCase):
         self.assertTrue(report["source_archive_unchanged"])
         self.assertFalse(report["deletion_performed_on_source"])
         self.assertEqual(report["removed_candidate_files"], [CANDIDATE])
+
+    def test_expired_plan_fails_before_destination_creation(self):
+        self.write_plan(created_at_epoch=int(time.time()) - 60 * 60,
+                        expires_at_epoch=int(time.time()) - 1)
+        with self.assertRaisesRegex(SimulationError, "retention plan has expired"):
+            simulate(self.archive, self.plan, self.catalog, self.root / "expired")
+        self.assertFalse((self.root / "expired").exists())
+
+    def test_plan_tampering_fails_integrity_check(self):
+        self.write_plan()
+        data = json.loads(self.plan.read_text(encoding="utf-8"))
+        data["eligible_wal_files"] = [REQUIRED]
+        self.plan.write_text(json.dumps(data), encoding="utf-8")
+        with self.assertRaisesRegex(SimulationError, "integrity check failed"):
+            simulate(self.archive, self.plan, self.catalog, self.root / "tampered")
+        self.assertFalse((self.root / "tampered").exists())
+
+    def test_invalid_plan_identity_fails_closed(self):
+        self.write_plan(plan_id="not-a-uuid")
+        with self.assertRaisesRegex(SimulationError, "valid plan_id UUID"):
+            simulate(self.archive, self.plan, self.catalog, self.root / "bad-id")
 
     def test_catalog_change_since_planning_fails_closed(self):
         changed = json.loads(self.catalog.read_text(encoding="utf-8"))
