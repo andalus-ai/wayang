@@ -400,3 +400,44 @@ Graph traversal returns graph facts and their provenance metadata; it does **not
 ### Current scope and next increment
 
 This increment delivers traversal and exact-version evidence retraction as workflow nodes. It does not yet add a graph-ingestion node: graph ingestion requires a configured extraction provider, versioned `KnowledgeSchema`, resolution policy and GraphStore adapter to be assembled explicitly. The next increment will compose those existing SPIs into a bounded graph-ingestion workflow component rather than silently inventing a default ontology or fuzzy merge policy.
+
+
+## Optional AQLI inference adapter
+
+**Foundation status: implemented as an optional Java 21 HTTP adapter.** The separate `wayang-adapter-aqli` module consumes AQLI's documented OpenAI-compatible service endpoints. It does not add an AQLI SDK/runtime dependency to `wayang-rag`, and it does not require Andalus.
+
+| Adapter | Wayang contract | AQLI endpoint |
+|---|---|---|
+| `AqliQueryMentionModel` | `QueryMentionModel` | `POST /v1/chat/completions` |
+| `AqliEntityResolutionModel` | `EntityResolutionModel` | `POST /v1/chat/completions` |
+| `AqliEmbedder` | `Embedder` | `POST /v1/embeddings` |
+
+The HTTP boundary is deliberate: AQLI documents JDK 25 for its Java SDK/runtime while Wayang targets Java 21. The adapter therefore speaks the service API and preserves Wayang's Java 21 baseline. Configure the AQLI **server origin** (for example `http://localhost:9131`), API key, model identifiers, request timeout and embedding dimension in the application. The client sends the documented `X-API-Key` header and JSON accept/content headers. Do not include credentials in the base URL.
+
+The chat adapter asks the selected model for a compact JSON object. The inspected AQLI API documentation does not establish schema-constrained JSON output, so this is a prompt-level format request—not a guarantee from the inference server. Invalid JSON, missing fields, unexpected result counts, provider errors and timeouts are surfaced as adapter failures. Compose the adapters with `ModelQueryMentionExtractor` and `ConfidenceAwareEntityResolver` to retain the deterministic fallback behavior and validation already enforced by `wayang-rag`.
+
+Entity-resolution prompts contain only the mention candidates and canonical entities matching the request's tenant, collection and entity type. Tenant and collection identifiers themselves are not sent to AQLI. Candidate counts and aliases are capped before serialization; the core resolver still independently validates every returned candidate ID, canonical entity ID, entity type, confidence and winner margin. This is defense in depth, not a substitute for the graph/evidence ACL boundary.
+
+`AqliEmbedder` requires an explicitly configured dimension. It checks every returned vector against that dimension; the model identifier and dimension are included in `Embedder.id()` so vectors from incompatible embedding spaces are not silently mixed. Use one embedding model/dimension pair per index and rebuild or migrate an index when that space changes.
+
+The adapter intentionally does not implement reranking: no reranking endpoint was established in the inspected AQLI API references. It also does not automatically retry inference POSTs. Applications should set request timeouts and concurrency limits at their adapter/service boundary; transient retry policy should be added only when AQLI exposes a documented idempotency strategy. API keys and full prompts/responses are not written to adapter logs.
+
+Example composition:
+
+```java
+AqliInferenceClient client = new AqliInferenceClient(
+        URI.create("http://localhost:9131"),
+        aqliApiKey,
+        Duration.ofSeconds(30));
+
+QueryMentionModel mentionModel = new AqliQueryMentionModel(client, chatModelId);
+EntityResolutionModel resolutionModel = new AqliEntityResolutionModel(client, chatModelId);
+Embedder embedder = new AqliEmbedder(client, embeddingModelId, embeddingDimensions);
+
+QueryMentionExtractor queryExtractor = new ModelQueryMentionExtractor(
+        mentionModel, deterministicQueryExtractor, 0.80, 100);
+EntityResolver entityResolver = new ConfidenceAwareEntityResolver(
+        resolutionModel, new ExactAliasEntityResolver(), 0.85, 0.10);
+```
+
+The adapter module has isolated fake-transport contract tests for chat parsing, tenant/collection filtering and batch embedding shape. Those tests do not claim that a live AQLI server or a specific model/runner has been exercised. Model capability and embedding dimensions must be verified against the deployed AQLI model before production rollout.
