@@ -92,7 +92,7 @@ public final class AgentPackageReader {
         validateAgentMap(agentMap);
         AgentSpec agent;
         try {
-            agent = AgentSpecLoader.fromMap(agentMap);
+            agent = immutableAgent(AgentSpecLoader.fromMap(agentMap));
         } catch (RuntimeException e) {
             throw new AgentPackageException("Invalid embedded AgentSpec: " + e.getMessage(), e);
         }
@@ -136,6 +136,16 @@ public final class AgentPackageReader {
                 agentApiRange, runtimeCompatibility, agent,
                 new AgentInterface(inputSchema, outputSchema), triggers, dependencies, configuration,
                 permissions, new Evaluation(evaluationRequired, evaluationSuites), resources);
+    }
+
+
+    private static AgentSpec immutableAgent(AgentSpec source) {
+        List<AgentSpec.Tool> tools = source.tools().stream()
+                .map(tool -> new AgentSpec.Tool(tool.name(), tool.type(), tool.description(), immutable(tool.config())))
+                .toList();
+        return new AgentSpec(source.id(), source.name(), source.model(), source.systemPrompt(), source.inputTemplate(),
+                tools, source.maxSteps(), source.timeoutSeconds(), source.requireApproval(), source.outputKeys(),
+                immutable(source.options()));
     }
 
     private static void validateAgentMap(Map<String, Object> agent) {
