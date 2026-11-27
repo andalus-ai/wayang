@@ -27,7 +27,8 @@ public final class AqliEntityResolutionModel implements EntityResolutionModel {
             runnerUpConfidence must be no greater than confidence. Return one match per mention.
             """;
     private static final int MAX_MENTIONS = 100;
-    private static final int MAX_ENTITIES_PER_MENTION = 200;
+    private static final int MAX_ENTITIES_PER_MENTION = 100;
+    private static final int MAX_TOTAL_ENTITIES = 2_000;
     private static final int MAX_ALIASES = 20;
 
     private final AqliInferenceClient client;
@@ -57,19 +58,23 @@ public final class AqliEntityResolutionModel implements EntityResolutionModel {
             throw new IllegalArgumentException("entity resolution requires 1..100 mentions");
         }
         List<Map<String, Object>> mentions = new ArrayList<>(request.candidates().size());
+        int totalEntities = 0;
         for (EntityCandidate mention : request.candidates()) {
             List<Map<String, Object>> scoped = new ArrayList<>();
             for (KnowledgeEntity entity : request.existingEntities()) {
                 if (entity.tenantId().equals(request.tenantId())
                         && entity.collectionId().equals(request.collectionId())
                         && entity.type().equals(mention.entityType())
-                        && scoped.size() < MAX_ENTITIES_PER_MENTION) {
+                        && scoped.size() < MAX_ENTITIES_PER_MENTION
+                        && totalEntities < MAX_TOTAL_ENTITIES) {
                     Map<String, Object> candidate = new LinkedHashMap<>();
                     candidate.put("id", entity.id());
                     candidate.put("type", entity.type());
                     candidate.put("canonicalName", entity.canonicalName());
-                    candidate.put("aliases", entity.aliases().stream().limit(MAX_ALIASES).toList());
+                    candidate.put("aliases", entity.aliases().stream().filter(alias -> alias.length() <= 500)
+                            .limit(MAX_ALIASES).toList());
                     scoped.add(candidate);
+                    totalEntities++;
                 }
             }
             mentions.add(Map.of(
