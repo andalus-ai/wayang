@@ -540,3 +540,44 @@ String copyTarget(String target, List<MappingRow> rows) {
   }
   return candidate;
 }
+
+/// One declared input of a connector or component, for [rowsFromInputs].
+typedef DeclaredInput = ({String name, String type, bool mandatory, String description});
+
+/// Rows for declared inputs (a component's `uiHints.inputs`): one per input, required marked, the type and description as the hint. A name that
+/// matches exactly one path of [sample] (by last segment, ignoring case) is connected to it. Names already used in [existing] are skipped.
+List<MappingRow> rowsFromInputs(Iterable<DeclaredInput> inputs, {Object? sample, List<MappingRow> existing = const []}) {
+  final paths = samplePaths(sample).where((p) => !p.contains('[')).toList();
+  final used = {for (final r in existing) r.target.trim()};
+  final out = <MappingRow>[];
+  for (final i in inputs) {
+    if (out.length + existing.length >= kMaxMappingRows) break;
+    if (i.name.isEmpty || used.contains(i.name)) continue;
+    final hits = paths.where((p) => p.split('.').last.toLowerCase() == i.name.toLowerCase()).toList();
+    final hint = [i.type + (i.mandatory ? ', required' : ''), if (i.description.trim().isNotEmpty) i.description.trim()].join(' - ');
+    out.add(MappingRow(target: i.name, value: hits.length == 1 ? hits.single : '')
+      ..hint = hint
+      ..required = i.mandatory);
+  }
+  return out;
+}
+
+/// The process variables a decision model reads, as declared inputs for [rowsFromInputs]: for every decision table input that is a plain path
+/// (`age`, `customer.tier`) the first segment, once each, in order. Inputs that are computed expressions are skipped (they cannot be named
+/// without parsing the expression), so the list can be shorter than the table's inputs.
+List<DeclaredInput> decisionInputsOf(Object? document) {
+  final out = <DeclaredInput>[];
+  final seen = <String>{};
+  if (document is! Map || document['decisions'] is! List) return out;
+  final path = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$');
+  for (final d in document['decisions'] as List) {
+    if (d is! Map || d['inputs'] is! List) continue;
+    for (final e in d['inputs'] as List) {
+      final expr = '$e'.trim();
+      if (!path.hasMatch(expr)) continue;
+      final name = expr.split('.').first;
+      if (seen.add(name)) out.add((name: name, type: 'any', mandatory: false, description: 'read by the decision as $expr'));
+    }
+  }
+  return out;
+}

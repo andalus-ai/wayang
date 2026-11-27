@@ -317,4 +317,48 @@ void main() {
     expect(copyTarget('a', [MappingRow(target: 'a'), MappingRow(target: 'a_copy'), MappingRow(target: 'a_copy2')]), 'a_copy3');
     expect(copyTarget('', []), 'field_copy');
   });
+
+  test('declared inputs become rows: required marked, hints, sample matches, existing skipped', () {
+    final rows = rowsFromInputs(
+      [
+        (name: 'url', type: 'string', mandatory: true, description: 'Target'),
+        (name: 'qty', type: 'number', mandatory: false, description: ''),
+        (name: 'id', type: 'string', mandatory: false, description: ''),
+        (name: 'taken', type: 'any', mandatory: false, description: ''),
+      ],
+      sample: {
+        'order': {'qty': 2, 'id': 9},
+        'other': {'id': 1}
+      },
+      existing: [MappingRow(target: 'taken', value: 'x')],
+    );
+    expect(rows.map((r) => r.target), ['url', 'qty', 'id']);
+    expect(rows[0].required, isTrue);
+    expect(rows[0].hint, 'string, required - Target');
+    expect(rows[1].hint, 'number');
+    expect(rows[1].value, 'order.qty');
+    expect(rows[2].value, isEmpty, reason: 'id matches two paths');
+    expect(unmappedRequired(rows), ['url']);
+  });
+
+  test('a decision model tells which process variables it reads (plain inputs only, once each)', () {
+    final doc = {
+      'decisions': [
+        {
+          'inputs': ['age', 'customer.tier', 'customer.region', 'income * 12', 'age'],
+        },
+        {
+          'inputs': ['score']
+        },
+        'junk',
+      ]
+    };
+    final names = decisionInputsOf(doc);
+    expect(names.map((n) => n.name), ['age', 'customer', 'score']);
+    expect(names[1].description, 'read by the decision as customer.tier');
+    expect(decisionInputsOf(null), isEmpty);
+    expect(decisionInputsOf({'decisions': 'x'}), isEmpty);
+    final rows = rowsFromInputs(names, sample: {'age': 30, 'applicant': {'score': 7}});
+    expect(rows.map((r) => '${r.target}<-${r.value}'), ['age<-age', 'customer<-', 'score<-applicant.score']);
+  });
 }
