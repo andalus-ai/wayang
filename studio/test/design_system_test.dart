@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wayang_studio/design_system/wds.dart';
 
+void _ignoreSelection(String key) {}
+
 void main() {
   group('Wayang Design System', () {
     test('exposes a consistent spacing and responsive scale', () {
