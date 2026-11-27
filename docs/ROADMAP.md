@@ -489,6 +489,7 @@ See [Agent Package Installation and Locking](architecture/AGENT-PACKAGE-INSTALLA
 - [x] Verify the archive digest, publisher signature, signed identity and every declared resource digest.
 - [x] Add structural checks for CycloneDX SBOM and in-toto Statement v1 evidence resources.
 - [x] Add secure `installVerified` and `upgradeVerified` paths that accept verifier-created artifacts and require verified dependency candidates.
+- [x] Persist publisher/key identity, signing-key fingerprint, manifest digest and verification time as an installation audit receipt.
 - [x] Add tests for signature tampering, trust/revocation/namespace/validity, resource integrity, archive limits and evidence structure.
 
 **Explicit limitations:** the in-memory trust store is a test/local implementation; persistent trust administration, KMS/HSM integration and distributed revocation are future work. SBOM and in-toto checks are structural, not full schema/policy or independent builder-attestation verification. Artifacts are not downloaded or persisted, and archives are not extracted. The existing low-level installer remains for local/trusted catalog use; network-facing import APIs must use the verified methods.
