@@ -22,9 +22,11 @@ public interface AgentPackageArtifactStore {
         }
     }
 
-    record StoredArtifact(ArtifactReference reference, byte[] archive) {
+    record StoredArtifact(String sha256, byte[] archive) {
         public StoredArtifact {
-            if (reference == null || archive == null) throw new IllegalArgumentException("Artifact reference and bytes are required");
+            if (sha256 == null || !sha256.matches("[0-9a-f]{64}") || archive == null) {
+                throw new IllegalArgumentException("Artifact digest and bytes are required");
+            }
             archive = archive.clone();
         }
         @Override public byte[] archive() { return archive.clone(); }
