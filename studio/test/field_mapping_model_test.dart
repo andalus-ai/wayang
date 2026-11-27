@@ -296,4 +296,25 @@ void main() {
     expect(firstItemResult(result, 'missing'), isNull);
     expect(resultAt(firstItemResult(result, 'lines'), 'sku'), (true, 'a'));
   });
+
+  test('a copy is independent and gets an unused target', () {
+    final list = MappingRow(target: 'lines', kind: SourceKind.list, value: 'body.lines')
+      ..required = true
+      ..hint = 'array'
+      ..itemName = 'l'
+      ..where = 'l.q > 0'
+      ..children.add(MappingRow(target: 'sku', value: 'l.sku', transforms: [TransformStep('replace', ['a', 'b'])]));
+    final c = list.copy();
+    expect(specFromRows([list]), specFromRows([c..target = 'lines']));
+    c.children.single.transforms.single.args[0] = 'z';
+    c.children.single.value = 'other';
+    expect(list.children.single.transforms.single.args[0], 'a', reason: 'arguments are not shared');
+    expect(list.children.single.value, 'l.sku');
+    final cond = MappingRow(target: 'c', kind: SourceKind.conditional, value: 'x')..thenRow = MappingRow(target: '-', value: 'y');
+    expect(cond.copy().thenRow.value, 'y');
+    expect(identical(cond.copy().thenRow, cond.thenRow), isFalse);
+    expect(copyTarget('a', [MappingRow(target: 'a')]), 'a_copy');
+    expect(copyTarget('a', [MappingRow(target: 'a'), MappingRow(target: 'a_copy'), MappingRow(target: 'a_copy2')]), 'a_copy3');
+    expect(copyTarget('', []), 'field_copy');
+  });
 }

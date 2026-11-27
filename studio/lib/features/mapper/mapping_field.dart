@@ -46,6 +46,7 @@ class MappingField extends ConsumerWidget {
     final last = output ? ref.read(lastNodeTestOutputProvider(nodeId)) : null;
     final result = await showDialog<Map<String, dynamic>?>(
       context: context,
+      barrierDismissible: false,
       builder: (_) => _MappingDialog(
         initial: value is Map ? Map<String, dynamic>.from(value as Map) : <String, dynamic>{},
         output: output,
@@ -85,6 +86,7 @@ class _MappingDialogState extends ConsumerState<_MappingDialog> {
   final _result = ValueNotifier<Object?>(null);
   bool _builder = true;
   bool _omitNull = false;
+  List<String> _problems = const [];
   String? _error;
   String? _preview;
   Timer? _debounce;
@@ -150,6 +152,29 @@ class _MappingDialogState extends ConsumerState<_MappingDialog> {
     }
   }
 
+  bool get _changedFromStart {
+    final now = _specOrNull();
+    return now == null || jsonEncode(now) != jsonEncode(widget.initial);
+  }
+
+  Future<void> _cancel() async {
+    if (_changedFromStart) {
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Discard your changes?'),
+          content: const Text('The mapping on the node stays as it was.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep editing')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Discard')),
+          ],
+        ),
+      );
+      if (discard != true || !mounted) return;
+    }
+    Navigator.pop(context);
+  }
+
   Map<String, dynamic>? _specOrNull() {
     try {
       final v = jsonDecode(_spec.text);
@@ -194,7 +219,7 @@ class _MappingDialogState extends ConsumerState<_MappingDialog> {
             const SizedBox(height: 8),
             Expanded(
               child: _builder
-                  ? FieldMappingBuilder(controller: _spec, sample: _sample, result: _result)
+                  ? FieldMappingBuilder(controller: _spec, sample: _sample, result: _result, onProblems: (p) => setState(() => _problems = p))
                   : TextField(controller: _spec, expands: true, maxLines: null, minLines: null, textAlignVertical: TextAlignVertical.top, style: _mono, decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true)),
             ),
           ]);
@@ -221,9 +246,14 @@ class _MappingDialogState extends ConsumerState<_MappingDialog> {
         }),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        if (_problems.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Text('Fix the highlighted rows to apply.', style: TextStyle(fontSize: 11.5, color: Theme.of(context).colorScheme.error)),
+          ),
+        TextButton(onPressed: _cancel, child: const Text('Cancel')),
         FilledButton(
-          onPressed: canApply ? () => Navigator.pop(context, _specOrNull()) : null,
+          onPressed: canApply && _problems.isEmpty ? () => Navigator.pop(context, _specOrNull()) : null,
           child: const Text('Apply'),
         ),
       ],

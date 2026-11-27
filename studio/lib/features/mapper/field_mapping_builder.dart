@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData, LengthLimitingTextInputFormatter;
 
 import '../../core/theme.dart';
 import '../../data/field_mapping_model.dart';
@@ -24,7 +25,7 @@ const _valueKinds = [SourceKind.field, SourceKind.constant, SourceKind.template,
 /// rows are valid, and re-reads it when it is changed elsewhere (an example, the JSON tab). A spec with features the builder cannot show
 /// (nested objects, `$each`, `$if`) is left untouched and edited as JSON.
 class FieldMappingBuilder extends StatefulWidget {
-  const FieldMappingBuilder({super.key, required this.controller, required this.sample, this.result});
+  const FieldMappingBuilder({super.key, required this.controller, required this.sample, this.result, this.onProblems});
 
   final TextEditingController controller;
 
@@ -33,6 +34,9 @@ class FieldMappingBuilder extends StatefulWidget {
 
   /// The last preview result (null when there is none or it failed); each top-level row shows the value it produced.
   final ValueListenable<Object?>? result;
+
+  /// Told the current problems after every change (empty when the rows are fine), so a host can refuse to save a spec that is out of date.
+  final ValueChanged<List<String>>? onProblems;
 
   @override
   State<FieldMappingBuilder> createState() => _FieldMappingBuilderState();
@@ -102,6 +106,7 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
   void _changed() {
     final rows = _rows!;
     final spec = specFromRows(rows);
+    widget.onProblems?.call(rowProblems(rows));
     setState(() {});
     if (spec == null) return; // the problems are shown; the last valid spec stays in place
     _writing = true;
@@ -113,7 +118,7 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
     final added = autoMapRows(_samplePaths, _rows!.where((r) => r.target.trim().isNotEmpty || r.value.trim().isNotEmpty).toList());
     if (added.isEmpty) return;
     _rows!.removeWhere((r) => r.target.trim().isEmpty && r.value.trim().isEmpty);
-    _rows!.addAll(added);
+    _rows!.addAll(added.take(kMaxMappingRows - _rows!.length));
     _changed();
   }
 
@@ -152,6 +157,10 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             FilledButton(
               onPressed: () {
+                if (c.text.length > 512 * 1024) {
+                  set(() => err = 'This schema is larger than 512 KB; paste the part you need.');
+                  return;
+                }
                 try {
                   final r = rowsFromSchema(jsonDecode(c.text), sample: _sample);
                   if (r == null) {
@@ -169,12 +178,29 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
         ),
       ),
     );
-    c.dispose();
+    // c is not disposed here: the dialog is still animating out and its field may still read it; it has no listeners to leak.
     final rows = _rows;
     if (created == null || rows == null || !mounted) return;
     final have = {for (final r in rows) r.target.trim()};
     rows.removeWhere((r) => r.target.trim().isEmpty && r.value.trim().isEmpty);
-    rows.addAll(created.where((r) => !have.contains(r.target)));
+    rows.addAll(created.where((r) => !have.contains(r.target)).take(kMaxMappingRows - rows.length));
+    _changed();
+  }
+
+  Future<void> _clear(List<MappingRow> rows) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove every field?'),
+        content: Text('This removes all ${rows.length} rows from the mapping.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Remove')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    rows.clear();
     _changed();
   }
 
@@ -203,13 +229,18 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
           runSpacing: 4,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            OutlinedButton.icon(
-              onPressed: () {
-                rows.add(MappingRow());
-                _changed();
-              },
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Add field'),
+            Tooltip(
+              message: rows.length >= kMaxMappingRows ? 'At most $kMaxMappingRows fields' : '',
+              child: OutlinedButton.icon(
+                onPressed: rows.length >= kMaxMappingRows
+                    ? null
+                    : () {
+                        rows.add(MappingRow());
+                        _changed();
+                      },
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Add field'),
+              ),
             ),
             OutlinedButton.icon(
               onPressed: _fromSchema,
@@ -221,7 +252,26 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
               icon: const Icon(Icons.auto_fix_high, size: 16),
               label: const Text('Map all from sample'),
             ),
-            Text(_samplePaths.isEmpty ? 'Paste sample variables to pick source fields.' : '${_samplePaths.length} source fields in the sample',
+            IconButton(
+              tooltip: 'Copy the mapping JSON',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.copy_rounded, size: 16),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: widget.controller.text));
+                ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text('Mapping copied'), duration: Duration(seconds: 2)));
+              },
+            ),
+            IconButton(
+              tooltip: 'Remove every field',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+              onPressed: rows.isEmpty ? null : () => _clear(rows),
+            ),
+            Text(
+                rows.isEmpty
+                    ? (_samplePaths.isEmpty ? 'Paste sample variables to pick source fields.' : '${_samplePaths.length} source fields in the sample')
+                    : '${rows.where((r) => r.value.trim().isNotEmpty).length} of ${rows.length} mapped'
+                        '${_samplePaths.isEmpty ? '' : ' · ${_samplePaths.length} source fields in the sample'}',
                 style: const TextStyle(fontSize: 11, color: AppColors.textMutedDark)),
           ],
         ),
@@ -242,6 +292,13 @@ class _FieldMappingBuilderState extends State<FieldMappingBuilder> {
                       rows.removeAt(i);
                       _changed();
                     },
+                    onDuplicate: rows.length >= kMaxMappingRows
+                        ? null
+                        : () {
+                            final c = rows[i].copy()..target = copyTarget(rows[i].target, rows);
+                            rows.insert(i + 1, c);
+                            _changed();
+                          },
                     onMove: i == 0 && rows.length == 1
                         ? null
                         : (delta) {
@@ -278,6 +335,7 @@ class _RowCard extends StatelessWidget {
     required this.onChanged,
     required this.onRemove,
     required this.onMove,
+    this.onDuplicate,
     this.result,
     this.depth = 0,
     this.showTarget = true,
@@ -298,6 +356,7 @@ class _RowCard extends StatelessWidget {
   final List<SourceKind> kinds;
   final VoidCallback onChanged;
   final VoidCallback onRemove;
+  final VoidCallback? onDuplicate;
   final void Function(int delta)? onMove;
 
   @override
@@ -331,6 +390,7 @@ class _RowCard extends StatelessWidget {
                   child: TextFormField(
                     initialValue: row.target,
                     style: _mono,
+                    inputFormatters: [LengthLimitingTextInputFormatter(255)],
                     decoration: InputDecoration(
                       isDense: true,
                       labelText: row.required ? 'Output field *' : 'Output field',
@@ -367,6 +427,7 @@ class _RowCard extends StatelessWidget {
               IconButton(tooltip: 'Move up', visualDensity: VisualDensity.compact, icon: const Icon(Icons.arrow_upward, size: 16), onPressed: () => onMove!(-1)),
               IconButton(tooltip: 'Move down', visualDensity: VisualDensity.compact, icon: const Icon(Icons.arrow_downward, size: 16), onPressed: () => onMove!(1)),
               ],
+              if (showTarget) IconButton(tooltip: 'Duplicate this field', visualDensity: VisualDensity.compact, icon: const Icon(Icons.copy_all_outlined, size: 17), onPressed: onDuplicate),
               if (showTarget) IconButton(tooltip: 'Remove', visualDensity: VisualDensity.compact, icon: const Icon(Icons.delete_outline, size: 18), onPressed: onRemove),
             ],
           ),
@@ -482,6 +543,12 @@ class _RowCard extends StatelessWidget {
                   row.children.removeAt(i);
                   onChanged();
                 },
+                onDuplicate: row.children.length >= kMaxMappingRows
+                    ? null
+                    : () {
+                        row.children.insert(i + 1, row.children[i].copy()..target = copyTarget(row.children[i].target, row.children));
+                        onChanged();
+                      },
                 onMove: (d) {
                   final j = i + d;
                   if (j < 0 || j >= row.children.length) return;
@@ -493,10 +560,12 @@ class _RowCard extends StatelessWidget {
           const SizedBox(height: 6),
           Wrap(spacing: 8, children: [
             OutlinedButton.icon(
-              onPressed: () {
-                row.children.add(MappingRow());
-                onChanged();
-              },
+              onPressed: row.children.length >= kMaxMappingRows
+                  ? null
+                  : () {
+                      row.children.add(MappingRow());
+                      onChanged();
+                    },
               icon: const Icon(Icons.add, size: 14),
               label: const Text('Add item field'),
             ),
@@ -506,7 +575,7 @@ class _RowCard extends StatelessWidget {
                   : () {
                       final added = autoMapRows(itemPaths(scope, row.value, item), row.children);
                       if (added.isEmpty) return;
-                      row.children.addAll(added);
+                      row.children.addAll(added.take(kMaxMappingRows - row.children.length));
                       onChanged();
                     },
               icon: const Icon(Icons.auto_fix_high, size: 14),
@@ -550,6 +619,7 @@ class _RowCard extends StatelessWidget {
           controller: controller,
           focusNode: focus,
           style: _mono,
+          inputFormatters: [LengthLimitingTextInputFormatter(2000)],
           decoration: InputDecoration(isDense: true, labelText: label, hintText: paths.isEmpty ? hint : 'pick or type'),
           onChanged: (v) {
             row.value = v;
@@ -561,6 +631,7 @@ class _RowCard extends StatelessWidget {
   Widget _plain(String label, String hint) => TextFormField(
         initialValue: row.value,
         style: _mono,
+        inputFormatters: [LengthLimitingTextInputFormatter(2000)],
         decoration: InputDecoration(isDense: true, labelText: label, hintText: hint),
         onChanged: (v) {
           row.value = v;

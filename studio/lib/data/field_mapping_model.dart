@@ -80,6 +80,9 @@ class TransformStep {
   final List<String> args;
 }
 
+/// The most rows one level of the builder holds (a guard for the UI and the spec, far above any real mapping).
+const kMaxMappingRows = 300;
+
 class MappingRow {
   MappingRow({this.target = '', this.kind = SourceKind.field, this.value = '', List<TransformStep>? transforms}) : transforms = transforms ?? [];
 
@@ -107,6 +110,19 @@ class MappingRow {
   set elseRow(MappingRow r) => _else = r;
   MappingRow? _then;
   MappingRow? _else;
+
+  /// An independent copy (transformations, list fields and branches included).
+  MappingRow copy() {
+    final c = MappingRow(target: target, kind: kind, value: value, transforms: [for (final t in transforms) TransformStep(t.fn, List<String>.of(t.args))])
+      ..hint = hint
+      ..required = required
+      ..itemName = itemName
+      ..where = where;
+    c.children.addAll(children.map((r) => r.copy()));
+    if (_then != null) c._then = _then!.copy();
+    if (_else != null) c._else = _else!.copy();
+    return c;
+  }
 }
 
 final _identifier = RegExp(r'^[A-Za-z_$][A-Za-z0-9_$]*$');
@@ -510,4 +526,17 @@ Map<String, dynamic>? firstItemResult(Object? result, String target) {
   final (found, v) = resultAt(result, target);
   if (!found || v is! List || v.isEmpty || v.first is! Map) return null;
   return Map<String, dynamic>.from(v.first as Map);
+}
+
+/// A target for a copy of [target] that no row in [rows] uses: `name_copy`, `name_copy2`, ...
+String copyTarget(String target, List<MappingRow> rows) {
+  final used = {for (final r in rows) r.target.trim()};
+  final base = target.trim().isEmpty ? 'field' : target.trim();
+  var candidate = '${base}_copy';
+  var n = 2;
+  while (used.contains(candidate)) {
+    candidate = '${base}_copy$n';
+    n++;
+  }
+  return candidate;
 }
