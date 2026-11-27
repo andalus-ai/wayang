@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wayang_studio/features/mapper/mapping_field.dart';
 
@@ -16,5 +18,15 @@ void main() {
     expect(MappingField.sampleText(true, null), '{\n  "result": {}\n}');
     expect(MappingField.sampleText(true, {'status': 200}), '{\n  "result": {\n    "status": 200\n  }\n}');
     expect(MappingField.sampleText(true, [1]), contains('"result": ['));
+  });
+
+  test('run variables merge into the sample, keeping a real test result', () {
+    final vars = {'order': {'id': 7}, 'result': 'stale'};
+    expect(jsonDecode(MappingField.mergeVariables('{}', vars)), {'order': {'id': 7}, 'result': 'stale'});
+    expect(jsonDecode(MappingField.mergeVariables('{"result": {"status": 200}, "old": 1}', {'order': 1})), {'order': 1, 'result': {'status': 200}},
+        reason: 'the test output stays, other old keys are replaced by the run');
+    expect(jsonDecode(MappingField.mergeVariables('{"result": {}}', {'a': 1})), {'a': 1}, reason: 'an empty result placeholder is not kept');
+    expect(jsonDecode(MappingField.mergeVariables('not json', {'a': 1})), {'a': 1});
+    expect(jsonDecode(MappingField.mergeVariables('[1]', {'a': 1})), {'a': 1});
   });
 }
