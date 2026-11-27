@@ -480,3 +480,17 @@ See [Shared Core boundary](SHARED-CORE.md) and https://github.com/andalus-ai/way
 **Explicit limitations:** dependency resolution currently handles only dependencies of kind `agent`; required extension/skill/template dependencies fail closed. The resolver does not download artifacts. Artifact digests are supplied by the caller and pinned, but the artifact bytes are not verified in this increment. Signatures, publisher trust, permission grants, Studio import UI, REST endpoints, deployment/activation and execution rollback remain future work. The JDBC adapter targets PostgreSQL; an end-to-end database integration test is still required.
 
 See [Agent Package Installation and Locking](architecture/AGENT-PACKAGE-INSTALLATION.md) for the contract, flow and verification boundary.
+
+## M1.8 — Agent Package trust and artifact verification
+
+- [x] Define an operator-owned publisher trust store with Ed25519 keys, package namespace allow-lists, validity windows and revocation.
+- [x] Define a detached signature envelope binding package identity and the exact archive SHA-256.
+- [x] Inspect bounded ZIP archives without extraction; reject traversal, duplicate/case-colliding, missing and undeclared entries.
+- [x] Verify the archive digest, publisher signature, signed identity and every declared resource digest.
+- [x] Add structural checks for CycloneDX SBOM and in-toto Statement v1 evidence resources.
+- [x] Add secure `installVerified` and `upgradeVerified` paths that accept verifier-created artifacts and require verified dependency candidates.
+- [x] Add tests for signature tampering, trust/revocation/namespace/validity, resource integrity, archive limits and evidence structure.
+
+**Explicit limitations:** the in-memory trust store is a test/local implementation; persistent trust administration, KMS/HSM integration and distributed revocation are future work. SBOM and in-toto checks are structural, not full schema/policy or independent builder-attestation verification. Artifacts are not downloaded or persisted, and archives are not extracted. The existing low-level installer remains for local/trusted catalog use; network-facing import APIs must use the verified methods.
+
+See [Agent Package Trust and Artifact Verification](architecture/AGENT-PACKAGE-TRUST.md).
