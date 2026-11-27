@@ -11,6 +11,7 @@ import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/bpmn_provider.dart';
 import '../common/schema_form.dart';
+import '../mapper/mapping_field.dart';
 import 'bpmn_canvas.dart';
 import 'node_test_section.dart';
 import 'openapi_section.dart';
@@ -384,6 +385,8 @@ class _NodeInspectorState extends ConsumerState<_NodeInspector> {
             overrides: {
               if (node.type == BpmnElementType.businessRuleTask) 'model': _definitionPicker(DefinitionKind.decision),
               if (node.type == BpmnElementType.agentTask) 'agent': _definitionPicker(DefinitionKind.agent),
+              if (node.type == BpmnElementType.serviceTask) 'inputMapping': mappingFieldBuilder(output: false),
+              if (node.type == BpmnElementType.serviceTask) 'outputMapping': mappingFieldBuilder(output: true),
             },
             onChanged: (props) => controller.updateNodeProperties(node.id, props),
           ),
