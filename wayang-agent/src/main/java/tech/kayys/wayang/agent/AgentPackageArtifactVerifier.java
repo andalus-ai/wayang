@@ -63,6 +63,8 @@ public final class AgentPackageArtifactVerifier {
         if (archive.length == 0 || archive.length > MAX_ARCHIVE_BYTES) {
             throw invalid("Agent Package archive is empty or exceeds the 64 MiB limit");
         }
+        // Snapshot caller-owned bytes so the digest and ZIP inspection cannot observe different content.
+        archive = archive.clone();
 
         String archiveSha256 = sha256(archive);
         if (!MessageDigest.isEqual(archiveSha256.getBytes(StandardCharsets.US_ASCII),
