@@ -36,6 +36,7 @@ class MappingField extends ConsumerWidget {
 
   /// The node's properties: which connector and operation it runs decides what an input mapping can be filled from.
   final Map<String, dynamic> props;
+  final bool decisionInputs;
   final ValueChanged<Object?> onChanged;
 
   /// "3 fields", "Custom mapping (JSON)", or "Not set".
@@ -346,7 +347,7 @@ class _MappingDialogState extends ConsumerState<_MappingDialog> {
             const SizedBox(height: 8),
             Expanded(
               child: _builder
-                  ? FieldMappingBuilder(controller: _spec, sample: _sample, result: _result, onProblems: (p) => setState(() => _problems = p), suggestions: widget.suggestions)
+                  ? FieldMappingBuilder(controller: _spec, sample: _sample, result: _result, onProblems: (p) => setState(() => _problems = p), suggestions: widget.suggestions, kinds: widget.expressionsOnly ? const [SourceKind.field, SourceKind.expression] : SourceKind.values, allowSchema: !widget.expressionsOnly)
                   : TextField(controller: _spec, expands: true, maxLines: null, minLines: null, textAlignVertical: TextAlignVertical.top, style: _mono, decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true)),
             ),
           ]);
