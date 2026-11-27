@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/utils.dart';
 import '../../core/widgets.dart';
 import '../../data/api_client.dart';
+import '../../data/channel_edit.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
 
@@ -311,9 +312,12 @@ class _CreateTriggerDialogState extends ConsumerState<_CreateTriggerDialog> {
 
   Future<void> _submit() async {
     final cfg = tryParseJsonObject(_config.text);
-    if (_id.text.trim().isEmpty) return setState(() => _error = 'Give the trigger an id');
+    final existing = ref.read(triggersProvider).valueOrNull?.map((t) => t.id) ?? const <String>[];
+    final idProblem = triggerIdProblem(_id.text, existing);
+    if (idProblem != null) return setState(() => _error = idProblem);
     if (_process == null) return setState(() => _error = 'Publish a process first, then pick it here');
     if (cfg == null) return setState(() => _error = 'Config must be a JSON object');
+    if (_busy) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -380,7 +384,12 @@ class _CreateTriggerDialogState extends ConsumerState<_CreateTriggerDialog> {
       ),
       actions: [
         TextButton(onPressed: _busy ? null : () => Navigator.pop(context), child: const Text('Cancel')),
-        ElevatedButton(onPressed: _busy ? null : _submit, child: const Text('Create')),
+        ElevatedButton(
+          onPressed: _busy ? null : _submit,
+          child: _busy
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Create'),
+        ),
       ],
     );
   }
@@ -431,6 +440,8 @@ class _AccountsTab extends ConsumerWidget {
     final secretName = TextEditingController(text: 'GOOGLE_CLIENT_SECRET');
     final scopes = <String>{_gmailScopes['Read mail']!};
     String? error;
+    var busy = false;
+    final existing = ref.read(oauthConnectionsProvider).valueOrNull?.map((c) => c.id) ?? const <String>[];
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -457,9 +468,18 @@ class _AccountsTab extends ConsumerWidget {
             ]),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(onPressed: busy ? null : () => Navigator.pop(ctx), child: const Text('Cancel')),
             ElevatedButton(
-              onPressed: () async {
+              onPressed: busy
+                  ? null
+                  : () async {
+                final problem = connectionProblem(
+                    id: id.text, clientId: clientId.text, secretName: secretName.text, scopeCount: scopes.length, existing: existing);
+                if (problem != null) return setState(() => error = problem);
+                setState(() {
+                  busy = true;
+                  error = null;
+                });
                 try {
                   await ref.read(repositoryProvider).createOAuthConnection(
                         id: id.text.trim(),
@@ -470,10 +490,17 @@ class _AccountsTab extends ConsumerWidget {
                   ref.invalidate(oauthConnectionsProvider);
                   if (ctx.mounted) Navigator.pop(ctx);
                 } catch (e) {
-                  setState(() => error = errText(e));
+                  if (ctx.mounted) {
+                    setState(() {
+                      busy = false;
+                      error = errText(e);
+                    });
+                  }
                 }
               },
-              child: const Text('Create'),
+              child: busy
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Create'),
             ),
           ],
         ),
@@ -551,7 +578,13 @@ class _ConnectionCard extends ConsumerWidget {
             ]),
           ),
           actions: [
-            TextButton(onPressed: () => Clipboard.setData(ClipboardData(text: url)), child: const Text('Copy link')),
+            TextButton(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: url));
+                if (ctx.mounted) showToast(ctx, 'Link copied');
+              },
+              child: const Text('Copy link'),
+            ),
             ElevatedButton(
               onPressed: () {
                 ref.invalidate(oauthConnectionsProvider);
