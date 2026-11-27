@@ -165,3 +165,171 @@ class WdsEmptyState extends StatelessWidget {
     ])));
   }
 }
+
+
+/// A breadcrumb item. The final item is treated as the current page.
+@immutable
+class WdsBreadcrumbItem {
+  const WdsBreadcrumbItem({required this.label, this.onTap});
+  final String label;
+  final VoidCallback? onTap;
+}
+
+/// Compact breadcrumb trail with overflow handled by the available width.
+class WdsBreadcrumbs extends StatelessWidget {
+  const WdsBreadcrumbs({super.key, required this.items, this.separator = Icons.chevron_right_rounded});
+  final List<WdsBreadcrumbItem> items;
+  final IconData separator;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: WdsSpacing.xs,
+      runSpacing: WdsSpacing.xs,
+      children: [
+        for (var index = 0; index < items.length; index++) ...[
+          if (index > 0) Icon(separator, size: 15, color: theme.colorScheme.onSurfaceVariant),
+          if (index == items.length - 1)
+            Text(items[index].label, style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurface, fontWeight: FontWeight.w700,
+            ))
+          else
+            TextButton(
+              onPressed: items[index].onTap,
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: WdsSpacing.xs),
+                minimumSize: const Size(0, WdsControlSize.compact),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(items[index].label),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Page-level heading composition shared by catalogs, settings and designers.
+class WdsPageHeader extends StatelessWidget {
+  const WdsPageHeader({
+    super.key,
+    required this.title,
+    this.description,
+    this.eyebrow,
+    this.breadcrumbs = const [],
+    this.actions = const [],
+    this.trailing,
+  });
+
+  final String title;
+  final String? description;
+  final String? eyebrow;
+  final List<WdsBreadcrumbItem> breadcrumbs;
+  final List<Widget> actions;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (breadcrumbs.isNotEmpty) ...[
+          WdsBreadcrumbs(items: breadcrumbs),
+          const SizedBox(height: WdsSpacing.md),
+        ],
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (eyebrow != null) ...[
+                    Text(eyebrow!.toUpperCase(), style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.primary, fontWeight: FontWeight.w800, letterSpacing: 1,
+                    )),
+                    const SizedBox(height: WdsSpacing.xs),
+                  ],
+                  Text(title, style: theme.textTheme.headlineMedium),
+                  if (description != null) ...[
+                    const SizedBox(height: WdsSpacing.xs),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 760),
+                      child: Text(description!, style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      )),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (trailing != null) ...[
+              const SizedBox(width: WdsSpacing.lg),
+              trailing!,
+            ],
+          ],
+        ),
+        if (actions.isNotEmpty) ...[
+          const SizedBox(height: WdsSpacing.lg),
+          Wrap(spacing: WdsSpacing.sm, runSpacing: WdsSpacing.sm, children: actions),
+        ],
+      ],
+    );
+  }
+}
+
+/// Responsive composition for search, filters and contextual list actions.
+class WdsFilterToolbar extends StatelessWidget {
+  const WdsFilterToolbar({
+    super.key,
+    this.search,
+    this.filters = const [],
+    this.actions = const [],
+    this.searchWidth = 320,
+  });
+
+  final Widget? search;
+  final List<Widget> filters;
+  final List<Widget> actions;
+  final double searchWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final controls = <Widget>[
+      if (search != null) ConstrainedBox(
+        constraints: BoxConstraints(minWidth: 180, maxWidth: searchWidth),
+        child: search!,
+      ),
+      ...filters,
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 680;
+        return Wrap(
+          alignment: WrapAlignment.start,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: WdsSpacing.sm,
+          runSpacing: WdsSpacing.sm,
+          children: [
+            ...controls,
+            if (actions.isNotEmpty)
+              SizedBox(
+                width: compact ? constraints.maxWidth : null,
+                child: Wrap(
+                  alignment: compact ? WrapAlignment.start : WrapAlignment.end,
+                  spacing: WdsSpacing.sm,
+                  runSpacing: WdsSpacing.sm,
+                  children: actions,
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
