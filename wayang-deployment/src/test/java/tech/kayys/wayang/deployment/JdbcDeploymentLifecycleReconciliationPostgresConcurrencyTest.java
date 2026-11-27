@@ -1,6 +1,7 @@
 package tech.kayys.wayang.deployment;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.sql.DriverManager;
@@ -60,6 +61,47 @@ class JdbcDeploymentLifecycleReconciliationPostgresConcurrencyTest {
             } finally {
                 executor.shutdownNow();
             }
+        } finally {
+            try (var connection = DriverManager.getConnection(jdbcUrl);
+                 var statement = connection.createStatement()) {
+                statement.execute("DROP SCHEMA " + schema + " CASCADE");
+            }
+        }
+    }
+
+
+    @Test
+    void independentWorkerCanReclaimOnlyAfterPostgresLeaseExpires() throws Exception {
+        String jdbcUrl = System.getenv("WAYANG_TEST_JDBC_URL");
+        Assumptions.assumeTrue(jdbcUrl != null && !jdbcUrl.isBlank(),
+                "PostgreSQL integration is enabled by WAYANG_TEST_JDBC_URL in CI");
+
+        String schema = "wayang_lease_" + UUID.randomUUID().toString().replace("-", "");
+        try (var connection = DriverManager.getConnection(jdbcUrl);
+             var statement = connection.createStatement()) {
+            statement.execute("CREATE SCHEMA " + schema);
+        }
+
+        try {
+            String scopedUrl = jdbcUrl + (jdbcUrl.contains("?") ? "&" : "?") + "currentSchema=" + schema;
+            PGSimpleDataSource source = new PGSimpleDataSource();
+            source.setUrl(scopedUrl);
+            createSchema(source);
+
+            DeploymentOperationReceipt receipt = new DeploymentOperationReceipt(
+                    "dep-lease", "op-lease", "d".repeat(64), "ACTIVATE",
+                    DeploymentOperationStatus.SUCCEEDED, 1, "target-op-lease",
+                    "SUCCEEDED", "target completed", null, NOW, NOW);
+            insertReceipt(source, receipt);
+
+            var workerA = new JdbcDeploymentLifecycleReconciliationWorkStore(source);
+            var workerB = new JdbcDeploymentLifecycleReconciliationWorkStore(source);
+            assertTrue(workerA.claim(receipt, NOW, NOW.plusSeconds(60)),
+                    "first worker should acquire the initial lease");
+            assertFalse(workerB.claim(receipt, NOW.plusSeconds(30), NOW.plusSeconds(90)),
+                    "second worker must not steal a live lease");
+            assertTrue(workerB.claim(receipt, NOW.plusSeconds(61), NOW.plusSeconds(121)),
+                    "second worker should reclaim the lease after expiry");
         } finally {
             try (var connection = DriverManager.getConnection(jdbcUrl);
                  var statement = connection.createStatement()) {
