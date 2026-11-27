@@ -81,8 +81,9 @@ void main() {
       'lane': {r'$const': 'fast'},
       'hi': {r'$template': r'Hi ${a}'},
     });
-    expect(rowsFromSpec({'lines': {r'$each': 'body.lines', r'$map': {'a': 'x'}}}), isNull);
     expect(rowsFromSpec({'nested': {'a': 'b'}}), isNull);
+    expect(rowsFromSpec({'lines': {r'$each': 'body.lines', r'$map': {r'$template': 'x'}}}), isNull, reason: 'an item that is not a set of fields');
+    expect(rowsFromSpec({'a': {r'$if': 'x', r'$then': {r'$each': 'y'}}}), isNull, reason: 'a branch cannot be a list');
     expect(rowsFromSpec([1, 2]), isNull);
     expect(rowsFromSpec({'n': 5}), isNull, reason: 'a bare number is a literal the builder does not model');
   });
@@ -104,5 +105,85 @@ void main() {
     final existing = [MappingRow(target: 'name', value: 'customer.name')];
     final rows = autoMapRows(['customer.name', 'partner.name', 'id', 'lines[1].sku'], existing);
     expect(rows.map((r) => '${r.target}<-${r.value}'), ['partner_name<-partner.name', 'id<-id']);
+  });
+
+  test('a list row maps each item with its own fields and round-trips', () {
+    final spec = {
+      'lines': {
+        r'$each': 'body.lines',
+        r'$as': 'l',
+        r'$where': 'l.qty > 0',
+        r'$map': {'sku': 'l.sku', 'label': {r'$template': r'#${l.sku}'}, 'source': {r'$const': 'web'}},
+      },
+      'plain': {r'$each': 'xs'},
+    };
+    final rows = rowsFromSpec(spec)!;
+    expect(rows[0].kind, SourceKind.list);
+    expect(rows[0].itemName, 'l');
+    expect(rows[0].where, 'l.qty > 0');
+    expect(rows[0].children.map((c) => c.kind), [SourceKind.field, SourceKind.template, SourceKind.constant]);
+    expect(rows[1].children, isEmpty);
+    expect(specFromRows(rows), spec);
+  });
+
+  test('the default item name is left out of the spec and lists can nest', () {
+    final inner = MappingRow(target: 'tags', kind: SourceKind.list, value: 'item.tags')..children.add(MappingRow(target: 't', value: 'item'));
+    inner.itemName = 'item';
+    final outer = MappingRow(target: 'rows', kind: SourceKind.list, value: 'body.rows')..children.add(inner);
+    final spec = specFromRows([outer])!;
+    expect(spec['rows'], {
+      r'$each': 'body.rows',
+      r'$map': {
+        'tags': {r'$each': 'item.tags', r'$map': {'t': 'item'}}
+      }
+    });
+    expect(rowsFromSpec(spec)!.single.children.single.kind, SourceKind.list);
+  });
+
+  test('a condition chooses between two values, either of which may be left out', () {
+    final r = MappingRow(target: 'lane', kind: SourceKind.conditional, value: 'body.vip');
+    r.thenRow = MappingRow(target: '-', kind: SourceKind.constant, value: 'fast');
+    r.elseRow = MappingRow(target: '-', value: 'body.lane', transforms: [TransformStep('upper case')]);
+    expect(specFromRows([r]), {
+      'lane': {r'$if': 'body.vip', r'$then': {r'$const': 'fast'}, r'$else': 'upper case(body.lane)'}
+    });
+    r.elseRow = MappingRow(target: '-');
+    expect(specFromRows([r]), {
+      'lane': {r'$if': 'body.vip', r'$then': {r'$const': 'fast'}}
+    });
+    final back = rowsFromSpec({'lane': {r'$if': 'x', r'$else': 'y'}})!.single;
+    expect(back.kind, SourceKind.conditional);
+    expect(back.elseRow.value, 'y');
+    expect(back.thenRow.value, isEmpty);
+  });
+
+  test('problems inside lists and conditions name the row they are in', () {
+    final l = MappingRow(target: 'lines', kind: SourceKind.list, value: 'body.lines')..itemName = '1x';
+    l.children.addAll([MappingRow(target: 'a', value: 'x'), MappingRow(target: 'a', value: 'y')]);
+    final p = rowProblems([l]);
+    expect(p.any((m) => m.contains('item name')), isTrue);
+    expect(p.any((m) => m.contains('Row 1 ("lines") > Row 2') && m.contains('mapped twice')), isTrue);
+    expect(rowProblems([MappingRow(target: 'l', kind: SourceKind.list)]).single, contains('no list'));
+    expect(rowProblems([MappingRow(target: 'c', kind: SourceKind.conditional)]).single, contains('no condition'));
+    final c = MappingRow(target: 'c', kind: SourceKind.conditional, value: 'x');
+    c.thenRow = MappingRow(target: '-', value: 'y', transforms: [TransformStep('round', ['two'])]);
+    expect(rowProblems([c]).single, contains('then'));
+  });
+
+  test('sample values resolve by path and item paths follow the list', () {
+    final sample = {
+      'body': {
+        'lines': [
+          {'sku': 'a', 'qty': 1, 'dims': {'w': 2}}
+        ],
+        'tags': ['x']
+      }
+    };
+    expect(sampleAt(sample, 'body.lines[1].sku'), 'a');
+    expect(sampleAt(sample, 'body.lines[2].sku'), isNull);
+    expect(sampleAt(sample, 'body.nope'), isNull);
+    expect(itemPaths(sample, 'body.lines', 'l'), ['l.sku', 'l.qty', 'l.dims.w']);
+    expect(itemPaths(sample, 'body.tags', ''), ['item']);
+    expect(itemPaths(sample, 'body.missing', 'l'), isEmpty);
   });
 }
