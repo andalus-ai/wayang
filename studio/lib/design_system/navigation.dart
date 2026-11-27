@@ -155,7 +155,6 @@ class _WdsRailItem extends StatelessWidget {
             child: Semantics(
               button: true,
               selected: selected,
-              onTap: onTap,
               label: item.label,
               child: Container(
                 constraints: const BoxConstraints(minHeight: WdsControlSize.comfortable),
@@ -217,7 +216,6 @@ class WdsCompactNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (items.isEmpty) return const SizedBox.shrink();
     final activeIndex = items.indexWhere((item) => item.key == selectedKey);
     return NavigationBar(
       backgroundColor: AppColors.darkSurface,

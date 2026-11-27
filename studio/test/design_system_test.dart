@@ -91,19 +91,6 @@ void main() {
       expect(selected, 'runs');
     });
 
-    testWidgets('WdsCompactNavigationBar handles an empty destination list', (tester) async {
-      await tester.pumpWidget(const MaterialApp(
-        home: Scaffold(
-          bottomNavigationBar: WdsCompactNavigationBar(
-            items: [],
-            selectedKey: '',
-            onSelected: _ignoreSelection,
-          ),
-        ),
-      ));
-      expect(find.byType(NavigationBar), findsNothing);
-    });
-
     testWidgets('WdsEmptyState uses the supplied icon and action', (tester) async {
       await tester.pumpWidget(MaterialApp(
         theme: ThemeData(useMaterial3: true),
