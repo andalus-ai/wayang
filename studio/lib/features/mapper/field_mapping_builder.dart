@@ -306,6 +306,7 @@ class _RowCard extends StatelessWidget {
   }
 
   Widget _source() {
+    final paths = samplePaths(scope);
     switch (row.kind) {
       case SourceKind.field:
         return _pathField('Source field', 'customer.name', paths);
