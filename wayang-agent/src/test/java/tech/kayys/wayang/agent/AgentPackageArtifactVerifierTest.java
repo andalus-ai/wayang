@@ -85,8 +85,8 @@ class AgentPackageArtifactVerifierTest {
         byte[] archive = archive(Map.of(AgentPackageArtifactVerifier.JSON_MANIFEST,
                 MINIMAL.getBytes(StandardCharsets.UTF_8)));
         var signature = sign(archive, "acme:support", "1.2.0", "acme:publisher");
-        var empty = new AgentPackageArtifactVerifier(new AgentPackageTrustStore.InMemory(),
-                Clock.fixed(NOW, ZoneOffset.UTC));
+        var empty = new AgentPackageArtifactVerifier(new AgentPackageReader(),
+                new AgentPackageTrustStore.InMemory(), Clock.fixed(NOW, ZoneOffset.UTC));
         assertThrows(AgentPackageArtifactVerifier.VerificationException.class, () -> empty.verify(archive, signature));
 
         trustStore.revoke("acme:publisher", "key-1");
