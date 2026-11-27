@@ -156,7 +156,7 @@ class WdsEmptyState extends StatelessWidget {
     final theme = Theme.of(context);
     return Center(child: Padding(padding: const EdgeInsets.all(WdsSpacing.xxxl), child: Column(mainAxisSize: MainAxisSize.min, children: [
       DecoratedBox(decoration: BoxDecoration(color: theme.colorScheme.primary.withValues(alpha: 0.10), shape: BoxShape.circle),
-        child: const Padding(padding: EdgeInsets.all(WdsSpacing.lg), child: Icon(Icons.inbox_outlined, size: 28))),
+        child: Padding(padding: const EdgeInsets.all(WdsSpacing.lg), child: Icon(icon, size: 28, color: theme.colorScheme.primary))),
       const SizedBox(height: WdsSpacing.lg),
       Text(title, style: theme.textTheme.titleMedium, textAlign: TextAlign.center),
       if (description != null) ...[const SizedBox(height: WdsSpacing.xs),
