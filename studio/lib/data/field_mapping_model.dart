@@ -4,7 +4,10 @@
 library;
 
 /// What a row's source column holds.
-enum SourceKind { field, constant, template, expression }
+///
+/// [list] maps every item of a list (`$each`): [MappingRow.value] is the list, [MappingRow.children] describe one output item, written
+/// against [MappingRow.itemName]. [conditional] chooses between two values (`$if`): [MappingRow.value] is the condition.
+enum SourceKind { field, constant, template, expression, list, conditional }
 
 /// How a transformation argument is written into the expression.
 enum ArgKind {
@@ -87,6 +90,19 @@ class MappingRow {
   /// A source path, a literal, template text with `${...}`, or a raw expression, by [kind].
   String value;
   final List<TransformStep> transforms;
+
+  /// [SourceKind.list]: the name the current item is bound to (the mapper's default is `item`), an optional filter, and one row per output field.
+  String itemName = 'item';
+  String where = '';
+  final List<MappingRow> children = [];
+
+  /// [SourceKind.conditional]: the value when the condition holds and when it does not (a blank value means no value, i.e. null).
+  MappingRow get thenRow => _then ??= MappingRow(target: '-');
+  set thenRow(MappingRow r) => _then = r;
+  MappingRow get elseRow => _else ??= MappingRow(target: '-');
+  set elseRow(MappingRow r) => _else = r;
+  MappingRow? _then;
+  MappingRow? _else;
 }
 
 final _identifier = RegExp(r'^[A-Za-z_$][A-Za-z0-9_$]*$');
@@ -144,41 +160,74 @@ Object? specValue(MappingRow row) {
       return {r'$const': row.value};
     case SourceKind.template:
       return {r'$template': row.value};
+    case SourceKind.list:
+      final m = <String, dynamic>{r'$each': row.value.trim()};
+      if (row.itemName.trim().isNotEmpty && row.itemName.trim() != 'item') m[r'$as'] = row.itemName.trim();
+      if (row.where.trim().isNotEmpty) m[r'$where'] = row.where.trim();
+      final fields = specFromRows(row.children);
+      if (fields != null && fields.isNotEmpty) m[r'$map'] = fields;
+      return m;
+    case SourceKind.conditional:
+      final m = <String, dynamic>{r'$if': row.value.trim()};
+      if (_present(row.thenRow)) m[r'$then'] = specValue(row.thenRow);
+      if (_present(row.elseRow)) m[r'$else'] = specValue(row.elseRow);
+      return m;
     default:
       return expressionFor(row);
   }
 }
 
+bool _present(MappingRow r) => r.value.trim().isNotEmpty;
+
 /// Problems that stop a spec from being built; empty when the rows are fine. Rows with neither target nor source are ignored (a fresh row).
-List<String> rowProblems(List<MappingRow> rows) {
+/// [where] names the enclosing list row for messages inside a list.
+List<String> rowProblems(List<MappingRow> rows, [String where = '']) {
   final out = <String>[];
   final seen = <String>{};
   for (var i = 0; i < rows.length; i++) {
     final r = rows[i];
-    final n = i + 1;
-    final blank = r.target.trim().isEmpty && r.value.trim().isEmpty;
+    final n = '${where}Row ${i + 1}';
+    final blank = r.target.trim().isEmpty && r.value.trim().isEmpty && r.children.isEmpty;
     if (blank) continue;
     final target = r.target.trim();
     if (target.isEmpty) {
-      out.add('Row $n has no target field.');
+      out.add('$n has no target field.');
       continue;
     }
-    if (!target.split('.').every((p) => p.isNotEmpty)) out.add('Row $n: "$target" is not a valid field path.');
-    if (!seen.add(target)) out.add('Row $n: "$target" is mapped twice.');
+    if (!target.split('.').every((p) => p.isNotEmpty)) out.add('$n: "$target" is not a valid field path.');
+    if (!seen.add(target)) out.add('$n: "$target" is mapped twice.');
     if (r.value.trim().isEmpty) {
-      out.add('Row $n ("$target") has no source.');
-    } else {
-      try {
-        expressionFor(r);
-      } on FormatException catch (e) {
-        out.add('Row $n: ${e.message}');
-      }
+      out.add('$n ("$target") has ${r.kind == SourceKind.list ? 'no list' : r.kind == SourceKind.conditional ? 'no condition' : 'no source'}.');
+      continue;
+    }
+    switch (r.kind) {
+      case SourceKind.list:
+        if (!_identifier.hasMatch(r.itemName.trim())) out.add('$n ("$target"): the item name must be a plain name such as item.');
+        out.addAll(rowProblems(r.children, '$n ("$target") > '));
+      case SourceKind.conditional:
+        for (final e in [('then', r.thenRow), ('else', r.elseRow)]) {
+          if (e.$2.kind == SourceKind.conditional || e.$2.kind == SourceKind.list) {
+            out.add('$n ("$target"): the ${e.$1} value is a field, fixed value, template or expression.');
+          } else if (_present(e.$2)) {
+            try {
+              expressionFor(e.$2);
+            } on FormatException catch (x) {
+              out.add('$n ("$target") ${e.$1}: ${x.message}');
+            }
+          }
+        }
+      default:
+        try {
+          expressionFor(r);
+        } on FormatException catch (e) {
+          out.add('$n: ${e.message}');
+        }
     }
   }
   final targets = seen.toList();
   for (final a in targets) {
     for (final b in targets) {
-      if (a != b && b.startsWith('$a.')) out.add('"$a" is a value and also a parent of "$b"; keep one of them.');
+      if (a != b && b.startsWith('$a.')) out.add('$where"$a" is a value and also a parent of "$b"; keep one of them.');
     }
   }
   return out;
@@ -189,33 +238,75 @@ Map<String, dynamic>? specFromRows(List<MappingRow> rows) {
   if (rowProblems(rows).isNotEmpty) return null;
   final spec = <String, dynamic>{};
   for (final r in rows) {
-    if (r.target.trim().isEmpty && r.value.trim().isEmpty) continue;
+    if (r.target.trim().isEmpty && r.value.trim().isEmpty && r.children.isEmpty) continue;
     spec[r.target.trim()] = specValue(r);
   }
   return spec;
 }
 
-/// Rows for an existing spec, or null when it uses something the builder cannot show (nested objects, lists, `$each`, `$if`, ...), in which
-/// case the JSON editor is the place to change it. A transformed source comes back as a raw expression: nothing is lost, it is just not split
-/// into steps again.
-List<MappingRow>? rowsFromSpec(Object? spec) {
+/// One output value as a row, or null when it is something the builder cannot show.
+MappingRow? _rowFromValue(String target, Object? v, int depth) {
+  if (v is String) {
+    return MappingRow(target: target, kind: _isPath(v) ? SourceKind.field : SourceKind.expression, value: v);
+  }
+  if (v is! Map) return null;
+  if (v.length == 1 && v.containsKey(r'$const') && v[r'$const'] is! Map && v[r'$const'] is! List) {
+    return MappingRow(target: target, kind: SourceKind.constant, value: v[r'$const'] == null ? 'null' : '${v[r'$const']}');
+  }
+  if (v.length == 1 && v[r'$template'] is String) {
+    return MappingRow(target: target, kind: SourceKind.template, value: v[r'$template'] as String);
+  }
+  if (depth >= 4) return null;
+  if (v[r'$each'] is String && v.keys.every((k) => const {r'$each', r'$as', r'$where', r'$map'}.contains(k))) {
+    final r = MappingRow(target: target, kind: SourceKind.list, value: v[r'$each'] as String);
+    if (v.containsKey(r'$as')) {
+      if (v[r'$as'] is! String) return null;
+      r.itemName = v[r'$as'] as String;
+    }
+    if (v.containsKey(r'$where')) {
+      if (v[r'$where'] is! String) return null;
+      r.where = v[r'$where'] as String;
+    }
+    if (v.containsKey(r'$map')) {
+      final kids = _rowsFrom(v[r'$map'], depth + 1);
+      if (kids == null) return null;
+      r.children.addAll(kids);
+    }
+    return r;
+  }
+  if (v[r'$if'] is String && v.keys.every((k) => const {r'$if', r'$then', r'$else'}.contains(k))) {
+    final r = MappingRow(target: target, kind: SourceKind.conditional, value: v[r'$if'] as String);
+    for (final e in [(r'$then', true), (r'$else', false)]) {
+      if (!v.containsKey(e.$1)) continue;
+      final branch = _rowFromValue('-', v[e.$1], 4); // depth 4: a branch is a single value, not another list or condition
+      if (branch == null) return null;
+      if (e.$2) {
+        r.thenRow = branch;
+      } else {
+        r.elseRow = branch;
+      }
+    }
+    return r;
+  }
+  return null;
+}
+
+List<MappingRow>? _rowsFrom(Object? spec, int depth) {
   if (spec is! Map) return null;
+  if (spec.keys.any((k) => '$k'.startsWith(r'$'))) return null; // a directive, not a set of fields
   final rows = <MappingRow>[];
   for (final e in spec.entries) {
-    final key = '${e.key}';
-    final v = e.value;
-    if (v is String) {
-      rows.add(MappingRow(target: key, kind: _identifier.hasMatch(v.split('.').first) && _isPath(v) ? SourceKind.field : SourceKind.expression, value: v));
-    } else if (v is Map && v.length == 1 && v.containsKey(r'$const') && (v[r'$const'] is! Map) && (v[r'$const'] is! List)) {
-      rows.add(MappingRow(target: key, kind: SourceKind.constant, value: v[r'$const'] == null ? 'null' : '${v[r'$const']}'));
-    } else if (v is Map && v.length == 1 && v[r'$template'] is String) {
-      rows.add(MappingRow(target: key, kind: SourceKind.template, value: v[r'$template'] as String));
-    } else {
-      return null;
-    }
+    final row = _rowFromValue('${e.key}', e.value, depth);
+    if (row == null) return null;
+    rows.add(row);
   }
   return rows;
 }
+
+/// Rows for an existing spec, or null when it uses something the builder cannot show (nested plain objects, literal lists, a list item that is
+/// not an object, a branch that is itself a list or condition, ...), in which case the JSON editor is the place to change it. A transformed
+/// source comes back as a raw expression: nothing is lost, it is just not split into steps again.
+List<MappingRow>? rowsFromSpec(Object? spec) => _rowsFrom(spec, 0);
 
 bool _isPath(String s) => s.split('.').every(_identifier.hasMatch);
 
@@ -270,4 +361,32 @@ List<MappingRow> autoMapRows(List<String> paths, List<MappingRow> existing) {
     out.add(MappingRow(target: candidate, value: p));
   }
   return out;
+}
+
+final _segment = RegExp(r'^([A-Za-z_$][A-Za-z0-9_$]*)((?:\[\d+\])*)$');
+
+/// The value at [path] (`a.b`, `lines[1].sku`; lists count from 1) in [sample], or null when it is not there.
+Object? sampleAt(Object? sample, String path) {
+  Object? cur = sample;
+  for (final seg in path.trim().split('.')) {
+    final m = _segment.firstMatch(seg);
+    if (m == null || cur is! Map) return null;
+    cur = cur[m.group(1)];
+    for (final idx in RegExp(r'\[(\d+)\]').allMatches(m.group(2) ?? '')) {
+      final i = int.parse(idx.group(1)!);
+      if (cur is! List || i < 1 || i > cur.length) return null;
+      cur = cur[i - 1];
+    }
+  }
+  return cur;
+}
+
+/// Source paths inside one item of the list at [listPath], written against [itemName] (`item.sku`); empty when the sample has no such list.
+List<String> itemPaths(Object? sample, String listPath, String itemName) {
+  final list = sampleAt(sample, listPath);
+  final name = itemName.trim().isEmpty ? 'item' : itemName.trim();
+  if (list is! List || list.isEmpty) return const [];
+  final first = list.first;
+  if (first is! Map) return [name];
+  return [for (final p in samplePaths(first)) '$name.$p'];
 }
