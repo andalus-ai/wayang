@@ -22,6 +22,10 @@ import java.util.Objects;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import org.yaml.snakeyaml.LoaderOptions;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
+
 /**
  * Verifies an Agent Package archive before it is passed to installation.
  *
@@ -91,8 +95,8 @@ public final class AgentPackageArtifactVerifier {
             throw invalid("Signature envelope identity does not match the Agent Package manifest");
         }
 
-        Map<String, String> resourceDigests = verifyResources(agentPackage, entries);
         String manifestSha256 = sha256(manifestBytes);
+        Map<String, String> resourceDigests = verifyResources(agentPackage, entries, manifestSha256);
         return new VerifiedArtifact(agentPackage, archiveSha256, manifestSha256,
                 signature.publisher(), signature.keyId(), resourceDigests);
     }
@@ -168,7 +172,7 @@ public final class AgentPackageArtifactVerifier {
     }
 
     private static Map<String, String> verifyResources(AgentPackageReader.AgentPackage pkg,
-            Map<String, byte[]> entries) {
+            Map<String, byte[]> entries, String manifestSha256) {
         Map<String, String> digests = new LinkedHashMap<>();
         java.util.Set<String> expectedPaths = new java.util.HashSet<>();
         expectedPaths.add(entries.containsKey(YAML_MANIFEST) ? YAML_MANIFEST : JSON_MANIFEST);
@@ -185,6 +189,11 @@ public final class AgentPackageArtifactVerifier {
                     resource.sha256().toLowerCase(Locale.ROOT).getBytes(StandardCharsets.US_ASCII))) {
                 throw invalid("Agent Package resource digest mismatch: " + path);
             }
+            if ("sbom".equalsIgnoreCase(resource.role())) {
+                verifyCycloneDx(content, path);
+            } else if ("provenance".equalsIgnoreCase(resource.role())) {
+                verifyInTotoProvenance(content, path, pkg.metadata().id(), manifestSha256);
+            }
             digests.put(path, actual);
         }
         String icon = pkg.metadata().icon();
@@ -197,6 +206,72 @@ public final class AgentPackageArtifactVerifier {
             throw invalid("Archive contains undeclared package resources: " + unexpected);
         }
         return Map.copyOf(digests);
+    }
+
+
+    private static void verifyCycloneDx(byte[] content, String path) {
+        Map<?, ?> bom = structuredObject(content, path);
+        if (!"CycloneDX".equals(bom.get("bomFormat"))
+                || !java.util.Set.of("1.4", "1.5", "1.6").contains(String.valueOf(bom.get("specVersion")))
+                || !(bom.get("serialNumber") instanceof String serial) || !serial.startsWith("urn:uuid:")
+                || !(bom.get("components") instanceof java.util.List<?> components)) {
+            throw invalid("SBOM resource is not a supported CycloneDX document: " + path);
+        }
+        java.util.Set<String> refs = new java.util.HashSet<>();
+        for (Object item : components) {
+            if (!(item instanceof Map<?, ?> component)
+                    || !(component.get("name") instanceof String name) || name.isBlank()
+                    || !(component.get("type") instanceof String type) || type.isBlank()) {
+                throw invalid("SBOM contains an invalid component entry: " + path);
+            }
+            Object ref = component.get("bom-ref");
+            if (ref instanceof String value && !refs.add(value)) {
+                throw invalid("SBOM contains duplicate bom-ref values: " + path);
+            }
+        }
+    }
+
+    private static void verifyInTotoProvenance(byte[] content, String path,
+            String packageId, String manifestSha256) {
+        Map<?, ?> statement = structuredObject(content, path);
+        if (!"https://in-toto.io/Statement/v1".equals(statement.get("_type"))
+                || !(statement.get("predicateType") instanceof String predicateType) || predicateType.isBlank()
+                || !(statement.get("predicate") instanceof Map<?, ?>)
+                || !(statement.get("subject") instanceof java.util.List<?> subjects)) {
+            throw invalid("Provenance resource is not an in-toto Statement v1: " + path);
+        }
+        boolean bindsManifest = false;
+        for (Object item : subjects) {
+            if (!(item instanceof Map<?, ?> subject)
+                    || !(subject.get("name") instanceof String name)
+                    || !(subject.get("digest") instanceof Map<?, ?> digest)) {
+                throw invalid("Provenance contains an invalid subject: " + path);
+            }
+            Object sha = digest.get("sha256");
+            if (packageId.equals(name) && sha instanceof String value
+                    && MessageDigest.isEqual(manifestSha256.getBytes(StandardCharsets.US_ASCII),
+                            value.toLowerCase(Locale.ROOT).getBytes(StandardCharsets.US_ASCII))) {
+                bindsManifest = true;
+            }
+        }
+        if (!bindsManifest) {
+            throw invalid("Provenance subject does not bind the package ID to the exact manifest digest: " + path);
+        }
+    }
+
+    private static Map<?, ?> structuredObject(byte[] content, String path) {
+        try {
+            LoaderOptions options = new LoaderOptions();
+            options.setAllowDuplicateKeys(false);
+            options.setMaxAliasesForCollections(5);
+            options.setCodePointLimit(MAX_RESOURCE_BYTES);
+            Object parsed = new Yaml(new SafeConstructor(options)).load(utf8(content));
+            if (!(parsed instanceof Map<?, ?> map)) throw invalid("Evidence resource must contain a JSON object: " + path);
+            return map;
+        } catch (RuntimeException e) {
+            if (e instanceof VerificationException ve) throw ve;
+            throw new VerificationException("Evidence resource is malformed: " + path, e);
+        }
     }
 
     private static String utf8(byte[] bytes) {
