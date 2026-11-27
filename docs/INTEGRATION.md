@@ -32,6 +32,8 @@ config:
 ```
 Mapping errors fail the node without retry.
 
+In the BPMN designer, a service task's `inputMapping` and `outputMapping` show a summary ("3 fields", "Custom mapping (edit as JSON)", "Not set") and an **Add/Edit mapping** button that opens the same field mapping builder in a dialog, with a sample pane (for the output mapping: the process variables plus `result`) and the live preview; **Apply** writes the spec into the node, Cancel leaves it as it was. Not wired to the sample of a previous test run of the node yet: you paste the sample.
+
 ## Pipeline steps (`EIP_TASK`)
 
 `parse`/`serialize` (json, csv, xml), `map` (mapping, headers, merge, remove, omitNull), `filter`, `transform`,
