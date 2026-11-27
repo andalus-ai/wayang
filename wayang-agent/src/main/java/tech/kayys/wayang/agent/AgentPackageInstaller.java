@@ -52,7 +52,9 @@ public final class AgentPackageInstaller {
                 (available == null ? List.<AgentPackageArtifactVerifier.VerifiedArtifact>of() : available)
                         .stream().map(artifact -> Objects.requireNonNull(artifact, "verified dependency").resolverArtifact())
                         .toList();
-        return install(tenantId, projectId, installationId, root.resolverArtifact(), verifiedDependencies, bindings, now);
+        InstalledAgent installed = install(tenantId, projectId, installationId,
+                root.resolverArtifact(), verifiedDependencies, bindings, now);
+        return withVerificationReceipt(installed, root.verificationReceipt());
     }
 
     /** Upgrade counterpart to installVerified; the candidate root and every dependency are trust-verified. */
@@ -65,13 +67,22 @@ public final class AgentPackageInstaller {
                 (available == null ? List.<AgentPackageArtifactVerifier.VerifiedArtifact>of() : available)
                         .stream().map(artifact -> Objects.requireNonNull(artifact, "verified dependency").resolverArtifact())
                         .toList();
-        return upgrade(current, root.resolverArtifact(), verifiedDependencies, bindings, now);
+        InstalledAgent upgraded = upgrade(current, root.resolverArtifact(), verifiedDependencies, bindings, now);
+        return withVerificationReceipt(upgraded, root.verificationReceipt());
     }
 
     /**
      * Low-level install for local/trusted catalog workflows. Network-facing import endpoints must use
      * {@link #installVerified(String, String, String, AgentPackageArtifactVerifier.VerifiedArtifact, List, Map, Instant)}.
      */
+
+    private static InstalledAgent withVerificationReceipt(InstalledAgent installed,
+            InstalledAgent.VerificationReceipt receipt) {
+        return new InstalledAgent(installed.tenantId(), installed.projectId(), installed.installationId(),
+                installed.lock(), installed.configurationBindings(), installed.requestedPermissions(),
+                installed.installedAt(), installed.updatedAt(), receipt);
+    }
+
     public InstalledAgent install(String tenantId, String projectId, String installationId,
             AgentDependencyResolver.PackageArtifact root,
             List<AgentDependencyResolver.PackageArtifact> available,
