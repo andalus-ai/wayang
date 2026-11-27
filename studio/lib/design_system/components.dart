@@ -113,20 +113,55 @@ class WdsSectionHeader extends StatelessWidget {
   final String title;
   final String? description, eyebrow;
   final List<Widget> actions;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         if (eyebrow != null) ...[
-          Text(eyebrow!.toUpperCase(), style: theme.textTheme.labelSmall?.copyWith(letterSpacing: 1, fontWeight: FontWeight.w700, color: theme.colorScheme.primary)),
+          Text(eyebrow!.toUpperCase(), style: theme.textTheme.labelSmall?.copyWith(
+            letterSpacing: 1, fontWeight: FontWeight.w700, color: theme.colorScheme.primary,
+          )),
           const SizedBox(height: WdsSpacing.xs),
         ],
         Text(title, style: theme.textTheme.headlineSmall),
-        if (description != null) ...[const SizedBox(height: WdsSpacing.xs), Text(description!, style: theme.textTheme.bodySmall)],
-      ])),
-      if (actions.isNotEmpty) ...[const SizedBox(width: WdsSpacing.md), Wrap(spacing: WdsSpacing.sm, runSpacing: WdsSpacing.sm, children: actions)],
-    ]);
+        if (description != null) ...[
+          const SizedBox(height: WdsSpacing.xs),
+          Text(description!, style: theme.textTheme.bodySmall),
+        ],
+      ],
+    );
+    if (actions.isEmpty) return heading;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 680;
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              heading,
+              const SizedBox(height: WdsSpacing.md),
+              Wrap(spacing: WdsSpacing.sm, runSpacing: WdsSpacing.sm, children: actions),
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: heading),
+            const SizedBox(width: WdsSpacing.md),
+            Flexible(child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: WdsSpacing.sm,
+              runSpacing: WdsSpacing.sm,
+              children: actions,
+            )),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -235,50 +270,61 @@ class WdsPageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
+    final heading = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (breadcrumbs.isNotEmpty) ...[
-          WdsBreadcrumbs(items: breadcrumbs),
-          const SizedBox(height: WdsSpacing.md),
+        if (eyebrow != null) ...[
+          Text(eyebrow!.toUpperCase(), style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.primary, fontWeight: FontWeight.w800, letterSpacing: 1,
+          )),
+          const SizedBox(height: WdsSpacing.xs),
         ],
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (eyebrow != null) ...[
-                    Text(eyebrow!.toUpperCase(), style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.primary, fontWeight: FontWeight.w800, letterSpacing: 1,
-                    )),
-                    const SizedBox(height: WdsSpacing.xs),
-                  ],
-                  Text(title, style: theme.textTheme.headlineMedium),
-                  if (description != null) ...[
-                    const SizedBox(height: WdsSpacing.xs),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 760),
-                      child: Text(description!, style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      )),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (trailing != null) ...[
-              const SizedBox(width: WdsSpacing.lg),
-              trailing!,
-            ],
-          ],
-        ),
-        if (actions.isNotEmpty) ...[
-          const SizedBox(height: WdsSpacing.lg),
-          Wrap(spacing: WdsSpacing.sm, runSpacing: WdsSpacing.sm, children: actions),
+        Text(title, style: theme.textTheme.headlineMedium),
+        if (description != null) ...[
+          const SizedBox(height: WdsSpacing.xs),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Text(description!, style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            )),
+          ),
         ],
       ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 640;
+        final titleRow = compact
+            ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                heading,
+                if (trailing != null) ...[
+                  const SizedBox(height: WdsSpacing.md),
+                  trailing!,
+                ],
+              ])
+            : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: heading),
+                if (trailing != null) ...[
+                  const SizedBox(width: WdsSpacing.lg),
+                  trailing!,
+                ],
+              ]);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (breadcrumbs.isNotEmpty) ...[
+              WdsBreadcrumbs(items: breadcrumbs),
+              const SizedBox(height: WdsSpacing.md),
+            ],
+            titleRow,
+            if (actions.isNotEmpty) ...[
+              const SizedBox(height: WdsSpacing.lg),
+              Wrap(spacing: WdsSpacing.sm, runSpacing: WdsSpacing.sm, children: actions),
+            ],
+          ],
+        );
+      },
     );
   }
 }
@@ -301,32 +347,50 @@ class WdsFilterToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controls = <Widget>[
-      if (search != null) ConstrainedBox(
-        constraints: BoxConstraints(minWidth: 180, maxWidth: searchWidth),
-        child: search!,
-      ),
+      if (search != null)
+        ConstrainedBox(
+          constraints: BoxConstraints(minWidth: 180, maxWidth: searchWidth),
+          child: search!,
+        ),
       ...filters,
     ];
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 680;
-        return Wrap(
-          alignment: WrapAlignment.start,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: WdsSpacing.sm,
-          runSpacing: WdsSpacing.sm,
-          children: [
-            ...controls,
-            if (actions.isNotEmpty)
-              SizedBox(
-                width: compact ? constraints.maxWidth : null,
-                child: Wrap(
-                  alignment: compact ? WrapAlignment.start : WrapAlignment.end,
-                  spacing: WdsSpacing.sm,
-                  runSpacing: WdsSpacing.sm,
-                  children: actions,
+        if (compact) {
+          return Wrap(
+            spacing: WdsSpacing.sm,
+            runSpacing: WdsSpacing.sm,
+            children: [
+              ...controls,
+              if (actions.isNotEmpty)
+                SizedBox(
+                  width: constraints.maxWidth,
+                  child: Wrap(
+                    spacing: WdsSpacing.sm,
+                    runSpacing: WdsSpacing.sm,
+                    children: actions,
+                  ),
                 ),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: Wrap(
+              spacing: WdsSpacing.sm,
+              runSpacing: WdsSpacing.sm,
+              children: controls,
+            )),
+            if (actions.isNotEmpty) ...[
+              const SizedBox(width: WdsSpacing.md),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: WdsSpacing.sm,
+                runSpacing: WdsSpacing.sm,
+                children: actions,
               ),
+            ],
           ],
         );
       },
