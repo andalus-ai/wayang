@@ -486,7 +486,14 @@ class _EventLogState extends ConsumerState<_EventLog> {
     });
     final state = ref.watch(runEventsProvider(widget.id));
     final live = state.hasValue || state.isLoading;
-    final recentEvents = _events.reversed.take(50).toList();
+    // StreamProvider may already hold its first value before this detail widget
+    // subscribes. Include that value in the first frame rather than waiting for
+    // a subsequent event callback to populate the local bounded history.
+    final streamedEvent = state.valueOrNull;
+    final visibleEvents = _events.isEmpty && streamedEvent != null
+        ? [streamedEvent]
+        : _events;
+    final recentEvents = visibleEvents.reversed.take(50).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -495,7 +502,7 @@ class _EventLogState extends ConsumerState<_EventLog> {
           const SizedBox(width: 8),
           WdsBadge(label: live ? 'live' : 'polling', tone: live ? WdsBadgeTone.success : WdsBadgeTone.neutral, dense: true),
         ]),
-        if (_events.isEmpty)
+        if (recentEvents.isEmpty)
           Text(live ? 'Waiting for events…' : 'Live feed unavailable; the panel refreshes every 2 s.', style: const TextStyle(fontSize: 12))
         else
           WdsExecutionTimeline(
