@@ -56,7 +56,8 @@ public final class DeploymentLifecycleReconciliationWorker {
         for (DeploymentOperationReceipt receipt : candidates) {
             var now = clock.instant();
             try {
-                if (!work.claim(receipt, now, now.plus(lease))) {
+                DeploymentLifecycleReconciliationWorkClaim claim = work.claimOwned(receipt, now, now.plus(lease));
+                if (claim == null) {
                     skipped++;
                     continue;
                 }
@@ -72,7 +73,7 @@ public final class DeploymentLifecycleReconciliationWorker {
             try {
                 context = contexts.find(receipt).orElse(null);
             } catch (RuntimeException unavailable) {
-                scheduleWaiting(receipt, "Reconciliation context is temporarily unavailable");
+                scheduleWaiting(claim, "Reconciliation context is temporarily unavailable");
                 waiting++;
                 continue;
             }
@@ -85,7 +86,7 @@ public final class DeploymentLifecycleReconciliationWorker {
                     || !context.operation().equals(receipt.operation())
                     || !context.command().deploymentId().equals(receipt.deploymentId())
                     || !context.command().idempotencyKey().equals(receipt.operationKey())) {
-                finish(receipt, DeploymentLifecycleReconciliationWorkStatus.CONFLICT,
+                finish(claim, DeploymentLifecycleReconciliationWorkStatus.CONFLICT,
                         "Reconciliation context identity does not match receipt", null);
                 conflicts++;
                 continue;
@@ -135,13 +136,13 @@ public final class DeploymentLifecycleReconciliationWorker {
                 reconciled, waiting, unresolved, conflicts, skipped);
     }
 
-    private void scheduleWaiting(DeploymentOperationReceipt receipt, String detail) {
-        finish(receipt, DeploymentLifecycleReconciliationWorkStatus.WAITING, detail,
+    private void scheduleWaiting(DeploymentLifecycleReconciliationWorkClaim claim, String detail) {
+        finish(claim, DeploymentLifecycleReconciliationWorkStatus.WAITING, detail,
                 clock.instant().plus(retryDelay));
     }
 
-    private void finish(DeploymentOperationReceipt receipt, DeploymentLifecycleReconciliationWorkStatus status,
+    private void finish(DeploymentLifecycleReconciliationWorkClaim claim, DeploymentLifecycleReconciliationWorkStatus status,
             String detail, java.time.Instant retryAt) {
-        work.complete(receipt, status, detail, clock.instant(), retryAt);
+        work.complete(claim, status, detail, clock.instant(), retryAt);
     }
 }
