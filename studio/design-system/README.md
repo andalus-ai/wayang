@@ -145,3 +145,15 @@ OpenAPI server expansion and lazy tool-detail loading. OAuth, credentials,
 allow-lists, endpoint security, import/preview and lifecycle operations remain
 owned by their feature modules. See the [screen inventory](studio-screen-inventory.md)
 for the verified migration scope.
+
+
+## M18 — Workspace and configuration adoption
+
+Workspace export/import, release planning, built-in and server-driven template
+creation, result reports, and environment Configuration now compose WDS page,
+surface, action, section, status and empty-state primitives. WDS remains a
+presentation layer: dry-run/apply eligibility, destructive confirmation,
+bundle validation, trigger safety, release-plan invalidation, credential-name
+validation, configuration scope and persistence remain feature-owned. See the
+[Studio screen inventory](studio-screen-inventory.md) for the verified scope
+and regression coverage.
