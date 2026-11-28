@@ -55,8 +55,9 @@ public final class DeploymentLifecycleReconciliationWorker {
         int skipped = 0;
         for (DeploymentOperationReceipt receipt : candidates) {
             var now = clock.instant();
+            DeploymentLifecycleReconciliationWorkClaim claim;
             try {
-                DeploymentLifecycleReconciliationWorkClaim claim = work.claimOwned(receipt, now, now.plus(lease));
+                claim = work.claimOwned(receipt, now, now.plus(lease));
                 if (claim == null) {
                     skipped++;
                     continue;
