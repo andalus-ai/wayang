@@ -266,23 +266,26 @@ class _WdsShowcaseCard extends StatelessWidget {
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(WdsSpacing.lg, WdsSpacing.sm, WdsSpacing.lg, WdsSpacing.md),
-            child: ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              childrenPadding: const EdgeInsets.only(bottom: WdsSpacing.sm),
-              title: const Text('Dart usage'),
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: SelectableText(
-                    example.code,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontFamily: 'monospace',
+          Material(
+            color: theme.colorScheme.surface,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(WdsSpacing.lg, WdsSpacing.sm, WdsSpacing.lg, WdsSpacing.md),
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: const EdgeInsets.only(bottom: WdsSpacing.sm),
+                title: const Text('Dart usage'),
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: SelectableText(
+                      example.code,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontFamily: 'monospace',
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
