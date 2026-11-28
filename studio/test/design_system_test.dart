@@ -366,5 +366,102 @@ void main() {
       await tester.tap(find.text('URL *'));
       expect(selectedPort?.id, 'url');
     });
+
+    testWidgets('execution status indicator covers semantic states', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        theme: ThemeData(useMaterial3: true),
+        home: const Scaffold(
+          body: Wrap(children: [
+            WdsExecutionStatusIndicator(status: WdsExecutionStatus.pending),
+            WdsExecutionStatusIndicator(status: WdsExecutionStatus.running),
+            WdsExecutionStatusIndicator(status: WdsExecutionStatus.succeeded),
+            WdsExecutionStatusIndicator(status: WdsExecutionStatus.failed),
+            WdsExecutionStatusIndicator(status: WdsExecutionStatus.retrying),
+          ]),
+        ),
+      ));
+      expect(find.text('Pending'), findsOneWidget);
+      expect(find.text('Running'), findsOneWidget);
+      expect(find.text('Succeeded'), findsOneWidget);
+      expect(find.text('Failed'), findsOneWidget);
+      expect(find.text('Retrying'), findsOneWidget);
+    });
+
+    testWidgets('execution timeline renders metadata and reports selection', (tester) async {
+      WdsExecutionStep? selected;
+      const steps = [
+        WdsExecutionStep(
+          id: 'validate',
+          title: 'Validate request',
+          status: WdsExecutionStatus.succeeded,
+          duration: Duration(milliseconds: 820),
+          attempt: 1,
+        ),
+        WdsExecutionStep(
+          id: 'invoke',
+          title: 'Call integration',
+          status: WdsExecutionStatus.running,
+          message: 'Waiting for response',
+        ),
+      ];
+      await tester.pumpWidget(MaterialApp(
+        theme: ThemeData(useMaterial3: true),
+        home: Scaffold(
+          body: WdsExecutionTimeline(
+            steps: steps,
+            activeStepId: 'invoke',
+            onStepSelected: (step) => selected = step,
+          ),
+        ),
+      ));
+      expect(find.text('Validate request'), findsOneWidget);
+      expect(find.text('820ms'), findsOneWidget);
+      expect(find.text('Attempt 1'), findsOneWidget);
+      expect(find.text('Waiting for response'), findsOneWidget);
+      await tester.tap(find.text('Validate request'));
+      expect(selected?.id, 'validate');
+    });
+
+    testWidgets('execution timeline presents an empty state', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: const Scaffold(body: WdsExecutionTimeline(steps: [])),
+      ));
+      expect(find.text('No execution steps'), findsOneWidget);
+    });
+
+    testWidgets('execution event list renders severity and reports selection', (tester) async {
+      WdsExecutionEvent? selected;
+      final event = WdsExecutionEvent(
+        id: 'event-1',
+        timestamp: DateTime(2026, 11, 28, 10, 30, 5),
+        title: 'Connector failed',
+        message: 'The upstream service returned an error.',
+        level: WdsExecutionEventLevel.error,
+        source: 'HTTP Request',
+        details: 'HTTP 502',
+      );
+      await tester.pumpWidget(MaterialApp(
+        theme: ThemeData(useMaterial3: true),
+        home: Scaffold(
+          body: WdsExecutionEventList(
+            events: [event],
+            onEventSelected: (value) => selected = value,
+          ),
+        ),
+      ));
+      expect(find.text('Connector failed'), findsOneWidget);
+      expect(find.text('ERROR'), findsOneWidget);
+      expect(find.text('HTTP 502'), findsOneWidget);
+      expect(find.text('10:30:05'), findsOneWidget);
+      await tester.tap(find.text('Connector failed'));
+      expect(selected?.id, 'event-1');
+    });
+
+    test('execution display formatters are stable', () {
+      expect(formatWdsDuration(const Duration(milliseconds: 820)), '820ms');
+      expect(formatWdsDuration(const Duration(seconds: 2)), '2s');
+      expect(formatWdsDuration(const Duration(minutes: 1, seconds: 5)), '1m 5s');
+      expect(formatWdsTimestamp(DateTime(2026, 11, 28, 9, 4, 7)), '09:04:07');
+    });
   });
 }
