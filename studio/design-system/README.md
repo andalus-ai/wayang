@@ -122,3 +122,9 @@ adoption. `SurfacePanel`, `AppSearchField`, `EmptyState`, `ScreenHeader` and
 `KeyValueRow` now delegate to WDS primitives through source-compatible facades.
 Feature-level call sites can migrate imports incrementally; provider-backed
 navigation, global feedback policy and editor decisions remain host-owned.
+
+
+## Studio adoption and inventory
+
+- [Studio-wide adoption roadmap](studio-adoption-roadmap.md) — cross-mode ownership, migration waves and quality gates.
+- [Studio screen inventory](studio-screen-inventory.md) — verified static screen registry, shell call sites and remaining source-wide census work.
