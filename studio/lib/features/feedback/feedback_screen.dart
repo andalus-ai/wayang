@@ -33,93 +33,160 @@ class FeedbackScreen extends ConsumerWidget {
     final filter = ref.watch(feedbackKindFilterProvider);
     final query = ref.watch(_feedbackQueryProvider);
     final hideDone = ref.watch(_feedbackHideDoneProvider);
-    final summary = ref.watch(feedbackSummaryProvider).valueOrNull; // a failure shows on the list below; the counts just stay out
+    final summary = ref.watch(feedbackSummaryProvider).valueOrNull;
+
+    final header = WdsPageHeader(
+      title: 'Feedback',
+      description:
+          'Ratings, comments, bugs, ideas and error reports from your users. Credentials are masked before they are stored.',
+      actions: [
+        WdsButton(
+          label: 'Send feedback',
+          icon: Icons.edit_outlined,
+          variant: WdsButtonVariant.secondary,
+          onPressed: () => showFeedbackDialog(context),
+        ),
+        WdsButton(
+          label: 'Copy CSV',
+          icon: Icons.content_copy_rounded,
+          variant: WdsButtonVariant.secondary,
+          onPressed: () async {
+            try {
+              final csv = await ref
+                  .read(repositoryProvider)
+                  .exportFeedbackCsv(kind: filter);
+              await Clipboard.setData(ClipboardData(text: csv));
+              if (context.mounted) {
+                showToast(
+                  context,
+                  'Copied as CSV${filter == null ? '' : ' ($filter only)'}',
+                );
+              }
+            } catch (e) {
+              if (context.mounted) {
+                showToast(context, errText(e), isError: true);
+              }
+            }
+          },
+        ),
+        WdsButton(
+          label: 'Export CSV',
+          icon: Icons.download_rounded,
+          variant: WdsButtonVariant.secondary,
+          onPressed: () async {
+            final command = feedbackExportCommand(
+              ref.read(apiConfigProvider).baseUrl,
+              kind: filter,
+            );
+            await Clipboard.setData(ClipboardData(text: command));
+            if (context.mounted) {
+              showToast(
+                context,
+                'Copied a command that downloads the CSV. It holds no token: set WAYANG_TOKEN in your shell.',
+              );
+            }
+          },
+        ),
+        WdsIconButton(
+          tooltip: 'Refresh',
+          icon: Icons.refresh_rounded,
+          onPressed: () {
+            ref.invalidate(feedbackListProvider);
+            ref.invalidate(feedbackSummaryProvider);
+          },
+        ),
+      ],
+    );
+
+    final filterToolbar = WdsFilterToolbar(
+      search: WdsSearchField(
+        hint: 'Search feedback',
+        onChanged: (value) {
+          ref.read(_feedbackQueryProvider.notifier).state = value;
+        },
+      ),
+      filters: [
+        ChoiceChip(
+          label: const Text('All'),
+          selected: filter == null,
+          onSelected: (_) {
+            ref.read(feedbackKindFilterProvider.notifier).state = null;
+          },
+        ),
+        for (final kind in FeedbackKind.values)
+          ChoiceChip(
+            label: Text(
+              summary != null && summary.openOf(kind.api) > 0
+                  ? '${kind.label} (${summary.openOf(kind.api)})'
+                  : kind.label,
+            ),
+            selected: filter == kind.api,
+            onSelected: (_) {
+              ref.read(feedbackKindFilterProvider.notifier).state = kind.api;
+            },
+          ),
+        FilterChip(
+          label: const Text('Hide done'),
+          selected: hideDone,
+          onSelected: (value) {
+            ref.read(_feedbackHideDoneProvider.notifier).state = value;
+          },
+        ),
+      ],
+    );
+
+    final content = Expanded(
+      child: items.when(
+        loading: () => const LoadingView(),
+        error: (error, _) => ErrorView(
+          message: errText(error),
+          needsSettings: needsSettings(error),
+          onRetry: () {
+            ref.invalidate(feedbackListProvider);
+          },
+        ),
+        data: (list) {
+          if (list.isEmpty) {
+            return const WdsEmptyState(
+              icon: Icons.feedback_outlined,
+              title: 'No feedback yet',
+              description: 'Feedback submitted by users will appear here.',
+            );
+          }
+
+          final shown = filterFeedback(list, query, hideDone: hideDone);
+          if (shown.isEmpty) {
+            return const WdsEmptyState(
+              icon: Icons.search_off_rounded,
+              title: 'Nothing matches',
+              description: 'Change the search or show done items.',
+            );
+          }
+          return ListView(
+            children: [for (final item in shown) _FeedbackCard(item: item)],
+          );
+        },
+      ),
+    );
+
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          WdsPageHeader(
-            title: 'Feedback',
-            description: 'Ratings, comments, bugs, ideas and error reports from your users. Credentials are masked before they are stored.',
-            actions: [
-              WdsButton(
-                label: 'Send feedback',
-                icon: Icons.edit_outlined,
-                variant: WdsButtonVariant.secondary,
-                onPressed: () => showFeedbackDialog(context),
+          header,
+          if (summary != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                summary.line,
+                style: const TextStyle(fontSize: 12),
               ),
-              WdsButton(
-                label: 'Copy CSV',
-                icon: Icons.content_copy_rounded,
-                variant: WdsButtonVariant.secondary,
-                onPressed: () async {
-                  try {
-                    final csv = await ref.read(repositoryProvider).exportFeedbackCsv(kind: filter);
-                    await Clipboard.setData(ClipboardData(text: csv));
-                    if (context.mounted) showToast(context, 'Copied as CSV${filter == null ? '' : ' ($filter only)'}');
-                  } catch (e) {
-                    if (context.mounted) showToast(context, errText(e), isError: true);
-                  }
-                },
-              ),
-              WdsButton(
-                label: 'Export CSV',
-                icon: Icons.download_rounded,
-                variant: WdsButtonVariant.secondary,
-                onPressed: () async {
-                  final command = feedbackExportCommand(ref.read(apiConfigProvider).baseUrl, kind: filter);
-                  await Clipboard.setData(ClipboardData(text: command));
-                  if (context.mounted) showToast(context, 'Copied a command that downloads the CSV. It holds no token: set WAYANG_TOKEN in your shell.');
-                },
-              ),
-              WdsIconButton(
-                tooltip: 'Refresh',
-                icon: Icons.refresh_rounded,
-                onPressed: () {
-                  ref.invalidate(feedbackListProvider);
-                  ref.invalidate(feedbackSummaryProvider);
-                },
-              ),
-            ],
-          ),
-          if (summary != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(summary.line, style: const TextStyle(fontSize: 12))),
-          const SizedBox(height: 12),
-          WdsFilterToolbar(
-            search: WdsSearchField(
-              hint: 'Search feedback',
-              onChanged: (v) => ref.read(_feedbackQueryProvider.notifier).state = v,
             ),
-            filters: [
-              ChoiceChip(label: const Text('All'), selected: filter == null, onSelected: (_) => ref.read(feedbackKindFilterProvider.notifier).state = null),
-              for (final k in FeedbackKind.values)
-                ChoiceChip(
-                  label: Text(summary != null && summary.openOf(k.api) > 0 ? '${k.label} (${summary.openOf(k.api)})' : k.label),
-                  selected: filter == k.api,
-                  onSelected: (_) => ref.read(feedbackKindFilterProvider.notifier).state = k.api,
-                ),
-              FilterChip(
-                label: const Text('Hide done'),
-                selected: hideDone,
-                onSelected: (v) => ref.read(_feedbackHideDoneProvider.notifier).state = v,
-              ),
-            ],
-          ),
           const SizedBox(height: 12),
-          Expanded(
-            child: items.when(
-              loading: () => const LoadingView(),
-              error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(feedbackListProvider)),
-              data: (list) {
-                if (list.isEmpty) return const WdsEmptyState(icon: Icons.feedback_outlined, title: 'No feedback yet', description: 'Feedback submitted by users will appear here.');
-                final shown = filterFeedback(list, query, hideDone: hideDone);
-                if (shown.isEmpty) {
-                  return const WdsEmptyState(icon: Icons.search_off_rounded, title: 'Nothing matches', description: 'Change the search or show done items.');
-                }
-                return ListView(children: [for (final f in shown) _FeedbackCard(item: f)]);
-              },
-            ),
-          ),
+          filterToolbar,
+          const SizedBox(height: 12),
+          content,
         ],
       ),
     );
