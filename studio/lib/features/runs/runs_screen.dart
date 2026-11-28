@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme.dart';
 import '../../core/utils.dart';
 import '../../core/widgets.dart';
+import '../../design_system/wds.dart';
 import '../../data/api_client.dart';
 import '../../data/feedback_model.dart';
 import '../../data/run_events.dart';
@@ -81,6 +82,24 @@ final runDetailProvider = StreamProvider.autoDispose.family<RunView, String>((re
   return out.stream;
 });
 
+WdsExecutionStatus runExecutionStatus(RunStatus status) => switch (status) {
+      RunStatus.running => WdsExecutionStatus.running,
+      RunStatus.waiting => WdsExecutionStatus.queued,
+      RunStatus.completed => WdsExecutionStatus.succeeded,
+      RunStatus.failed => WdsExecutionStatus.failed,
+      RunStatus.cancelled => WdsExecutionStatus.cancelled,
+    };
+
+WdsExecutionStatus runEventExecutionStatus(RunEventView event) {
+  final type = event.type.toUpperCase();
+  if (type.contains('FAIL') || type.contains('ERROR')) return WdsExecutionStatus.failed;
+  if (type.contains('CANCEL')) return WdsExecutionStatus.cancelled;
+  if (type.contains('COMPLETE') || type.contains('SUCCEED')) return WdsExecutionStatus.succeeded;
+  if (type.contains('RETR') || type.contains('START')) return WdsExecutionStatus.running;
+  if (type.contains('QUEUE') || type.contains('WAIT')) return WdsExecutionStatus.queued;
+  return WdsExecutionStatus.pending;
+}
+
 Color runStatusColor(RunStatus s) => switch (s) {
       RunStatus.running => AppColors.info,
       RunStatus.waiting => AppColors.warning,
@@ -115,37 +134,28 @@ class RunsScreen extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ScreenHeader(
+          WdsPageHeader(
             title: 'Runs',
-            subtitle: 'Process instances executed by the durable engine.',
-            icon: Icons.play_circle_outline_rounded,
+            description: 'Process instances executed by the durable engine.',
             actions: [
-              IconButton(tooltip: 'Refresh', icon: const Icon(Icons.refresh_rounded), onPressed: () => ref.invalidate(runsProvider)),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: () => _startDialog(context, ref),
-                icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                label: const Text('Start run'),
-              ),
+              WdsIconButton(tooltip: 'Refresh runs', icon: Icons.refresh_rounded, onPressed: () => ref.invalidate(runsProvider)),
+              WdsButton(label: 'Start run', icon: Icons.play_arrow_rounded, onPressed: () => _startDialog(context, ref)),
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              SizedBox(
-                width: 280,
-                child: TextField(
-                  decoration: const InputDecoration(isDense: true, prefixIcon: Icon(Icons.search, size: 18), hintText: 'Search process or run id'),
-                  onChanged: (v) => ref.read(_runQueryProvider.notifier).state = v,
-                ),
-              ),
-              const SizedBox(width: 12),
+          WdsFilterToolbar(
+            search: WdsSearchField(
+              hint: 'Search process or run id',
+              onChanged: (value) => ref.read(_runQueryProvider.notifier).state = value,
+            ),
+            filters: [
               Wrap(
                 spacing: 6,
+                runSpacing: 6,
                 children: [
                   for (final st in [null, ...RunStatus.values])
                     ChoiceChip(
-                      label: Text(st == null ? 'All' : st.name, style: const TextStyle(fontSize: 11.5)),
+                      label: Text(st == null ? 'All' : st.name),
                       selected: statusFilter == st,
                       onSelected: (_) => ref.read(_runStatusFilterProvider.notifier).state = st,
                     ),
@@ -159,7 +169,7 @@ class RunsScreen extends ConsumerWidget {
               loading: () => const LoadingView(),
               error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(runsProvider)),
               data: (all) => all.isEmpty
-                  ? const EmptyState(icon: Icons.play_circle_outline_rounded, title: 'No runs yet', message: 'Publish a process and start it.')
+                  ? const WdsEmptyState(icon: Icons.play_circle_outline_rounded, title: 'No runs yet', description: 'Publish a process and start it.')
                   : Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -170,15 +180,16 @@ class RunsScreen extends ConsumerWidget {
                               if (filterRuns(all, query, statusFilter).isEmpty)
                                 const Padding(padding: EdgeInsets.all(16), child: Text('No run matches the filter.', style: TextStyle(fontSize: 12))),
                               for (final r in filterRuns(all, query, statusFilter))
-                                Card(
-                                  color: r.id == selected ? AppColors.darkSurfaceRaised : null,
+                                WdsSurface(
+                                  padding: EdgeInsets.zero,
+                                  color: r.id == selected ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.24) : null,
+                                  onTap: () => ref.read(selectedRunIdProvider.notifier).state = r.id,
                                   child: ListTile(
                                     dense: true,
                                     title: Text('${r.processId} v${r.version}', style: const TextStyle(fontWeight: FontWeight.w600)),
                                     subtitle: Text('${r.id}${r.startedAt == null ? '' : ' · ${formatDateShort(r.startedAt!)}'}',
                                         style: const TextStyle(fontSize: 11)),
-                                    trailing: StatusPill(label: r.status.name, color: runStatusColor(r.status), dense: true),
-                                    onTap: () => ref.read(selectedRunIdProvider.notifier).state = r.id,
+                                    trailing: WdsExecutionStatusIndicator(status: runExecutionStatus(r.status), compact: true),
                                   ),
                                 ),
                             ],
@@ -188,7 +199,7 @@ class RunsScreen extends ConsumerWidget {
                         Expanded(
                           flex: 6,
                           child: selected == null
-                              ? const EmptyState(icon: Icons.touch_app_outlined, title: 'Pick a run')
+                              ? const WdsEmptyState(icon: Icons.touch_app_outlined, title: 'Pick a run', description: 'Select a run to inspect its execution details.')
                               : _RunDetail(id: selected),
                         ),
                       ],
@@ -301,7 +312,7 @@ class _RunDetail extends ConsumerWidget {
                   if (context.mounted) showToast(context, 'Run id copied');
                 },
               ),
-              StatusPill(label: r.status.name, color: runStatusColor(r.status)),
+              WdsExecutionStatusIndicator(status: runExecutionStatus(r.status)),
             ]),
             const SizedBox(height: 4),
             Text('${r.processId} v${r.version}', style: Theme.of(context).textTheme.bodySmall),
@@ -346,7 +357,7 @@ class _RunDetail extends ConsumerWidget {
                 ),
             ]),
             const SizedBox(height: 16),
-            const PanelSectionLabel('Executed nodes'),
+            const WdsSectionHeader(title: 'Executed nodes'),
             if (r.executedNodes.isEmpty)
               const Text('—', style: TextStyle(fontSize: 12))
             else
@@ -372,7 +383,7 @@ class _RunDetail extends ConsumerWidget {
               ),
             if (r.waiting.isNotEmpty) ...[
               const SizedBox(height: 14),
-              const PanelSectionLabel('Waiting on'),
+              const WdsSectionHeader(title: 'Waiting on'),
               for (final t in r.waiting)
                 Text('${t.kind}: ${t.title ?? t.messageName ?? t.nodeId}', style: const TextStyle(fontSize: 12)),
             ],
@@ -384,7 +395,7 @@ class _RunDetail extends ConsumerWidget {
               _RunSurface(runId: r.id, surface: Map<String, dynamic>.from(r.variables['surface'] as Map)),
               const SizedBox(height: 14),
             ],
-            const PanelSectionLabel('Variables'),
+            const WdsSectionHeader(title: 'Variables'),
             _VariablesView(variables: r.variables),
           ],
         ),
@@ -448,6 +459,15 @@ class _EventLog extends ConsumerStatefulWidget {
 }
 
 class _EventLogState extends ConsumerState<_EventLog> {
+  WdsExecutionStep _eventStep(RunEventView event, int index) => WdsExecutionStep(
+        id: '${event.runId}:${event.type}:${event.nodeId ?? 'event'}:$index',
+        title: event.type,
+        status: runEventExecutionStatus(event),
+        description: event.nodeId,
+        message: event.isOverflow ? event.data.toString() : null,
+        startedAt: event.time,
+      );
+
   static const _max = 200;
   final List<RunEventView> _events = [];
 
@@ -467,22 +487,21 @@ class _EventLogState extends ConsumerState<_EventLog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(children: [
-          const PanelSectionLabel('Live events'),
+          const WdsSectionHeader(title: 'Live events'),
           const SizedBox(width: 8),
-          StatusPill(label: live ? 'live' : 'polling', color: live ? AppColors.success : AppColors.textMutedDark, dense: true),
+          WdsBadge(label: live ? 'live' : 'polling', tone: live ? WdsBadgeTone.success : WdsBadgeTone.neutral, dense: true),
         ]),
         if (_events.isEmpty)
           Text(live ? 'Waiting for events…' : 'Live feed unavailable; the panel refreshes every 2 s.', style: const TextStyle(fontSize: 12))
         else
-          for (final e in _events.reversed.take(50))
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 1),
-              child: Text(
-                '${e.time == null ? '' : formatDateShort(e.time!)}  ${e.type}${e.nodeId == null ? '' : '  ${e.nodeId}'}'
-                '${e.isOverflow ? '  (${e.data})' : ''}',
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
-              ),
-            ),
+          WdsExecutionTimeline(
+            steps: [
+              for (var index = 0; index < _events.reversed.take(50).length; index++)
+                _eventStep(_events.reversed.take(50).toList()[index], index),
+            ],
+            emptyTitle: 'Waiting for events',
+            emptyDescription: live ? 'Run events will appear here.' : 'Live feed unavailable; the run detail refreshes by polling.',
+          ),
       ],
     );
   }
