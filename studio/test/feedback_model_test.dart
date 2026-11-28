@@ -3,6 +3,7 @@ import 'package:wayang_studio/data/feedback_model.dart';
 
 void main() {
   feedbackItemTests();
+  feedbackFilterTests();
   test('summary reads the counts, ignores junk and marks a floor', () {
     final s = FeedbackSummary.fromJson({'open': 3, 'byKind': {'bug': 2, 'idea': 1, 'x': -4, 'y': 'z'}, 'up': 5, 'down': 2, 'sampled': false});
     expect(s.line, '3 open · 👍 5 · 👎 2');
@@ -90,5 +91,25 @@ void feedbackItemTests() {
     expect(f.isDone, isFalse);
     expect(FeedbackItem.fromJson({'id': 'c', 'kind': 'bug', 'status': 'done'}).isDone, isTrue);
     expect(FeedbackItem.fromJson({'id': 'd', 'kind': 'bug', 'status': 'weird'}).status, 'open');
+  });
+}
+
+void feedbackFilterTests() {
+  FeedbackItem item(String id, String msg, {String status = 'open', String user = 'ann', String kind = 'bug', Map<String, String> ctx = const {}}) =>
+      FeedbackItem(id: id, time: null, user: user, kind: kind, rating: null, message: msg, status: status, context: ctx);
+  final all = [
+    item('1', 'Save button broken', ctx: {'screen': 'bpmn'}),
+    item('2', 'Nice work', user: 'bob', kind: 'comment', status: 'done'),
+    item('3', 'Crash on run', ctx: {'screen': 'runs'}),
+  ];
+  test('filterFeedback searches message, user, kind and context', () {
+    expect(filterFeedback(all, '').length, 3);
+    expect(filterFeedback(all, 'SAVE').map((f) => f.id), ['1']);
+    expect(filterFeedback(all, 'bob').map((f) => f.id), ['2']);
+    expect(filterFeedback(all, 'bug runs').map((f) => f.id), ['3']);
+    expect(filterFeedback(all, 'nothing'), isEmpty);
+  });
+  test('filterFeedback can hide done items', () {
+    expect(filterFeedback(all, '', hideDone: true).map((f) => f.id), ['1', '3']);
   });
 }

@@ -4,6 +4,13 @@ import 'package:wayang_studio/data/workspace_model.dart';
 // Not run in the environment that produced it (no Dart SDK there).
 
 void main() {
+  test('applyWarnings names the risky options', () {
+    expect(applyWarnings(const ImportOptions()), isEmpty);
+    expect(applyWarnings(const ImportOptions().copyWith(onConflict: 'overwrite')), hasLength(1));
+    expect(applyWarnings(const ImportOptions().copyWith(onConflict: 'overwrite', tenantConfig: true, allowUnsigned: true)), hasLength(3));
+    expect(applyWarnings(const ImportOptions().copyWith(onConflict: 'skip')), isEmpty);
+  });
+
   test('import options default to a dry run that fails on conflicts and serialise what the server reads', () {
     const o = ImportOptions();
     expect(o.toJson(), {
