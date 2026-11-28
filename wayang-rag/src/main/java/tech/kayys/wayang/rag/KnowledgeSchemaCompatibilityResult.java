@@ -9,12 +9,8 @@ public record KnowledgeSchemaCompatibilityResult(
 
     public KnowledgeSchemaCompatibilityResult {
         breakingChanges = breakingChanges == null ? List.of() : List.copyOf(breakingChanges);
-        if (compatible != breakingingChangesEmpty(breakingChanges)) {
+        if (compatible != breakingChanges.isEmpty()) {
             throw new RagException("compatibility flag must agree with breaking change details");
         }
-    }
-
-    private static boolean breakingingChangesEmpty(List<String> changes) {
-        return changes.isEmpty();
     }
 }
