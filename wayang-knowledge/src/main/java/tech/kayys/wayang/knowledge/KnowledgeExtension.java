@@ -80,7 +80,7 @@ public final class KnowledgeExtension implements WayangExtension {
         registered.put("graph-query", new GraphQueryConnector(graphStore));
         registered.put("graph-retract", new GraphRetractConnector(graphStore));
         if (allExtractionDependencies) {
-            registered.put("graph-ingest", new GraphIngestConnector(graphStore, entityLookup,
+            registered.put("graph-ingest", new GraphIngestConnector(graphStore, files, entityLookup,
                     entityExtractor, relationshipExtractor, schema));
         }
         this.connectors = Map.copyOf(registered);

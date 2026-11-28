@@ -7,3 +7,6 @@ export 'tokens.dart';
 
 export 'data_table.dart';
 export 'inspector.dart';
+
+export 'editor.dart';
+export 'node.dart';
