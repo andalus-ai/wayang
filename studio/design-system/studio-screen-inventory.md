@@ -41,7 +41,7 @@ The following builders are explicitly registered in
 | Navigation key / screen | Source widget | WDS adoption notes | Census status |
 |---|---|---|---|
 | dashboard | `DashboardScreen` | Inspect KPI/surface/page-header patterns; KPI meaning stays feature-owned | Registered; screen internals not yet scanned |
-| components | `ComponentCatalogScreen` | Candidate for page header, filter toolbar, table, badges and empty state | Registered; screen internals not yet scanned |
+| components | `ComponentCatalogScreen` | Uses `WdsPageHeader`, `WdsFilterToolbar`, `WdsSearchField`, `WdsSurface`, `WdsBadge`, `WdsInspectorSection`, `WdsFieldGroup`, `WdsPropertyRow` and `WdsEmptyState`; loading/error recovery remains host-owned | Migrated in M14; filtering remains feature-owned |
 | runs | `RunsScreen` | Candidate for execution status/timeline/event and inspector patterns | Registered; screen internals not yet scanned |
 | tasks | `TasksScreen` | Candidate for catalog/table/inspector and execution status patterns | Registered; screen internals not yet scanned |
 | projects | `ProjectsScreen` | Candidate for page header, table, filters and empty state | Registered; screen internals not yet scanned |
@@ -152,3 +152,30 @@ rg -n --glob '*.dart' "\b(showConfirmDialog|showToast|confirmDiscardEdits)\b" li
 - No provider, router, runtime, plugin, API or persistence dependency enters WDS.
 - Legacy facades are removed only after a complete search proves no remaining
   supported consumers.
+
+
+## M14 — Component Catalog adoption
+
+The Component Catalog was inspected and migrated in
+`studio/lib/features/components/component_catalog_screen.dart`.
+
+Verified adoption:
+- `WdsPageHeader` provides page identity and runtime context.
+- `WdsFilterToolbar` composes the search control responsively;
+  `WdsSearchField` reports text changes to the feature-owned query state.
+- `WdsSurface` and `WdsBadge` provide theme-aware component cards and
+  neutral version metadata.
+- `WdsFieldGroup`, `WdsInspectorSection` and `WdsPropertyRow` present
+  component metadata and configuration schema fields.
+- `WdsEmptyState` handles both an empty runtime catalog and an empty search
+  result.
+- Existing loading and error/retry views remain host-owned because they include
+  application-level behavior.
+
+The existing multi-term search contract is preserved: every whitespace-
+separated term must match somewhere in the component's display metadata.
+A focused test file covers matching across names, categories, kinds, executor
+types, descriptions and capabilities, plus empty/whitespace-only queries.
+
+This is a verified migration of the Component Catalog only. It does not claim
+that Projects, Channels, MCP, Secrets or other catalogs have been audited.
