@@ -349,18 +349,20 @@ class _CreateTriggerDialogState extends ConsumerState<_CreateTriggerDialog> {
         child: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             DropdownButtonFormField<String>(
+              isExpanded: true,
               value: _template,
               decoration: const InputDecoration(labelText: 'Channel'),
-              items: [for (final e in _templates.entries) DropdownMenuItem(value: e.key, child: Text(e.value.label))],
+              items: [for (final e in _templates.entries) DropdownMenuItem(value: e.key, child: Text(e.value.label, overflow: TextOverflow.ellipsis))],
               onChanged: (v) => setState(() => _applyTemplate(v ?? 'telegram')),
             ),
             const SizedBox(height: 10),
             TextField(controller: _id, decoration: const InputDecoration(labelText: 'Trigger id (e.g. telegram-me)')),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
+              isExpanded: true,
               value: _process,
               decoration: const InputDecoration(labelText: 'Process to start'),
-              items: [for (final p in widget.processes) DropdownMenuItem(value: p.id, child: Text('${p.name} (${p.id})'))],
+              items: [for (final p in widget.processes) DropdownMenuItem(value: p.id, child: Text('${p.name} (${p.id})', overflow: TextOverflow.ellipsis))],
               onChanged: (v) => setState(() => _process = v),
             ),
             const SizedBox(height: 10),
