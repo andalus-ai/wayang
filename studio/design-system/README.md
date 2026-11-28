@@ -147,6 +147,16 @@ owned by their feature modules. See the [screen inventory](studio-screen-invento
 for the verified migration scope.
 
 
+## M18 — Workspace and configuration adoption
+
+Workspace export/import, release planning, built-in and server-driven template
+creation, result reports, and environment Configuration now compose WDS page,
+surface, action, section, status and empty-state primitives. WDS remains a
+presentation layer: dry-run/apply eligibility, destructive confirmation,
+bundle validation, trigger safety, release-plan invalidation, credential-name
+validation, configuration scope and persistence remain feature-owned. See the
+[Studio screen inventory](studio-screen-inventory.md) for the verified scope
+and regression coverage.
 ## M19 — Runs and Tasks adoption
 
 Runs and Tasks now use shared WDS page, filter, search, surface, status, timeline, badge and action primitives. The Runs screen adapts server run and event states to WDS presentation types without changing API models; unknown event types remain neutral. The Tasks screen uses semantic kind/overdue badges while keeping due-time ordering and task/message operations in the feature. See the [Studio screen inventory](studio-screen-inventory.md) for ownership boundaries and regression coverage.
