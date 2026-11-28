@@ -24,8 +24,10 @@ unavailable health observation leaves the lifecycle pending and schedules a retr
 ## Cross-process leases
 
 Migration `V4__deployment_lifecycle_reconciliation_work.sql` adds a work row keyed by deployment ID
-and operation key. The database primary key elects one initial claimant. A claim can be acquired again
-only when a WAITING retry is due or a previous CLAIMED lease has expired. Terminal work states are
+and operation key. Migration `V5__deployment_reconciliation_claim_fencing.sql` adds an opaque claim token. The database primary key elects one initial claimant. A claim can be acquired again
+only when a WAITING retry is due or a previous CLAIMED lease has expired. Every ownership-aware claim receives a fresh opaque token persisted in `claim_token`. Reclaiming an
+expired lease replaces that token. Completion and retry scheduling from the worker are conditional on
+the exact token, so a stale worker cannot overwrite the newer owner's result. Terminal work states are
 not claimable. A fingerprint mismatch for an existing work key is a security conflict, not a replay.
 
 The terminal receipt scan excludes work already in a terminal work state and includes WAITING or expired
@@ -69,3 +71,16 @@ never repeats the original target operation.
 
 This worker provides durable, leased lifecycle reconciliation. It does not provide exactly-once delivery
 for external side effects and must not be used to replay a target operation.
+
+## Claim fencing
+
+The worker uses `claimOwned` and fenced `complete(claim, ...)` APIs. Stores that do not implement
+ownership-aware claims fail closed; the worker does not fall back to the legacy boolean claim contract.
+The JDBC implementation generates a fresh unpredictable token for each successful acquisition and
+clears it when the current owner completes. A completion with an old token updates zero rows and is
+rejected.
+
+The original boolean `claim` and receipt-based `complete` methods remain for source compatibility
+with existing integrations and low-level tests. They are not used by the reconciliation worker and
+must not be used to implement new worker paths. Custom production stores must implement both
+ownership-aware methods atomically across processes before enabling the worker.
