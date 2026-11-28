@@ -85,7 +85,8 @@ class SecretsScreen extends ConsumerWidget {
                 if (list.isEmpty) return const WdsEmptyState(icon: Icons.search_off_rounded, title: 'No secret matches');
                 return ListView(children: [
                       for (final s in list)
-                        Card(
+                        WdsSurface(
+                          padding: EdgeInsets.zero,
                           child: ListTile(
                             title: Text(s.name, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w600)),
                             subtitle: Text(
@@ -102,12 +103,12 @@ class SecretsScreen extends ConsumerWidget {
                                 },
                               ),
                               WdsIconButton(
-                                tooltip: 'Replace the value,
+                                tooltip: 'Replace the value',
                                 icon: Icons.edit_outlined,
                                 onPressed: () => _put(context, ref, fixedName: s.name),
                               ),
                               WdsIconButton(
-                              tooltip: 'Delete secret,
+                              tooltip: 'Delete secret',
                               icon: Icons.delete_outline_rounded,
                               onPressed: () async {
                                 final ok = await showConfirmDialog(context,
