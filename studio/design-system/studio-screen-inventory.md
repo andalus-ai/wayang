@@ -40,7 +40,7 @@ The following builders are explicitly registered in
 
 | Navigation key / screen | Source widget | WDS adoption notes | Census status |
 |---|---|---|---|
-| dashboard | `DashboardScreen` | Inspect KPI/surface/page-header patterns; KPI meaning stays feature-owned | Registered; screen internals not yet scanned |
+| dashboard | `DashboardScreen` | Uses `WdsPageHeader`, `WdsIconButton`, `WdsBadge`, `WdsSurface`, `WdsSectionHeader`, `WdsEmptyState` and `WdsExecutionStatusIndicator`; KPI composition, aggregation and first-run logic remain dashboard-owned | Migrated in M20 |
 | components | `ComponentCatalogScreen` | Uses `WdsPageHeader`, `WdsFilterToolbar`, `WdsSearchField`, `WdsSurface`, `WdsBadge`, `WdsInspectorSection`, `WdsFieldGroup`, `WdsPropertyRow` and `WdsEmptyState`; loading/error recovery remains host-owned | Migrated in M14; filtering remains feature-owned |
 | runs | `RunsScreen` | Uses `WdsPageHeader`, `WdsFilterToolbar`, `WdsSearchField`, `WdsSurface`, `WdsExecutionStatusIndicator`, `WdsExecutionTimeline`, `WdsBadge`, `WdsButton` and `WdsIconButton`; run lifecycle, polling, WebSocket subscriptions, cancel/start and variables remain feature-owned | Migrated in M19 |
 | tasks | `TasksScreen` | Uses `WdsPageHeader`, `WdsFilterToolbar`, `WdsSearchField`, `WdsSurface`, `WdsBadge`, `WdsButton` and `WdsIconButton`; overdue ordering, task completion, message delivery and due-time logic remain feature-owned | Migrated in M19 |
