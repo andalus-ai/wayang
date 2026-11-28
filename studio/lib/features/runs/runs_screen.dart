@@ -94,7 +94,7 @@ WdsExecutionStatus runEventExecutionStatus(RunEventView event) {
   final type = event.type.toUpperCase();
   if (type.contains('FAIL') || type.contains('ERROR')) return WdsExecutionStatus.failed;
   if (type.contains('CANCEL')) return WdsExecutionStatus.cancelled;
-  if (type.contains('COMPLETE') || type.contains('SUCCEED')) return WdsExecutionStatus.succeeded;
+  if (type.endsWith('_COMPLETED') || type.endsWith('_SUCCEEDED') || type == 'RUN_COMPLETED') return WdsExecutionStatus.succeeded;
   if (type.contains('RETR') || type.contains('START')) return WdsExecutionStatus.running;
   if (type.contains('QUEUE') || type.contains('WAIT')) return WdsExecutionStatus.queued;
   return WdsExecutionStatus.pending;
@@ -483,11 +483,12 @@ class _EventLogState extends ConsumerState<_EventLog> {
     });
     final state = ref.watch(runEventsProvider(widget.id));
     final live = state.hasValue || state.isLoading;
+    final recentEvents = _events.reversed.take(50).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(children: [
-          const WdsSectionHeader(title: 'Live events'),
+          const Expanded(child: WdsSectionHeader(title: 'Live events')),
           const SizedBox(width: 8),
           WdsBadge(label: live ? 'live' : 'polling', tone: live ? WdsBadgeTone.success : WdsBadgeTone.neutral, dense: true),
         ]),
@@ -496,8 +497,8 @@ class _EventLogState extends ConsumerState<_EventLog> {
         else
           WdsExecutionTimeline(
             steps: [
-              for (var index = 0; index < _events.reversed.take(50).length; index++)
-                _eventStep(_events.reversed.take(50).toList()[index], index),
+              for (var index = 0; index < recentEvents.length; index++)
+                _eventStep(recentEvents[index], index),
             ],
             emptyTitle: 'Waiting for events',
             emptyDescription: live ? 'Run events will appear here.' : 'Live feed unavailable; the run detail refreshes by polling.',
