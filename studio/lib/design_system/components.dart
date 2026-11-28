@@ -20,7 +20,9 @@ class WdsSurface extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(color: borderColor ?? (isDark ? AppColors.darkBorder : AppColors.lightBorder)),
       ),
-      child: child,
+      // A transparent Material between the coloured box and the content: ListTile, InkWell and friends paint their ink on the
+      // nearest Material, which would otherwise sit above the box's colour (hiding splashes) and trips a framework assertion.
+      child: Material(type: MaterialType.transparency, child: child),
     );
     if (onTap == null) return surface;
     return Material(color: Colors.transparent, borderRadius: BorderRadius.circular(radius), clipBehavior: Clip.antiAlias,
