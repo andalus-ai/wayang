@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wayang_studio/features/dashboard/dashboard_screen.dart';
+import 'package:wayang_studio/models/wayang.dart';
+import 'package:wayang_studio/design_system/wds.dart';
 
 void main() {
   test('a new workspace sees all three steps, the first done once connected', () {
@@ -22,3 +24,12 @@ void main() {
     expect(firstRunSteps(connected: true, processes: 1, runs: 0, executes: false), isEmpty);
   });
 }
+
+
+  test('dashboard maps API run statuses to neutral WDS execution states', () {
+    expect(dashboardRunStatus(RunStatus.running), WdsExecutionStatus.running);
+    expect(dashboardRunStatus(RunStatus.waiting), WdsExecutionStatus.queued);
+    expect(dashboardRunStatus(RunStatus.completed), WdsExecutionStatus.succeeded);
+    expect(dashboardRunStatus(RunStatus.failed), WdsExecutionStatus.failed);
+    expect(dashboardRunStatus(RunStatus.cancelled), WdsExecutionStatus.cancelled);
+  });
