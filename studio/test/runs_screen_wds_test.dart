@@ -46,8 +46,11 @@ void main() {
       ],
       child: const MaterialApp(home: Scaffold(body: RunsScreen())),
     ));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 20));
+    // The run list, the run detail and the event stream are three separate async providers; each needs a frame to deliver.
+    // (pumpAndSettle is avoided: the live panel may keep timers running.)
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
 
     expect(find.byType(WdsExecutionStatusIndicator), findsWidgets);
     expect(find.byType(WdsExecutionTimeline), findsOneWidget);
