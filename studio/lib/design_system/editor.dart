@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'components.dart';
 import 'tokens.dart';
 
 /// Responsive action strip for a visual editor or workflow designer.
