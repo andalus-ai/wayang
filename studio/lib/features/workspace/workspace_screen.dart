@@ -193,23 +193,28 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Text('Export', style: TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
-                Row(children: [
-                  DropdownButton<String>(
-                    hint: const Text('Project'),
-                    value: list.any((p) => p.id == _exportProject) ? _exportProject : null,
-                    items: [for (final p in list) DropdownMenuItem(value: p.id, child: Text(p.name))],
-                    onChanged: (v) => setState(() {
-                      _exportProject = v;
-                      _plan = null;
-                      _planError = null;
-                    }),
-                  ),
-                  const SizedBox(width: 12),
-                  Checkbox(value: _withTenantConfig, onChanged: (v) => setState(() => _withTenantConfig = v ?? false)),
-                  const Text('include tenant-wide settings'),
-                  const Spacer(),
-                  WdsButton(label: 'Export', icon: Icons.download_outlined, onPressed: _busy || _exportProject == null ? null : _export),
-                ]),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    DropdownButton<String>(
+                      hint: const Text('Project'),
+                      value: list.any((p) => p.id == _exportProject) ? _exportProject : null,
+                      items: [for (final p in list) DropdownMenuItem(value: p.id, child: Text(p.name))],
+                      onChanged: (v) => setState(() {
+                        _exportProject = v;
+                        _plan = null;
+                        _planError = null;
+                      }),
+                    ),
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      Checkbox(value: _withTenantConfig, onChanged: (v) => setState(() => _withTenantConfig = v ?? false)),
+                      const Text('include tenant-wide settings'),
+                    ]),
+                    WdsButton(label: 'Export', icon: Icons.download_outlined, onPressed: _busy || _exportProject == null ? null : _export),
+                  ],
+                ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _only,
