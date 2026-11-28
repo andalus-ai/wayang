@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme.dart';
 import '../../core/utils.dart';
 import '../../core/widgets.dart';
+import '../../design_system/wds.dart';
 import '../../data/api_client.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
@@ -59,40 +60,35 @@ class TasksScreen extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ScreenHeader(
+          WdsPageHeader(
             title: 'Task inbox',
-            subtitle: 'Open human tasks and runs waiting for a message.',
-            icon: Icons.inbox_rounded,
+            description: 'Open human tasks and runs waiting for a message.',
             actions: [
-              IconButton(tooltip: 'Refresh', icon: const Icon(Icons.refresh_rounded), onPressed: () => ref.invalidate(tasksProvider)),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                onPressed: () => _messageDialog(context, ref),
-                icon: const Icon(Icons.mail_outline_rounded, size: 16),
-                label: const Text('Send message'),
-              ),
+              WdsIconButton(tooltip: 'Refresh tasks', icon: Icons.refresh_rounded, onPressed: () => ref.invalidate(tasksProvider)),
+              WdsButton(label: 'Send message', icon: Icons.mail_outline_rounded, variant: WdsButtonVariant.secondary, onPressed: () => _messageDialog(context, ref)),
             ],
           ),
           const SizedBox(height: 12),
-          Row(children: [
-            SizedBox(
-              width: 280,
-              child: TextField(
-                decoration: const InputDecoration(hintText: 'Search title, run, assignee, key', prefixIcon: Icon(Icons.search_rounded), isDense: true),
-                onChanged: (v) => ref.read(taskFilterProvider.notifier).state = filter.copyWith(query: v),
-              ),
+          WdsFilterToolbar(
+            search: WdsSearchField(
+              hint: 'Search title, run, assignee, key',
+              onChanged: (value) => ref.read(taskFilterProvider.notifier).state = filter.copyWith(query: value),
             ),
-            const SizedBox(width: 12),
-            for (final k in const ['all', 'human', 'timer', 'message'])
-              Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: ChoiceChip(
-                  label: Text(k == 'all' ? 'All' : '${k[0].toUpperCase()}${k.substring(1)}'),
-                  selected: filter.kind == k,
-                  onSelected: (_) => ref.read(taskFilterProvider.notifier).state = filter.copyWith(kind: k),
-                ),
+            filters: [
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final k in const ['all', 'human', 'timer', 'message'])
+                    ChoiceChip(
+                      label: Text(k == 'all' ? 'All' : '${k[0].toUpperCase()}${k.substring(1)}'),
+                      selected: filter.kind == k,
+                      onSelected: (_) => ref.read(taskFilterProvider.notifier).state = filter.copyWith(kind: k),
+                    ),
+                ],
               ),
-          ]),
+            ],
+          ),
           const SizedBox(height: 12),
           Expanded(
             child: tasks.when(
@@ -101,14 +97,30 @@ class TasksScreen extends ConsumerWidget {
               data: (all) {
                 final now = DateTime.now();
                 final list = visibleTasks(all, filter, now);
-                if (all.isEmpty) return const EmptyState(icon: Icons.done_all_rounded, title: 'Nothing waiting');
-                if (list.isEmpty) return const EmptyState(icon: Icons.filter_alt_off_rounded, title: 'No task matches', message: 'Clear the search or choose All.');
+                if (all.isEmpty) return const WdsEmptyState(icon: Icons.done_all_rounded, title: 'Nothing waiting', description: 'There are no open human tasks or message waits.');
+                if (list.isEmpty) return const WdsEmptyState(icon: Icons.filter_alt_off_rounded, title: 'No task matches', description: 'Clear the search or choose All.');
                 return ListView(children: [
                       for (final t in list)
-                        Card(
-                          child: ListTile(
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: WdsSurface(
+                            padding: EdgeInsets.zero,
+                            child: ListTile(
                             leading: Icon(t.kind == 'human' ? Icons.person_outline_rounded : t.kind == 'timer' ? Icons.timer_outlined : Icons.mail_outline_rounded),
-                            title: Text(t.title ?? t.messageName ?? t.nodeId, style: const TextStyle(fontWeight: FontWeight.w600)),
+                            title: Row(
+                              children: [
+                                Expanded(child: Text(t.title ?? t.messageName ?? t.nodeId, style: const TextStyle(fontWeight: FontWeight.w600))),
+                                WdsBadge(
+                                  label: t.kind,
+                                  tone: t.kind == 'human' ? WdsBadgeTone.info : t.kind == 'timer' ? WdsBadgeTone.warning : WdsBadgeTone.neutral,
+                                  dense: true,
+                                ),
+                                if (isOverdue(t, now)) ...[
+                                  const SizedBox(width: 6),
+                                  const WdsBadge(label: 'OVERDUE', tone: WdsBadgeTone.danger, dense: true, icon: Icons.warning_amber_rounded),
+                                ],
+                              ],
+                            ),
                             subtitle: Text(
                               [
                                 'run ${t.runId}',
@@ -119,8 +131,9 @@ class TasksScreen extends ConsumerWidget {
                               style: TextStyle(fontSize: 11, color: isOverdue(t, now) ? AppColors.danger : null),
                             ),
                             trailing: t.kind == 'human'
-                                ? ElevatedButton(onPressed: () => _completeDialog(context, ref, t), child: const Text('Complete'))
+                                ? WdsButton(label: 'Complete', onPressed: () => _completeDialog(context, ref, t))
                                 : null,
+                            ),
                           ),
                         ),
                     ]);
