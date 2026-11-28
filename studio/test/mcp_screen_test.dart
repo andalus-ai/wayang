@@ -6,6 +6,7 @@ import 'package:wayang_studio/data/wayang_repository.dart';
 import 'package:wayang_studio/features/mcp/mcp_screen.dart';
 import 'package:wayang_studio/models/wayang.dart';
 import 'package:wayang_studio/providers/app_providers.dart';
+import 'package:wayang_studio/design_system/wds.dart';
 
 McpServerInfo _server(String id) => McpServerInfo(
       id: id,
@@ -54,6 +55,10 @@ void main() {
       child: const MaterialApp(home: Scaffold(body: McpScreen())),
     ));
     await tester.pumpAndSettle();
+    expect(find.byType(WdsPageHeader), findsOneWidget);
+    await tester.tap(find.text('pets'));
+    await tester.pumpAndSettle();
+    expect(find.byType(WdsBadge), findsOneWidget);
 
     await tester.tap(find.text('Import OpenAPI'));
     await tester.pumpAndSettle();
