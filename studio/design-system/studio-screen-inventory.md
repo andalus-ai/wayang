@@ -45,9 +45,9 @@ The following builders are explicitly registered in
 | runs | `RunsScreen` | Uses `WdsPageHeader`, `WdsFilterToolbar`, `WdsSearchField`, `WdsSurface`, `WdsExecutionStatusIndicator`, `WdsExecutionTimeline`, `WdsBadge`, `WdsButton` and `WdsIconButton`; run lifecycle, polling, WebSocket subscriptions, cancel/start and variables remain feature-owned | Migrated in M19 |
 | tasks | `TasksScreen` | Uses `WdsPageHeader`, `WdsFilterToolbar`, `WdsSearchField`, `WdsSurface`, `WdsBadge`, `WdsButton` and `WdsIconButton`; overdue ordering, task completion, message delivery and due-time logic remain feature-owned | Migrated in M19 |
 | projects | `ProjectsScreen` | Uses `WdsPageHeader`, `WdsButton`, `WdsFilterToolbar`, `WdsSearchField`, `WdsDataTable`, `WdsIconButton`, `WdsBadge` and `WdsEmptyState`; project lifecycle and active-project state remain feature-owned | Migrated in M15; search/filter is feature-owned |
-| channels | `ChannelsScreen` | Candidate for catalog/table/inspector patterns | Registered; screen internals not yet scanned |
+| channels | `ChannelsScreen` | Uses `WdsPageHeader`, `WdsBadge`, `WdsEmptyState` and `WdsSurface` for trigger/account cards; trigger lifecycle, OAuth consent, credentials and allow-lists remain feature-owned | Adopted in M16; surface consistency completed in M22 |
 | mapper | `MapperScreen` | Editor-specific; inspect editor toolbar/panel and property inspector | Registered; screen internals not yet scanned |
-| mcp | `McpScreen` | Candidate for integration catalog, status and configuration inspector | Registered; screen internals not yet scanned |
+| mcp | `McpScreen` | Uses `WdsPageHeader`, `WdsButton`, `WdsIconButton`, `WdsBadge`, `WdsEmptyState` and `WdsSurface` for server cards; OpenAPI preview/import, lazy tool details, security and lifecycle remain feature-owned | Adopted in M16; surface consistency completed in M22 |
 | secrets | `SecretsScreen` | Candidate for table and field presentation; secret values and reveal policy stay feature-owned | Registered; screen internals not yet scanned |
 | config | `ConfigScreen` | Uses `WdsPageHeader`, `WdsButton`, `WdsEmptyState`, `WdsSurface`, `WdsIconButton` and `WdsFieldGroup`; scope, validation, persistence and confirmation remain feature-owned | Migrated in M18 |
 | workspace | `WorkspaceScreen` | Uses `WdsPageHeader`, `WdsSurface`, `WdsButton`, `WdsSectionHeader`, `WdsBadge` and WDS empty states across export/import, release planning, template gallery and reports | Migrated in M18 |
@@ -324,3 +324,23 @@ server-side validation, read-only rendering policy, navigation allow-listing,
 refresh behavior and task completion authorization. Pasted surfaces cannot
 complete tasks or perform arbitrary actions. Focused widget coverage checks
 the workbench composition, semantic badge mapping and disabled pasted actions.
+
+
+## M22 — Integration resource surface consistency
+
+The integration screens now share WDS resource-surface framing without
+collapsing their distinct domain workflows.
+
+- Channels trigger and connected-account cards use `WdsSurface`; the empty
+  trigger state now uses `WdsEmptyState`. Existing page headers, semantic
+  state badges and the two-tab trigger/account layout are retained.
+- MCP server expansion cards use `WdsSurface`; its page actions, empty state
+  and read/write/destructive tool badges continue to use WDS primitives.
+- Focused widget assertions verify that the rendered channel and MCP resource
+  cards are WDS surfaces.
+
+Channels continues to own trigger creation, enable/disable/delete, OAuth
+consent, secret references, allow-lists and provider state. MCP continues to
+own OpenAPI parsing/preview, stale-preview invalidation, endpoint security,
+lazy tool-detail loading, credential configuration and server lifecycle.
+WDS owns only the reusable visual surface and semantic presentation.
