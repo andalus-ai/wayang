@@ -101,18 +101,24 @@ class DeploymentReconciliationMultiWorkerIntegrationTest {
     }
 
     @Test
-    void restartedWorkerCanReclaimExpiredLeaseButNotCompletedWork() {
+    void restartedWorkerCanReclaimExpiredLeaseButStaleOwnerCannotComplete() {
         var beforeRestart = new JdbcDeploymentLifecycleReconciliationWorkStore(dataSource);
         var afterRestart = new JdbcDeploymentLifecycleReconciliationWorkStore(dataSource);
 
-        assertTrue(beforeRestart.claim(receipt, NOW, NOW.plusSeconds(30)));
-        assertTrue(afterRestart.claim(receipt, NOW.plusSeconds(30), NOW.plusSeconds(90)),
-                "a new worker instance must reclaim an expired lease");
+        var firstOwner = beforeRestart.claimOwned(receipt, NOW, NOW.plusSeconds(30));
+        assertNotNull(firstOwner);
+        var secondOwner = afterRestart.claimOwned(receipt, NOW.plusSeconds(30), NOW.plusSeconds(90));
+        assertNotNull(secondOwner, "a new worker instance must reclaim an expired lease");
+        assertNotEquals(firstOwner.ownershipToken(), secondOwner.ownershipToken());
 
-        afterRestart.complete(receipt, DeploymentLifecycleReconciliationWorkStatus.RECONCILED,
-                "lifecycle reconciled", NOW.plusSeconds(31), null);
+        assertThrows(IllegalStateException.class, () -> beforeRestart.complete(firstOwner,
+                DeploymentLifecycleReconciliationWorkStatus.RECONCILED, "stale result",
+                NOW.plusSeconds(31), null));
 
-        assertFalse(beforeRestart.claim(receipt, NOW.plusSeconds(120), NOW.plusSeconds(180)),
+        afterRestart.complete(secondOwner, DeploymentLifecycleReconciliationWorkStatus.RECONCILED,
+                "lifecycle reconciled", NOW.plusSeconds(32), null);
+
+        assertNull(beforeRestart.claimOwned(receipt, NOW.plusSeconds(120), NOW.plusSeconds(180)),
                 "terminal work must not be reclaimed after restart");
     }
 
@@ -122,6 +128,6 @@ class DeploymentReconciliationMultiWorkerIntegrationTest {
         if (!start.await(5, TimeUnit.SECONDS)) {
             throw new IllegalStateException("claim barrier timed out");
         }
-        return store.claim(receipt, NOW, NOW.plusSeconds(60));
+        return store.claimOwned(receipt, NOW, NOW.plusSeconds(60)) != null;
     }
 }
