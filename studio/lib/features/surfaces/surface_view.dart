@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme.dart';
-import '../../core/widgets.dart';
+import '../../design_system/wds.dart';
 import '../../data/surface_model.dart';
 
 /// Draws a [UiSurface]. Read-only: text, tables and badges only; no images are fetched, markdown is plain text, and a button can only
@@ -30,12 +29,12 @@ class SurfaceView extends StatelessWidget {
         : Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: children);
   }
 
-  Color _variant(String v) => switch (v) {
-        'success' => AppColors.success,
-        'warning' => AppColors.warning,
-        'error' => AppColors.danger,
-        'info' => AppColors.info,
-        _ => Colors.grey,
+  WdsBadgeTone _variant(String v) => switch (v) {
+        'success' => WdsBadgeTone.success,
+        'warning' => WdsBadgeTone.warning,
+        'error' => WdsBadgeTone.danger,
+        'info' => WdsBadgeTone.info,
+        _ => WdsBadgeTone.neutral,
       };
 
   Widget _node(BuildContext context, SurfaceNode n) {
@@ -52,21 +51,21 @@ class SurfaceView extends StatelessWidget {
         };
         return Text(n.text, style: style);
       case BadgeSurfaceNode():
-        return Align(alignment: Alignment.centerLeft, child: StatusPill(label: n.label, color: _variant(n.variant)));
+        return Align(alignment: Alignment.centerLeft, child: WdsBadge(label: n.label, tone: _variant(n.variant)));
       case DividerSurfaceNode():
         return const Divider(height: 16);
       case MetadataSurfaceNode():
-        return KeyValueRow(label: n.label, value: n.value);
+        return WdsPropertyRow(label: n.label, value: Text(n.value, style: theme.textTheme.bodyMedium));
       case ProvenanceSurfaceNode():
         final c = n.confidence;
         return Row(children: [
           const Icon(Icons.fact_check_outlined, size: 16),
           const SizedBox(width: 6),
           Expanded(child: Text('${n.citation}${n.evidenceId.isEmpty ? '' : '  (${n.evidenceId})'}', style: theme.textTheme.bodySmall)),
-          if (c != null) StatusPill(label: '${(c * 100).round()}%', color: c >= 0.8 ? AppColors.success : AppColors.warning, dense: true),
+          if (c != null) WdsBadge(label: '${(c * 100).round()}%', tone: c >= 0.8 ? WdsBadgeTone.success : WdsBadgeTone.warning, dense: true),
         ]);
       case CardSurfaceNode():
-        return SurfacePanel(
+        return WdsSurface(
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
             if (n.title != null && n.title!.isNotEmpty) ...[Text(n.title!, style: theme.textTheme.titleMedium), const SizedBox(height: 10)],
             _kids(context, n.children),

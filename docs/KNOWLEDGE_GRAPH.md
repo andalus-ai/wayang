@@ -408,6 +408,20 @@ Graph traversal returns graph facts and their provenance metadata; it does **not
 This increment delivers traversal and exact-version evidence retraction as workflow nodes. It does not yet add a graph-ingestion node: graph ingestion requires a configured extraction provider, versioned `KnowledgeSchema`, resolution policy and GraphStore adapter to be assembled explicitly. The next increment will compose those existing SPIs into a bounded graph-ingestion workflow component rather than silently inventing a default ontology or fuzzy merge policy.
 
 
+
+## Exact-version schema registry integration
+
+**Status: implemented as an opt-in deployment path.** In addition to injecting a fixed `KnowledgeSchema`, a deployment may inject a `KnowledgeSchemaRegistry` into `KnowledgeExtension`. In that configuration, the `graph-ingest` connector resolves the exact schema selected by its node configuration:
+
+- `graphSchemaId`: immutable schema identity;
+- `graphSchemaVersion`: exact registered version.
+
+Both values are required for every registry-backed invocation. The connector never resolves "latest", never falls back to a different version and fails before extraction or graph writes when the exact version is absent. The selected schema is then passed through the existing candidate validator and ingestion lifecycle; extraction and evidence semantics are unchanged.
+
+The fixed-schema constructor remains available for deployments that inject a schema directly. A deployment must choose exactly one schema source: fixed schema or registry. The registry implementation itself is supplied by the deployment; the in-memory implementation is suitable for tests and development, not durable multi-instance production.
+
+The registry is not tenant-scoped in its current contract. A multi-tenant deployment must enforce schema visibility and authorization at the registry/provider boundary and must not assume that tenant-specific schema access is provided by the graph store.
+
 ## Optional AQLI inference adapter
 
 **Foundation status: implemented as an optional Java 21 HTTP adapter.** The separate `wayang-adapter-aqli` module consumes AQLI's documented OpenAI-compatible service endpoints. It does not add an AQLI SDK/runtime dependency to `wayang-rag`, and it does not require Andalus.
