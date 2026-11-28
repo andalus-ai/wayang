@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/widgets.dart';
+import '../../design_system/wds.dart';
 import '../../data/api_client.dart';
 import '../../data/workspace_model.dart';
 import '../../providers/app_providers.dart';
@@ -85,17 +86,17 @@ class _TemplateGalleryState extends ConsumerState<TemplateGallery> {
   @override
   Widget build(BuildContext context) {
     final templates = ref.watch(templatesProvider);
-    return Card(
+    return WdsSurface(padding: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Template gallery', style: TextStyle(fontWeight: FontWeight.w700)),
+          const WdsSectionHeader(title: 'Template gallery', description: 'Create a project from a server-provided template. Check first; created triggers remain disabled.'),
           const SizedBox(height: 8),
           templates.when(
             loading: () => const LinearProgressIndicator(),
             error: (e, _) => Text(errText(e)),
             data: (list) {
-              if (list.isEmpty) return const Text('This server offers no templates (its profile has no agents).');
+              if (list.isEmpty) return const WdsEmptyState(icon: Icons.dashboard_customize_outlined, title: 'No templates available', description: 'This server offers no templates (its profile has no agents).');
               final t = list.where((x) => x.id == _selected).firstOrNull;
               return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Wrap(spacing: 8, runSpacing: 8, children: [
@@ -148,9 +149,9 @@ class _TemplateGalleryState extends ConsumerState<TemplateGallery> {
         ),
       const SizedBox(height: 8),
       Row(children: [
-        OutlinedButton(onPressed: _busy || problems.isNotEmpty ? null : () => _run(t, dry: true), child: const Text('Check')),
+        WdsButton(label: 'Check', variant: WdsButtonVariant.secondary, onPressed: _busy || problems.isNotEmpty ? null : () => _run(t, dry: true)),
         const SizedBox(width: 8),
-        ElevatedButton(onPressed: _busy || problems.isNotEmpty ? null : () => _run(t, dry: false), child: const Text('Create project')),
+        WdsButton(label: 'Create project', icon: Icons.add_rounded, onPressed: _busy || problems.isNotEmpty ? null : () => _run(t, dry: false)),
       ]),
       if (_report != null) ...[const SizedBox(height: 8), ReportView(report: _report!)],
     ];

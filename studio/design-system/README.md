@@ -145,3 +145,40 @@ OpenAPI server expansion and lazy tool-detail loading. OAuth, credentials,
 allow-lists, endpoint security, import/preview and lifecycle operations remain
 owned by their feature modules. See the [screen inventory](studio-screen-inventory.md)
 for the verified migration scope.
+
+
+## M17 — Secrets and connection settings
+
+The Secrets and Settings screens adopt WDS page, filter, field-group, surface,
+button, badge and empty-state primitives. WDS renders only metadata and status:
+secret values remain write-only and never enter WDS state; bearer tokens remain
+obscured and are retained only by the existing in-memory API configuration.
+Secret storage, key rotation, reveal policy, credential lifecycle, API
+configuration and connection testing remain feature-owned. See the
+[Studio screen inventory](studio-screen-inventory.md) for the verified scope.
+## M18 — Workspace and configuration adoption
+
+Workspace export/import, release planning, built-in and server-driven template
+creation, result reports, and environment Configuration now compose WDS page,
+surface, action, section, status and empty-state primitives. WDS remains a
+presentation layer: dry-run/apply eligibility, destructive confirmation,
+bundle validation, trigger safety, release-plan invalidation, credential-name
+validation, configuration scope and persistence remain feature-owned. See the
+[Studio screen inventory](studio-screen-inventory.md) for the verified scope
+and regression coverage.
+## M19 — Runs and Tasks adoption
+
+Runs and Tasks now use shared WDS page, filter, search, surface, status, timeline, badge and action primitives. The Runs screen adapts server run and event states to WDS presentation types without changing API models; unknown event types remain neutral. The Tasks screen uses semantic kind/overdue badges while keeping due-time ordering and task/message operations in the feature. See the [Studio screen inventory](studio-screen-inventory.md) for ownership boundaries and regression coverage.
+
+
+## M20 — Dashboard overview adoption
+
+The Dashboard uses WDS for page identity and refresh action, compose-mode
+context badge, shared surfaces, section heading, empty state and recent-run
+execution status. The KPI card remains a dashboard-owned composition because
+its metric semantics and layout are currently specific to the overview.
+
+The dashboard feature continues to own API aggregation, provider refresh,
+first-run progress, connection recovery, navigation, recent-run selection and
+the mapping from API run states to neutral WDS execution states. WDS does not
+fetch metrics, infer health, or own navigation.

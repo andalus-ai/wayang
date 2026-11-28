@@ -266,12 +266,12 @@ class AgentPackageArtifactVerifierTest {
                  "predicateType":"https://slsa.dev/provenance/v1","predicate":{"buildDefinition":{},"runDetails":{}}}
                 """.formatted("a".repeat(64));
         byte[] validProvenanceBytes = validProvenance.getBytes(StandardCharsets.UTF_8);
-        String manifest = MINIMAL.replace("\\"requestedPermissions\\":[]",
-                "\\"requestedPermissions\\":[],\\"resources\\":["
-                + "{\\"path\\":\\"evidence/sbom.json\\",\\"mediaType\\":\\"application/vnd.cyclonedx+json\\","
-                + "\\"sha256\\":\\"" + sha256(sbomBytes) + "\\" ,\\"role\\":\\"sbom\\"},"
-                + "{\\"path\\":\\"evidence/provenance.json\\",\\"mediaType\\":\\"application/vnd.in-toto+json\\","
-                + "\\"sha256\\":\\"" + sha256(validProvenanceBytes) + "\\" ,\\"role\\":\\"provenance\\"}]");
+        String manifest = MINIMAL.replace("\"requestedPermissions\":[]",
+                "\"requestedPermissions\":[],\"resources\":["
+                + "{\"path\":\"evidence/sbom.json\",\"mediaType\":\"application/vnd.cyclonedx+json\","
+                + "\"sha256\":\"" + sha256(sbomBytes) + "\" ,\"role\":\"sbom\"},"
+                + "{\"path\":\"evidence/provenance.json\",\"mediaType\":\"application/vnd.in-toto+json\","
+                + "\"sha256\":\"" + sha256(validProvenanceBytes) + "\" ,\"role\":\"provenance\"}]");
         byte[] validArchive = archive(Map.of(
                 AgentPackageArtifactVerifier.JSON_MANIFEST, manifest.getBytes(StandardCharsets.UTF_8),
                 "evidence/sbom.json", sbomBytes,
@@ -281,12 +281,12 @@ class AgentPackageArtifactVerifierTest {
 
         String invalidProvenance = validProvenance.replace("acme:support", "acme:other");
         byte[] invalidProvenanceBytes = invalidProvenance.getBytes(StandardCharsets.UTF_8);
-        String invalidManifest = MINIMAL.replace("\\"requestedPermissions\\":[]",
-                "\\"requestedPermissions\\":[],\\"resources\\":["
-                + "{\\"path\\":\\"evidence/sbom.json\\",\\"mediaType\\":\\"application/vnd.cyclonedx+json\\","
-                + "\\"sha256\\":\\"" + sha256(sbomBytes) + "\\" ,\\"role\\":\\"sbom\\"},"
-                + "{\\"path\\":\\"evidence/provenance.json\\",\\"mediaType\\":\\"application/vnd.in-toto+json\\","
-                + "\\"sha256\\":\\"" + sha256(invalidProvenanceBytes) + "\\" ,\\"role\\":\\"provenance\\"}]");
+        String invalidManifest = MINIMAL.replace("\"requestedPermissions\":[]",
+                "\"requestedPermissions\":[],\"resources\":["
+                + "{\"path\":\"evidence/sbom.json\",\"mediaType\":\"application/vnd.cyclonedx+json\","
+                + "\"sha256\":\"" + sha256(sbomBytes) + "\" ,\"role\":\"sbom\"},"
+                + "{\"path\":\"evidence/provenance.json\",\"mediaType\":\"application/vnd.in-toto+json\","
+                + "\"sha256\":\"" + sha256(invalidProvenanceBytes) + "\" ,\"role\":\"provenance\"}]");
         byte[] invalidArchive = archive(Map.of(
                 AgentPackageArtifactVerifier.JSON_MANIFEST, invalidManifest.getBytes(StandardCharsets.UTF_8),
                 "evidence/sbom.json", sbomBytes,

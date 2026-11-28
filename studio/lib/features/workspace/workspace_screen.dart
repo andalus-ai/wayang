@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/widgets.dart';
+import '../../design_system/wds.dart';
 import '../../data/api_client.dart';
 import '../../data/workspace_model.dart';
 import '../../models/wayang.dart';
@@ -181,35 +182,39 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       padding: const EdgeInsets.all(20),
       child: ListView(
         children: [
-          const ScreenHeader(
+          const WdsPageHeader(
             title: 'Workspace',
-            subtitle: 'Export a project as a bundle and import one, with a dry run first. Secret values never travel in a bundle.',
-            icon: Icons.inventory_2_outlined,
+            description: 'Export a project as a bundle and import one, with a dry run first. Secret values never travel in a bundle.',
           ),
           const SizedBox(height: 16),
-          Card(
+          WdsSurface(padding: EdgeInsets.zero,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Text('Export', style: TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
-                Row(children: [
-                  DropdownButton<String>(
-                    hint: const Text('Project'),
-                    value: list.any((p) => p.id == _exportProject) ? _exportProject : null,
-                    items: [for (final p in list) DropdownMenuItem(value: p.id, child: Text(p.name))],
-                    onChanged: (v) => setState(() {
-                      _exportProject = v;
-                      _plan = null;
-                      _planError = null;
-                    }),
-                  ),
-                  const SizedBox(width: 12),
-                  Checkbox(value: _withTenantConfig, onChanged: (v) => setState(() => _withTenantConfig = v ?? false)),
-                  const Text('include tenant-wide settings'),
-                  const Spacer(),
-                  ElevatedButton(onPressed: _busy || _exportProject == null ? null : _export, child: const Text('Export')),
-                ]),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    DropdownButton<String>(
+                      hint: const Text('Project'),
+                      value: list.any((p) => p.id == _exportProject) ? _exportProject : null,
+                      items: [for (final p in list) DropdownMenuItem(value: p.id, child: Text(p.name))],
+                      onChanged: (v) => setState(() {
+                        _exportProject = v;
+                        _plan = null;
+                        _planError = null;
+                      }),
+                    ),
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      Checkbox(value: _withTenantConfig, onChanged: (v) => setState(() => _withTenantConfig = v ?? false)),
+                      const Text('include tenant-wide settings'),
+                    ]),
+                    WdsButton(label: 'Export', icon: Icons.download_outlined, onPressed: _busy || _exportProject == null ? null : _export),
+                  ],
+                ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _only,
@@ -230,7 +235,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           const SizedBox(height: 12),
           TemplateGallery(onCreated: () => ref.invalidate(projectsProvider)),
           const SizedBox(height: 12),
-          Card(
+          WdsSurface(padding: EdgeInsets.zero,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -268,9 +273,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 ]),
                 const SizedBox(height: 10),
                 Row(children: [
-                  OutlinedButton(onPressed: _busy || _bundleText.text.trim().isEmpty ? null : () => _run(dry: true), child: const Text('Check (dry run)')),
+                  WdsButton(label: 'Check (dry run)', variant: WdsButtonVariant.secondary, onPressed: _busy || _bundleText.text.trim().isEmpty ? null : () => _run(dry: true)),
                   const SizedBox(width: 8),
-                  ElevatedButton(onPressed: _busy || !_canApply ? null : () => _run(dry: false), child: const Text('Apply')),
+                  WdsButton(label: 'Apply', icon: Icons.publish_outlined, onPressed: _busy || !_canApply ? null : () => _run(dry: false)),
                 ]),
                 if (_report != null) ...[const SizedBox(height: 12), ReportView(report: _report!)],
               ]),
@@ -358,7 +363,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             onChanged: (_) => setState(() {}),
           ),
         );
-    return Card(
+    return WdsSurface(padding: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -478,9 +483,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           ]),
           const SizedBox(height: 10),
           Row(children: [
-            OutlinedButton(onPressed: _busy || !ok || _tplChat.text.trim().isEmpty ? null : () => _createFromTemplate(dry: true), child: const Text('Check')),
+            WdsButton(label: 'Check', variant: WdsButtonVariant.secondary, onPressed: _busy || !ok || _tplChat.text.trim().isEmpty ? null : () => _createFromTemplate(dry: true)),
             const SizedBox(width: 8),
-            ElevatedButton(onPressed: _busy || !ok || _tplChat.text.trim().isEmpty ? null : () => _createFromTemplate(dry: false), child: const Text('Create project')),
+            WdsButton(label: 'Create project', icon: Icons.add_rounded, onPressed: _busy || !ok || _tplChat.text.trim().isEmpty ? null : () => _createFromTemplate(dry: false)),
           ]),
           if (_tplReport != null) ...[const SizedBox(height: 12), ReportView(report: _tplReport!)],
         ]),
@@ -511,7 +516,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               for (final x in xs) Text('• $x', style: const TextStyle(fontSize: 12)),
             ]),
           );
-    return Card(
+    return WdsSurface(padding: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -548,7 +553,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           ]),
           const SizedBox(height: 10),
           Row(children: [
-            OutlinedButton(onPressed: _busy || _exportProject == null ? null : _planRelease, child: const Text('Plan release')),
+            WdsButton(label: 'Plan release', variant: WdsButtonVariant.secondary, onPressed: _busy || _exportProject == null ? null : _planRelease),
             const SizedBox(width: 10),
             if (_exportProject == null) const Text('Pick a project in Export above.', style: TextStyle(fontSize: 12)),
           ]),
@@ -569,12 +574,13 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 child: SelectableText(releaseDownloadCommand(base, _exportProject ?? '', _release, plan.zipName),
                     style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
               ),
-              TextButton(
+              WdsButton(
+                label: 'Copy command',
+                variant: WdsButtonVariant.tertiary,
                 onPressed: () async {
                   await Clipboard.setData(ClipboardData(text: releaseDownloadCommand(base, _exportProject ?? '', _release, plan.zipName)));
                   if (mounted) showToast(context, 'Copied. The command holds no token.');
                 },
-                child: const Text('Copy'),
               ),
             ]),
           ],
