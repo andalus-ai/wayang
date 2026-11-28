@@ -59,6 +59,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(find.byType(WdsPageHeader), findsOneWidget);
+    expect(find.byType(WdsSurface), findsOneWidget);
     await tester.tap(find.text('pets'));
     await tester.pumpAndSettle();
     expect(find.byType(WdsBadge), findsOneWidget);
