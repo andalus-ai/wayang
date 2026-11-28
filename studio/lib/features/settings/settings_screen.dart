@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/widgets.dart';
 import '../../data/api_client.dart';
 import '../../providers/app_providers.dart';
+import '../../design_system/wds.dart';
 
 /// Connection settings. The bearer token lives in memory only; the tenant comes from the token on the server.
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -65,33 +66,46 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const ScreenHeader(title: 'Settings', subtitle: 'Connection to the Wayang API.', icon: Icons.settings_rounded),
+              const WdsPageHeader(title: 'Settings', description: 'Connection to the Wayang API.'),
               const SizedBox(height: 20),
-              TextField(controller: _url, decoration: const InputDecoration(labelText: 'API base URL'), textInputAction: TextInputAction.next),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _token,
-                obscureText: true,
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _apply(),
-                decoration: const InputDecoration(
-                  labelText: 'API key or bearer token (kept in memory only)',
-                  helperText: 'Local mode: the operator key. JWT or Numu mode: your bearer token.',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _tenant,
-                decoration: const InputDecoration(
-                  labelText: 'Tenant (Numu mode, sent as X-Tenant)',
-                  helperText: 'Leave empty in JWT mode: the tenant comes from the token.',
+              WdsInspectorSection(
+                title: 'API connection',
+                description: 'Configure how this Studio instance connects to the Wayang API.',
+                child: WdsFieldGroup(
+                  children: [
+                    TextField(controller: _url, decoration: InputDecoration(labelText: 'API base URL'), textInputAction: TextInputAction.next),
+                    TextField(
+                      controller: _token,
+                      obscureText: true,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _apply(),
+                      decoration: InputDecoration(
+                        labelText: 'API key or bearer token (kept in memory only)',
+                        helperText: 'Local mode: the operator key. JWT or Numu mode: your bearer token.',
+                      ),
+                    ),
+                    TextField(
+                      controller: _tenant,
+                      decoration: InputDecoration(
+                        labelText: 'Tenant (Numu mode, sent as X-Tenant)',
+                        helperText: 'Leave empty in JWT mode: the tenant comes from the token.',
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 16),
-              ElevatedButton(onPressed: _apply, child: const Text('Apply and test')),
+              WdsButton(label: 'Apply and test', icon: Icons.cloud_done_outlined, onPressed: _apply),
               if (_status != null) ...[
                 const SizedBox(height: 12),
-                Text(_status!, style: TextStyle(fontSize: 12.5, color: _ok ? Colors.green : Colors.redAccent)),
+                WdsSurface(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    WdsBadge(label: _ok ? 'Connected' : 'Connection failed', tone: _ok ? WdsBadgeTone.success : WdsBadgeTone.danger),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(_status!, style: Theme.of(context).textTheme.bodySmall)),
+                  ]),
+                ),
               ],
             ],
           ),
