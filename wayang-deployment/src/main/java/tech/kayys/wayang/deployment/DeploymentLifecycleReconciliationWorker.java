@@ -78,7 +78,7 @@ public final class DeploymentLifecycleReconciliationWorker {
                 continue;
             }
             if (context == null) {
-                scheduleWaiting(receipt, "No matching durable reconciliation context is available");
+                scheduleWaiting(claim, "No matching durable reconciliation context is available");
                 waiting++;
                 continue;
             }
@@ -96,39 +96,39 @@ public final class DeploymentLifecycleReconciliationWorker {
                         context.command(), context.actor(), context.reason(), context.correlationId(), context.timeout());
                 switch (result.status()) {
                     case RECONCILED -> {
-                        finish(receipt, DeploymentLifecycleReconciliationWorkStatus.RECONCILED,
+                        finish(claim, DeploymentLifecycleReconciliationWorkStatus.RECONCILED,
                                 result.detail(), null);
                         reconciled++;
                     }
                     case ALREADY_RECONCILED -> {
-                        finish(receipt, DeploymentLifecycleReconciliationWorkStatus.ALREADY_RECONCILED,
+                        finish(claim, DeploymentLifecycleReconciliationWorkStatus.ALREADY_RECONCILED,
                                 result.detail(), null);
                         reconciled++;
                     }
-                    case NOT_APPLICABLE -> finish(receipt,
+                    case NOT_APPLICABLE -> finish(claim,
                             DeploymentLifecycleReconciliationWorkStatus.NOT_APPLICABLE, result.detail(), null);
                     case WAITING_FOR_HEALTH -> {
-                        scheduleWaiting(receipt, result.detail());
+                        scheduleWaiting(claim, result.detail());
                         waiting++;
                     }
                     case UNRESOLVED -> {
-                        finish(receipt, DeploymentLifecycleReconciliationWorkStatus.UNRESOLVED,
+                        finish(claim, DeploymentLifecycleReconciliationWorkStatus.UNRESOLVED,
                                 result.detail(), null);
                         unresolved++;
                     }
                     case CONFLICT -> {
-                        finish(receipt, DeploymentLifecycleReconciliationWorkStatus.CONFLICT,
+                        finish(claim, DeploymentLifecycleReconciliationWorkStatus.CONFLICT,
                                 result.detail(), null);
                         conflicts++;
                     }
                 }
             } catch (SecurityException | IllegalArgumentException invalid) {
-                finish(receipt, DeploymentLifecycleReconciliationWorkStatus.CONFLICT,
+                finish(claim, DeploymentLifecycleReconciliationWorkStatus.CONFLICT,
                         "Reconciliation rejected due to invalid identity or lifecycle state", null);
                 conflicts++;
             } catch (RuntimeException unavailable) {
                 // Avoid persisting exception messages: adapters and database drivers may expose secrets.
-                scheduleWaiting(receipt, "Reconciliation attempt failed; retry scheduled");
+                scheduleWaiting(claim, "Reconciliation attempt failed; retry scheduled");
                 waiting++;
             }
         }
