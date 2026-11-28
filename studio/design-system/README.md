@@ -112,8 +112,8 @@ values and remain responsible for route registration and access control. See
 
 ## Legacy widget migration
 
-The compatibility inventory in [legacy widget migration](legacy-widget-migration.md)
-classifies existing `core/widgets.dart` APIs, distinguishes true presentation
-primitives from feature-owned behavior, and defines a staged migration with
-compatibility and test requirements. It is an inventory and migration guide,
-not a mandate to remove legacy APIs in one pass.
+The [legacy widget migration inventory](legacy-widget-migration.md) tracks the staged
+adoption. `SurfacePanel`, `AppSearchField`, `EmptyState`, `ScreenHeader` and
+`KeyValueRow` now delegate to WDS primitives through source-compatible facades.
+Feature-level call sites can migrate imports incrementally; provider-backed
+navigation, global feedback policy and editor decisions remain host-owned.
