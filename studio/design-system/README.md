@@ -145,3 +145,14 @@ OpenAPI server expansion and lazy tool-detail loading. OAuth, credentials,
 allow-lists, endpoint security, import/preview and lifecycle operations remain
 owned by their feature modules. See the [screen inventory](studio-screen-inventory.md)
 for the verified migration scope.
+
+
+## M17 — Secrets and connection settings
+
+The Secrets and Settings screens adopt WDS page, filter, field-group, surface,
+button, badge and empty-state primitives. WDS renders only metadata and status:
+secret values remain write-only and never enter WDS state; bearer tokens remain
+obscured and are retained only by the existing in-memory API configuration.
+Secret storage, key rotation, reveal policy, credential lifecycle, API
+configuration and connection testing remain feature-owned. See the
+[Studio screen inventory](studio-screen-inventory.md) for the verified scope.
