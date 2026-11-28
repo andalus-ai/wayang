@@ -120,9 +120,10 @@ See [Studio adoption audit and migration roadmap](studio-adoption-roadmap.md) fo
 The [legacy widget migration inventory](legacy-widget-migration.md) tracks the staged
 adoption. `SurfacePanel`, `AppSearchField`, `EmptyState`, `ScreenHeader` and
 `KeyValueRow` now delegate to WDS primitives through source-compatible facades.
-The Component Catalog is the first verified P0 catalog migration: it composes
-WDS page, search, surface, badge, inspector and empty-state primitives while
-keeping filtering and application-level loading/error behavior in the feature.
+The Component Catalog and Projects are the first verified P0 catalog migrations.
+They compose WDS page, search, surface, badge, inspector, table, action and
+empty-state primitives while keeping filtering, provider access, lifecycle
+operations and application-level loading/error behavior in their features.
 Feature-level call sites can migrate imports incrementally; provider-backed
 navigation, global feedback policy and editor decisions remain host-owned.
 
