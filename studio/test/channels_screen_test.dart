@@ -71,6 +71,7 @@ Future<_FakeRepo> _open(WidgetTester tester) async {
   await tester.pumpAndSettle();
   expect(find.byType(WdsPageHeader), findsOneWidget);
   expect(find.byType(WdsBadge), findsWidgets);
+  expect(find.byType(WdsSurface), findsOneWidget);
   return repo;
 }
 
