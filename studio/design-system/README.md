@@ -98,3 +98,13 @@ to each feature module. See [execution view examples](examples/execution-views.m
 for Agent Builder run inspection, ESB connector traces, BPMN process-instance
 history and BI pipeline execution. The examples define presentation patterns,
 not shared domain models or runtime contracts.
+
+
+## Component showcase
+
+Mount `WdsComponentShowcase(examples: WdsShowcaseCatalog.examples)` from a
+host-owned route to browse the starter catalog. The showcase supports text
+search, category filters, responsive card columns, light/dark preview themes
+and copyable Dart snippets. Hosts may supply their own `WdsShowcaseExample`
+values and remain responsible for route registration and access control. See
+[showcase guide](showcase.md) for the extension contract and examples.
