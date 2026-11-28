@@ -186,6 +186,7 @@ class _FeedbackCard extends ConsumerWidget {
               child: SelectableText(stack, style: const TextStyle(fontSize: 10.5, fontFamily: 'monospace')),
             ),
         ],
+        ),
       ),
     );
   }
