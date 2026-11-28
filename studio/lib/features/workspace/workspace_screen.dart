@@ -345,7 +345,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     }
   }
 
-  Widget _templateWdsSurface(padding: EdgeInsets.zero,) {
+  Widget _templateCard() {
     final idKey = _tplSlack ? 'channelId' : 'chatId';
     final fields = {idKey: _tplChat, 'model': _tplModel, 'persona': _tplPersona, 'name': _tplName, 'lookupUrl': _tplLookup, 'lookupDescription': _tplLookupDesc, 'lookupSecret': _tplLookupSecret, if (_tplBrief) ...{'cron': _tplCron, 'timezone': _tplZone}, if (!_tplBrief && _tplCalendar) 'calendarConnection': _tplCalConn, if (!_tplBrief && _tplImages) 'imageModel': _tplImageModel, if (!_tplBrief) ...{'memoryTurns': _tplMemory, 'emailRecipients': _tplEmail}};
     final ok = fields.entries.every((e) => assistantFieldProblem(e.key, e.value.text) == null) && (!_tplBrief || assistantFieldProblem('topic', _tplTopic.text) == null);
@@ -488,7 +488,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     );
   }
 
-  Widget _releaseWdsSurface(padding: EdgeInsets.zero,) {
+  Widget _releaseCard() {
     final plan = _plan;
     final base = ref.watch(apiConfigProvider).baseUrl;
     Widget field(String label, String value, void Function(String) set, {double width = 170}) => SizedBox(
