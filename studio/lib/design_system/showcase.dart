@@ -275,15 +275,15 @@ class _WdsShowcaseCard extends StatelessWidget {
                 childrenPadding: const EdgeInsets.only(bottom: WdsSpacing.sm),
                 title: const Text('Dart usage'),
                 children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: SelectableText(
-                      example.code,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontFamily: 'monospace',
-                      ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: SelectableText(
+                    example.code,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontFamily: 'monospace',
                     ),
                   ),
+                ),
                 ],
               ),
             ),
