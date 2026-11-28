@@ -200,3 +200,31 @@ badge and empty-state primitives.
 
 Only the Projects screen is covered by this migration record; other resource
 screens remain unaudited until their source is inspected.
+
+
+## M16 — Channels and MCP integration catalog adoption
+
+The Channels and MCP screens now consume the shared WDS page and status
+primitives while retaining their distinct interaction models.
+
+- Channels uses `WdsPageHeader` for page identity and preserves its two-tab
+  organization for triggers and connected OAuth accounts.
+- Trigger channel, disabled and failure indicators use semantic
+  `WdsBadgeTone` values. OAuth connection states map connected to success,
+  revoked to danger and pending/other states to warning.
+- The connected-account empty state uses `WdsEmptyState`.
+- MCP uses `WdsPageHeader`, `WdsButton` and `WdsIconButton` for page
+  composition and actions. Its empty state uses `WdsEmptyState`.
+- MCP tool permission labels use success for read-only, danger for destructive
+  and warning for write-capable tools.
+
+The migration deliberately does not combine the two screens into a generic
+integration catalog: Channels is a trigger/account workspace with two tabs,
+whereas MCP is an OpenAPI-imported server catalog with lazy tool details.
+Credential references, OAuth consent, allow-lists, endpoint exposure,
+OpenAPI preview/import, tool authorization, refresh/delete operations,
+provider state and error recovery remain feature-owned.
+
+Focused widget assertions verify WDS page headers and semantic badges in both
+screens. Existing dialog validation and feature behavior remain covered by
+the original screen tests.
