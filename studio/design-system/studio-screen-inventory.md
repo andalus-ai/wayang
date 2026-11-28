@@ -44,7 +44,7 @@ The following builders are explicitly registered in
 | components | `ComponentCatalogScreen` | Uses `WdsPageHeader`, `WdsFilterToolbar`, `WdsSearchField`, `WdsSurface`, `WdsBadge`, `WdsInspectorSection`, `WdsFieldGroup`, `WdsPropertyRow` and `WdsEmptyState`; loading/error recovery remains host-owned | Migrated in M14; filtering remains feature-owned |
 | runs | `RunsScreen` | Candidate for execution status/timeline/event and inspector patterns | Registered; screen internals not yet scanned |
 | tasks | `TasksScreen` | Candidate for catalog/table/inspector and execution status patterns | Registered; screen internals not yet scanned |
-| projects | `ProjectsScreen` | Candidate for page header, table, filters and empty state | Registered; screen internals not yet scanned |
+| projects | `ProjectsScreen` | Uses `WdsPageHeader`, `WdsButton`, `WdsFilterToolbar`, `WdsSearchField`, `WdsDataTable`, `WdsIconButton`, `WdsBadge` and `WdsEmptyState`; project lifecycle and active-project state remain feature-owned | Migrated in M15; search/filter is feature-owned |
 | channels | `ChannelsScreen` | Candidate for catalog/table/inspector patterns | Registered; screen internals not yet scanned |
 | mapper | `MapperScreen` | Editor-specific; inspect editor toolbar/panel and property inspector | Registered; screen internals not yet scanned |
 | mcp | `McpScreen` | Candidate for integration catalog, status and configuration inspector | Registered; screen internals not yet scanned |
@@ -179,3 +179,24 @@ types, descriptions and capabilities, plus empty/whitespace-only queries.
 
 This is a verified migration of the Component Catalog only. It does not claim
 that Projects, Channels, MCP, Secrets or other catalogs have been audited.
+
+
+## M15 — Projects catalog adoption
+
+The Projects screen now uses the shared WDS page, filter, table, action,
+badge and empty-state primitives.
+
+- Project data loading, create/rename/delete operations, duplicate-name
+  validation, confirmation dialogs, error feedback and active-project state
+  remain in the Projects feature.
+- The table is a presentation component; it does not own pagination, sorting,
+  persistence or project selection.
+- Search matches every whitespace-separated term across project name, ID and
+  description. It is local presentation filtering and does not mutate project
+  data or the active-project selection.
+- The explicit `All definitions` action clears the active project filter.
+- Regression tests cover the WDS table adoption, row actions, search behavior,
+  empty state and existing project creation validation.
+
+Only the Projects screen is covered by this migration record; other resource
+screens remain unaudited until their source is inspected.
