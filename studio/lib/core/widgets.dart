@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_providers.dart';
 import 'theme.dart';
 import '../design_system/wds.dart';
+import '../design_system/inspector.dart';
 
 /// A soft, bordered surface with optional glow — the base "card" look used
 /// throughout the studio (panels, inspector, dialogs).
@@ -106,34 +107,25 @@ class ScreenHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final header = WdsSectionHeader(
+      title: title,
+      description: subtitle,
+      actions: actions,
+    );
+    if (icon == null) return header;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (icon != null) ...[
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: AppColors.brandGradient),
-              borderRadius: BorderRadius.circular(AppRadius.md),
-            ),
-            child: Icon(icon, color: Colors.white, size: 20),
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(colors: AppColors.brandGradient),
+            borderRadius: BorderRadius.circular(AppRadius.md),
           ),
-          const SizedBox(width: 14),
-        ],
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: theme.textTheme.headlineSmall),
-              if (subtitle != null) ...[
-                const SizedBox(height: 4),
-                Text(subtitle!, style: theme.textTheme.bodySmall),
-              ],
-            ],
-          ),
+          child: Icon(icon, color: Colors.white, size: 20),
         ),
-        ...actions,
+        const SizedBox(width: 14),
+        Expanded(child: header),
       ],
     );
   }
@@ -224,38 +216,12 @@ class EmptyState extends StatelessWidget {
   final Widget? action;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.primaryBright.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: 30, color: AppColors.primaryBright),
-            ),
-            const SizedBox(height: 16),
-            Text(title, style: theme.textTheme.titleMedium),
-            if (message != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                message!,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
-            if (action != null) ...[const SizedBox(height: 18), action!],
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => WdsEmptyState(
+        icon: icon,
+        title: title,
+        description: message,
+        action: action,
+      );
 }
 
 /// Full-bleed loading placeholder with a subtle brand spinner.
@@ -347,30 +313,20 @@ class KeyValueRow extends StatelessWidget {
   final bool mono;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 110,
-            child: Text(label, style: theme.textTheme.bodySmall),
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: WdsPropertyRow(
+          label: label,
+          value: Text(
+            value,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontFamily: mono ? 'monospace' : null,
+                  fontSize: mono ? 12.5 : 13,
+                ),
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontFamily: mono ? 'monospace' : null,
-                fontSize: mono ? 12.5 : 13,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+          valueAlignment: CrossAxisAlignment.start,
+        ),
+      );
 }
 
 /// Section label used inside panels (e.g. "DIAGNOSTICS", "DEPENDENCIES").
