@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wayang_studio/design_system/wds.dart';
 
@@ -28,8 +29,8 @@ void main() {
 
       final semantics = tester.getSemantics(find.text('Home').first);
       expect(semantics.label, contains('Home'));
-      expect(semantics.hasFlag(SemanticsFlag.isButton), isTrue);
-      expect(semantics.hasFlag(SemanticsFlag.isSelected), isTrue);
+      // containsSemantics does not name the flag enum, which newer Flutter versions renamed (SemanticsFlag is undefined there).
+      expect(semantics, containsSemantics(isButton: true, isSelected: true));
     });
 
     testWidgets('compact navigation safely handles an empty destination set', (tester) async {

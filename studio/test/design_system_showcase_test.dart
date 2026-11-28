@@ -24,8 +24,8 @@ void main() {
     ];
 
     testWidgets('renders catalog examples and category filters', (tester) async {
-      await tester.view.setPhysicalSize(const Size(1200, 1600));
-      await tester.view.setDevicePixelRatio(1);
+      tester.view.physicalSize = const Size(1200, 1600);
+      tester.view.devicePixelRatio = 1;
       await tester.pumpWidget(MaterialApp(
         theme: ThemeData(useMaterial3: true),
         home: Scaffold(
@@ -39,7 +39,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Primary action'), findsOneWidget);
       expect(find.text('Success badge'), findsNothing);
-      await tester.view.resetPhysicalSize();
+      tester.view.resetPhysicalSize();
     });
 
     testWidgets('search filters examples by title and tags', (tester) async {
