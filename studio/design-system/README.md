@@ -225,3 +225,18 @@ pipeline builders remain specialized feature components; WDS does not own
 mapping expressions, transformation semantics, preview requests or result
 interpretation. Plugin screens may optionally use WDS, while registration,
 discovery, routing and permissions remain host-owned.
+
+
+## M24 — Feedback analysis correction and static-screen audit
+
+A post-merge CI review found that the M23 Studio analyzer failed on the
+Feedback screen's nested widget composition. M24 rewrites the page build into
+named header, filter-toolbar and content widgets to simplify the tree and
+correct the syntax issue. Other CI jobs for M23 (Java, Andalus and Wayang Core
+adapter) completed successfully.
+
+The static screen inventory was rechecked: Secrets and Settings already use
+WDS as documented in M17. The remaining repository-wide legacy call-site
+count still requires a local source scan; no counts are inferred from
+incomplete code-search results. Plugin-contributed screens remain a separate,
+host-discovered inventory.
