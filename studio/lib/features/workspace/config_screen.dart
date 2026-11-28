@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/widgets.dart';
+import '../../design_system/wds.dart';
 import '../../data/api_client.dart';
 import '../../data/workspace_model.dart';
 import '../../providers/app_providers.dart';
@@ -29,16 +30,11 @@ class ConfigScreen extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ScreenHeader(
+          WdsPageHeader(
             title: 'Configuration',
-            subtitle: r'Settings per environment. Use in a node config as ${config:NAME}; a project value wins for that project.',
-            icon: Icons.tune_rounded,
+            description: r'Settings per environment. Use in a node config as ${config:NAME}; a project value wins for that project.',
             actions: [
-              ElevatedButton.icon(
-                onPressed: () => _edit(context, ref, scope, null),
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('Add setting'),
-              ),
+              WdsButton(label: 'Add setting', icon: Icons.add_rounded, onPressed: () => _edit(context, ref, scope, null)),
             ],
           ),
           const SizedBox(height: 12),
@@ -62,17 +58,17 @@ class ConfigScreen extends ConsumerWidget {
               loading: () => const LoadingView(),
               error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(configProvider)),
               data: (list) => list.isEmpty
-                  ? const EmptyState(icon: Icons.tune_rounded, title: 'No settings in this scope')
+                  ? const WdsEmptyState(icon: Icons.tune_rounded, title: 'No settings in this scope')
                   : ListView(children: [
                       for (final c in list)
-                        Card(
+                        WdsSurface(padding: EdgeInsets.zero,
                           child: ListTile(
                             title: Text(c.key, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w600)),
                             subtitle: Text(c.value, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
                             onTap: () => _edit(context, ref, scope, c),
-                            trailing: IconButton(
+                            trailing: WdsIconButton(
                               tooltip: 'Delete setting',
-                              icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                              icon: Icons.delete_outline_rounded,
                               onPressed: () async {
                                 final ok = await showConfirmDialog(context,
                                     title: 'Delete ${c.key}?',
@@ -116,8 +112,9 @@ class ConfigScreen extends ConsumerWidget {
             ]),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            ElevatedButton(
+            WdsButton(label: 'Cancel', variant: WdsButtonVariant.tertiary, onPressed: () => Navigator.pop(ctx)),
+            WdsButton(
+              label: 'Save',
               onPressed: () async {
                 final problem = configProblem(key.text.trim(), value.text);
                 if (problem != null) {
@@ -132,7 +129,6 @@ class ConfigScreen extends ConsumerWidget {
                   setState(() => error = errText(e));
                 }
               },
-              child: const Text('Save'),
             ),
           ],
         ),
