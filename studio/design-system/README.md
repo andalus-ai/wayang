@@ -46,7 +46,7 @@ The navigation widgets accept destination data and selection callbacks. The
 host application remains responsible for plugin discovery, filtering, routing,
 permissions and choosing compact destinations.
 
-Planned follow-up families: mode-specific composition examples and templates.
+Execution-view composition examples for Agent Builder, Integration / ESB, Business Automation and Intelligent BI are documented in [examples/execution-views.md](examples/execution-views.md). These examples intentionally compose generic WDS primitives inside feature-owned screens.
 Planned components are not yet shipped.
 
 ## Contribution checklist
@@ -89,3 +89,12 @@ execution means. The Studio "Go to" flow now uses this shared component.
 ## Execution monitoring composition
 
 Use `WdsExecutionStatusIndicator` to present a host-mapped run or step status. `WdsExecutionTimeline` renders immutable `WdsExecutionStep` values in the order supplied and reports selection through a callback. Duration, attempt number and supporting messages are optional display metadata. `WdsExecutionEventList` presents immutable `WdsExecutionEvent` rows with severity, source and optional details. The host owns event acquisition, ordering, filtering, pagination, retention, retry semantics and the mapping from its runtime lifecycle to WDS status values. Timestamp and duration helpers are intentionally locale-neutral; applications may format values differently when they need localized output.
+
+
+## Mode-specific composition
+
+WDS components are shared across modes, but the complete page composition belongs
+to each feature module. See [execution view examples](examples/execution-views.md)
+for Agent Builder run inspection, ESB connector traces, BPMN process-instance
+history and BI pipeline execution. The examples define presentation patterns,
+not shared domain models or runtime contracts.
