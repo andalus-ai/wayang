@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wayang_studio/features/runs/runs_screen.dart';
 import 'package:wayang_studio/data/run_events.dart';
+import 'package:wayang_studio/design_system/wds.dart';
 import 'package:wayang_studio/models/wayang.dart';
 
 RunView r(String id, String process, RunStatus s) => RunView(id: id, processId: process, version: 1, status: s);
@@ -30,6 +31,7 @@ void main() {
     expect(runEventExecutionStatus(const RunEventView(type: 'NODE_FAILED', runId: 'r1')), WdsExecutionStatus.failed);
     expect(runEventExecutionStatus(const RunEventView(type: 'RUN_CANCELLED', runId: 'r1')), WdsExecutionStatus.cancelled);
     expect(runEventExecutionStatus(const RunEventView(type: 'CUSTOM_EVENT', runId: 'r1')), WdsExecutionStatus.pending);
+    expect(runEventExecutionStatus(const RunEventView(type: 'RUN_INCOMPLETE', runId: 'r1')), WdsExecutionStatus.pending);
   });
 
   test('the status narrows, and the words must all match process or run id', () {
