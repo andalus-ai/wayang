@@ -33,6 +33,11 @@ FeedbackItem _item(String id, String msg, {String status = 'open'}) =>
     FeedbackItem(id: id, time: null, user: 'ann', kind: 'bug', rating: null, message: msg, status: status, context: const {});
 
 Future<void> _pump(WidgetTester tester, _FakeRepo repo, Widget body) async {
+  // The default 800x600 test surface is narrower than any desktop window the screen is built for.
+  tester.view.physicalSize = const Size(1600, 1200);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(ProviderScope(
     overrides: [repositoryProvider.overrideWithValue(repo)],
     child: MaterialApp(home: Scaffold(body: body)),
