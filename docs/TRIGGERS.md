@@ -139,7 +139,9 @@ Verified by tests with a scripted model and fake clock, and by injected bugs in 
 * **Errors never contain secrets**: resolved secret values are redacted from `lastError`.
 * **Single node.** Two nodes ticking would poll twice; there is no lease yet.
 * **Webhooks have no rate limit** (put one in front) and the secret cannot be rotated except by recreating the trigger.
-* The Studio has no trigger screen yet (REST only).
+* The Studio has a **Channels** screen (triggers and Gmail connections). Its create dialogs check the id (triggers: letters, digits, `_`, `-`,
+  up to 64; connections: up to 60), the OAuth client id, the secret name and the scopes before sending, refuse an id already in the list,
+  and block a second submit while one is running. The server stays the authority; these are early messages, not a second rule set.
 
 ## Verification
 

@@ -26,6 +26,8 @@ persistence, plugin activation, or execution services.
 - studio/lib/design_system/command_palette.dart: searchable command model, filtering and modal palette.
 - studio/lib/design_system/data_table.dart: controlled sorting/selection data table with loading and empty states.
 - studio/lib/design_system/inspector.dart: reusable inspector sections, field groups, property rows and field messages.
+- studio/lib/design_system/editor.dart: responsive editor toolbar and panel composition.
+- studio/lib/design_system/node.dart: generic node cards and typed input/output port presentation.
 - studio/lib/design_system/wds.dart: public import surface.
 - studio/lib/core/theme.dart remains the ThemeData and brand-color source during
   migration. Existing core/widgets.dart APIs remain compatible.
@@ -36,14 +38,15 @@ Implemented: WdsSurface, WdsBadge, WdsButton, WdsIconButton,
 WdsSectionHeader, WdsSearchField, WdsEmptyState, WdsNavigationRail,
 WdsCompactNavigationBar, WdsBreadcrumbs, WdsPageHeader, WdsFilterToolbar,
 WdsCommandPalette, WdsDataTable, WdsInspectorSection, WdsFieldGroup,
-WdsPropertyRow and WdsFieldMessage.
+WdsPropertyRow, WdsFieldMessage, WdsEditorToolbar, WdsEditorPanel,
+WdsNodeCard and WdsNodePort.
 
 The navigation widgets accept destination data and selection callbacks. The
 host application remains responsible for plugin discovery, filtering, routing,
 permissions and choosing compact destinations.
 
-Planned follow-up families: editor chrome, node/port primitives, execution
-timelines and mode-specific templates. Planned components are not yet shipped.
+Planned follow-up families: execution timelines and mode-specific templates.
+Planned components are not yet shipped.
 
 ## Contribution checklist
 
@@ -73,3 +76,10 @@ execution means. The Studio "Go to" flow now uses this shared component.
 `WdsDataTable<T>` renders typed columns and accepts controlled sort and selection callbacks. The host owns pagination, query state, sorting algorithms, selection persistence and row actions. Provide a stable `rowKey` together with `onSelectionChanged` to enable row selection; omit them for read-only tables. Loading and empty states are presentation options, not data-fetching behavior.
 
 `WdsInspectorSection`, `WdsFieldGroup`, `WdsPropertyRow` and `WdsFieldMessage` provide consistent inspector composition. They accept ordinary Flutter widgets and validation messages; feature modules own field controllers, validation rules, persistence and domain-specific editors.
+
+
+## Editor and node composition
+
+`WdsEditorToolbar` composes editor identity, optional center content and action widgets; it adapts to compact widths. `WdsEditorPanel` provides a bounded-height panel layout with optional heading, actions and footer. Docking, resizing and panel persistence belong to the host editor.
+
+`WdsNodeCard` and `WdsNodePort` are visual primitives only. A node receives its title, status, input/output metadata and selection state from the host. Port kinds provide consistent visual differentiation; the host owns graph topology, connection validation, pointer gestures, hit testing, selection and mutations. These components intentionally do not encode Agent Builder, BPMN, DMN or runtime-specific rules.
