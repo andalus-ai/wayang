@@ -132,3 +132,16 @@ navigation, global feedback policy and editor decisions remain host-owned.
 
 - [Studio-wide adoption roadmap](studio-adoption-roadmap.md) — cross-mode ownership, migration waves and quality gates.
 - [Studio screen inventory](studio-screen-inventory.md) — verified static screen registry, shell call sites and remaining source-wide census work.
+
+
+## M16 — Integration catalog adoption
+
+Channels and MCP are the first integration-focused screens to adopt WDS
+composition. Both use `WdsPageHeader` and semantic `WdsBadge` states;
+MCP additionally uses the shared page action buttons, and both use
+`WdsEmptyState` where applicable. Their domain layouts intentionally remain
+different: Channels retains trigger/account tabs, while MCP retains its
+OpenAPI server expansion and lazy tool-detail loading. OAuth, credentials,
+allow-lists, endpoint security, import/preview and lifecycle operations remain
+owned by their feature modules. See the [screen inventory](studio-screen-inventory.md)
+for the verified migration scope.
