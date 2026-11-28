@@ -1,54 +1,41 @@
 # Knowledge schema registry
 
-**Status:** the provider-neutral registry contract, bounded in-memory implementation and additive compatibility checker are implemented in `wayang-rag`. Persistent providers, tenant-scoped registry authorization, schema publication workflows and graph-ingestion integration are not implemented.
+**Status:** the provider-neutral process-local registry and additive compatibility checker are implemented in `wayang-rag`. This increment adds a separate tenant-scoped registry contract and PostgreSQL adapter in `wayang-store-jdbc`. The legacy `KnowledgeSchemaRegistry` remains unchanged for compatibility; it is not a tenant authorization boundary.
 
 ## Purpose
 
-A `KnowledgeSchema` is an explicit allow-list for entity types and directed relationship predicates. A schema is identified by the pair `schemaId + version`. Once registered, that exact version is immutable.
+A `KnowledgeSchema` is an explicit allow-list for entity types and directed relationship predicates. A schema is identified by `schemaId + version`. Once registered, that exact version is immutable.
 
-The registry deliberately does not infer ontologies, select an active version, migrate graph data, or silently upgrade an ingestion workflow. Callers must select an exact schema version and pass it to the existing `KnowledgeCandidateValidator`.
+The registry does not infer ontologies, select an active version, migrate graph data, or silently upgrade a workflow. Callers must select an exact schema version and pass it to the candidate validator.
 
 ## Contracts
 
-- `KnowledgeSchemaRegistry`: provider-neutral register/find/list-versions SPI.
+- `KnowledgeSchemaRegistry`: existing provider-neutral process-local register/find/list-versions SPI.
 - `InMemoryKnowledgeSchemaRegistry`: bounded process-local implementation for tests and development; default capacity is 1,000 versions.
-- `KnowledgeSchemaCompatibility`: conservative additive-compatibility check between two versions of the same schema.
-- `KnowledgeSchemaCompatibilityResult`: explicit compatibility outcome and breaking-change diagnostics.
+- `TenantKnowledgeSchemaRegistry`: tenant-explicit SPI. Every operation requires tenant ID; it has no global lookup or implicit latest operation.
+- `JdbcKnowledgeSchemaRegistry`: PostgreSQL implementation of the tenant-scoped SPI, supplied with a caller-managed `DataSource`.
+- `KnowledgeSchemaCompatibility`: conservative additive-compatibility check between versions of the same schema.
 
-Registering the same schema version with identical content is idempotent. Registering different content under an existing schema ID and version is rejected. Capacity exhaustion is explicit; there is no silent eviction.
+The JDBC adapter stores canonical schema JSON and a SHA-256 content digest. Its primary key is `(tenant_id, schema_id, schema_version)`. Registration uses an atomic insert-on-conflict operation, then compares the persisted digest. Identical concurrent registrations are idempotent; conflicting content for the same tenant/key is rejected. The same schema ID/version may contain different definitions in different tenants.
+
+## PostgreSQL setup
+
+`JdbcSchema.apply(dataSource)` now also applies `wayang/schema-knowledge-schema-registry.sql`. The migration is idempotent and creates the immutable version table and lookup index. The JDBC module does not bundle a production PostgreSQL driver; deployments supply one.
+
+Integration tests use the existing `WAYANG_TEST_JDBC_URL` convention. When that variable is absent, the tests return without opening a database. Run them against an isolated PostgreSQL database before production use.
 
 ## Compatibility policy
 
-A candidate version is considered additive when it:
+A candidate version is considered additive when it retains every previous entity type, relationship predicate, and allowed source/target endpoint type. New types and predicates may be added. Removing or narrowing existing definitions is breaking. The checker does not infer semantic equivalence, validate graph-data migrations, or interpret version strings as SemVer.
 
-1. retains every entity type from the previous version;
-2. retains every relationship predicate from the previous version; and
-3. retains every previously allowed source and target entity type for each retained predicate.
-
-New entity types, predicates and endpoint types may be added. Removing or narrowing existing definitions is reported as breaking. The checker does not infer semantic equivalence, validate graph-data migrations, or interpret version strings as SemVer.
-
-A compatible result is not an automatic approval to activate the schema. Deployments must still review policy, data migration, extraction behavior and operational impact.
-
-## Intended usage
-
-```java
-KnowledgeSchemaRegistry registry = new InMemoryKnowledgeSchemaRegistry();
-registry.register(schema);
-
-KnowledgeSchema selected = registry.find("acme.graph", "1.0")
-        .orElseThrow(() -> new IllegalStateException("schema version not found"));
-
-ValidatedKnowledgeCandidates candidates = validator.validate(
-        extractionInput, entities, relationships, selected);
-```
-
-The example is illustrative. The registry is not yet wired into `graph-ingest`; the current connector continues to require an explicitly injected `KnowledgeSchema`.
+A compatible result is not automatic approval to activate a schema. Deployments must still review policy, data migration, extraction behavior and operational impact.
 
 ## Security and operational boundaries
 
-- The in-memory implementation is not durable, distributed, tenant-isolated or an authorization boundary.
-- A future persistent adapter must preserve immutable version semantics under concurrent registration.
-- Tenant and collection authorization remains the responsibility of the caller and graph storage boundary; schema validation does not grant access to graph data.
-- Do not store secrets or executable expressions in schema properties.
-- No implicit "latest" lookup is provided. Pin exact schema versions in workflow/deployment configuration.
-- Schema activation, migration plans, rollback and provenance should be explicit future control-plane workflows.
+- The JDBC adapter requires an explicit tenant on every operation; blank or missing tenant IDs are rejected.
+- Tenant identity must come from the authenticated server-side execution context. Never trust a workflow input or user-editable node field as the tenant authority.
+- The adapter is a storage boundary, not an authorization system. The caller must authorize the tenant before invoking it; database credentials and row-level security should be configured according to deployment policy.
+- The legacy unscoped `KnowledgeSchemaRegistry` must not be used for cross-tenant data.
+- No implicit "latest" lookup or active-version pointer exists. Pin exact schema versions in workflow/deployment configuration.
+- Schema activation, migration plans, rollback, audit/provenance and tenant-aware connector wiring remain separate control-plane work.
+- Do not store secrets or executable expressions in schema definitions.
