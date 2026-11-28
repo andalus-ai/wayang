@@ -156,3 +156,15 @@ String feedbackExportCommand(String baseUrl, {String? kind}) {
   final known = FeedbackKind.values.any((k) => k.api == kind);
   return "curl -sS '$base/api/v1/feedback/export${known ? '?kind=$kind' : ''}' -H \"Authorization: Bearer \$WAYANG_TOKEN\" -o feedback.csv";
 }
+
+/// Feedback whose message, user, kind or context text contains every word of [query] (case-insensitive); [hideDone] drops resolved items.
+List<FeedbackItem> filterFeedback(List<FeedbackItem> all, String query, {bool hideDone = false}) {
+  final words = query.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  return [
+    for (final f in all)
+      if (!(hideDone && f.isDone) &&
+          (words.isEmpty ||
+              words.every('${f.message} ${f.user} ${f.kind} ${f.context.values.join(' ')}'.toLowerCase().contains)))
+        f,
+  ];
+}

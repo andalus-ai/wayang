@@ -16,6 +16,9 @@ final feedbackKindFilterProvider = StateProvider<String?>((ref) => null);
 final feedbackListProvider = FutureProvider.autoDispose<List<FeedbackItem>>(
     (ref) => ref.watch(repositoryProvider).listFeedback(kind: ref.watch(feedbackKindFilterProvider)));
 
+final _feedbackQueryProvider = StateProvider.autoDispose<String>((ref) => '');
+final _feedbackHideDoneProvider = StateProvider.autoDispose<bool>((ref) => false);
+
 final feedbackSummaryProvider = FutureProvider.autoDispose<FeedbackSummary>((ref) => ref.watch(repositoryProvider).feedbackSummary());
 
 /// What people sent from Studio, newest first. Reading needs the tenant ADMIN role; anyone else sees the server's refusal and can still
@@ -27,6 +30,8 @@ class FeedbackScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final items = ref.watch(feedbackListProvider);
     final filter = ref.watch(feedbackKindFilterProvider);
+    final query = ref.watch(_feedbackQueryProvider);
+    final hideDone = ref.watch(_feedbackHideDoneProvider);
     final summary = ref.watch(feedbackSummaryProvider).valueOrNull; // a failure shows on the list below; the counts just stay out
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -51,7 +56,7 @@ class FeedbackScreen extends ConsumerWidget {
                     await Clipboard.setData(ClipboardData(text: csv));
                     if (context.mounted) showToast(context, 'Copied as CSV${filter == null ? '' : ' ($filter only)'}');
                   } catch (e) {
-                    if (context.mounted) showToast(context, errText(e));
+                    if (context.mounted) showToast(context, errText(e), isError: true);
                   }
                 },
                 icon: const Icon(Icons.content_copy_rounded, size: 16),
@@ -85,14 +90,35 @@ class FeedbackScreen extends ConsumerWidget {
                 onSelected: (_) => ref.read(feedbackKindFilterProvider.notifier).state = k.api,
               ),
           ]),
+          const SizedBox(height: 8),
+          Row(children: [
+            SizedBox(
+              width: 280,
+              child: TextField(
+                onChanged: (v) => ref.read(_feedbackQueryProvider.notifier).state = v,
+                decoration: const InputDecoration(isDense: true, prefixIcon: Icon(Icons.search_rounded, size: 18), hintText: 'Search feedback'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            FilterChip(
+              label: const Text('Hide done'),
+              selected: hideDone,
+              onSelected: (v) => ref.read(_feedbackHideDoneProvider.notifier).state = v,
+            ),
+          ]),
           const SizedBox(height: 12),
           Expanded(
             child: items.when(
               loading: () => const LoadingView(),
               error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(feedbackListProvider)),
-              data: (list) => list.isEmpty
-                  ? const EmptyState(icon: Icons.feedback_outlined, title: 'No feedback yet')
-                  : ListView(children: [for (final f in list) _FeedbackCard(item: f)]),
+              data: (list) {
+                if (list.isEmpty) return const EmptyState(icon: Icons.feedback_outlined, title: 'No feedback yet');
+                final shown = filterFeedback(list, query, hideDone: hideDone);
+                if (shown.isEmpty) {
+                  return const EmptyState(icon: Icons.search_off_rounded, title: 'Nothing matches', message: 'Change the search or show done items.');
+                }
+                return ListView(children: [for (final f in shown) _FeedbackCard(item: f)]);
+              },
             ),
           ),
         ],
@@ -140,7 +166,7 @@ class _FeedbackCard extends ConsumerWidget {
                   ref.invalidate(feedbackListProvider);
                   ref.invalidate(feedbackSummaryProvider);
                 } catch (e) {
-                  if (context.mounted) showToast(context, errText(e));
+                  if (context.mounted) showToast(context, errText(e), isError: true);
                 }
               },
             ),

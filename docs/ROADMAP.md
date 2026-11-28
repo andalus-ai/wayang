@@ -495,3 +495,19 @@ See [Agent Package Installation and Locking](architecture/AGENT-PACKAGE-INSTALLA
 **Explicit limitations:** the in-memory trust store is a test/local implementation; persistent trust administration, KMS/HSM integration and distributed revocation are future work. SBOM and in-toto checks are structural, not full schema/policy or independent builder-attestation verification. Artifacts are not downloaded or persisted, and archives are not extracted. The existing low-level installer remains for local/trusted catalog use; network-facing import APIs must use the verified methods.
 
 See [Agent Package Trust and Artifact Verification](architecture/AGENT-PACKAGE-TRUST.md).
+
+
+## M1.9 — Agent Package artifact repository
+
+- [x] Define a storage contract that accepts verifier-produced artifacts and the exact archive bytes.
+- [x] Add a local content-addressed filesystem backend with SHA-256 object paths and immutable package ID/version coordinates.
+- [x] Make duplicate publication idempotent and reject coordinate rebinding to different bytes.
+- [x] Bound archive size, snapshot caller bytes, use atomic writes, and verify integrity again on retrieval.
+- [x] Add focused tests for round-trip, idempotency, immutability, invalid digest/path input, corruption detection and defensive copies.
+- [x] Document filesystem layout, configuration, trust boundary and deployment limitations.
+
+**Verification status:** implementation and tests are committed to the feature branch; CI has not yet run for this increment. Do not treat M1.9 as verified until the focused Maven tests and repository CI pass.
+
+**Explicit limitations:** local filesystem backend only; no HTTP API, S3 adapter, marketplace catalog, listing/search, retention, garbage collection or deletion. Tenant/project authorization remains the responsibility of the future API/catalog boundary. Artifact digest is an integrity address, not an authorization token or trust proof.
+
+See [Agent Package Artifact Repository](architecture/AGENT-PACKAGE-ARTIFACT-REPOSITORY.md).

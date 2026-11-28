@@ -8,6 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+
+import org.junit.jupiter.api.io.TempDir;
 
 import org.junit.jupiter.api.Test;
 
@@ -44,7 +48,11 @@ class GraphIngestConnectorTest {
     }
 
     private static KnowledgeExtension extension(InMemoryGraphStore store) {
-        return new KnowledgeExtension(null, UrlGuard.strict(), store, store, entities(), relationships(), schema());
+        return extension(store, null);
+    }
+
+    private static KnowledgeExtension extension(InMemoryGraphStore store, FileStore files) {
+        return new KnowledgeExtension(files, UrlGuard.strict(), store, store, entities(), relationships(), schema());
     }
 
     private static Map<String, Object> config() {
@@ -104,8 +112,69 @@ class GraphIngestConnectorTest {
 
         assertEquals(false, result.get("ingested"));
         assertEquals(0, result.get("chunksProcessed"));
-        assertEquals("sourceId, sourceVersion and text are required; no graph data was changed", result.get("reason"));
+        assertEquals("provide exactly one of text or fileId; no graph data was changed", result.get("reason"));
         assertTrue(store.findCandidates("tenant-a", "companies", Set.of("Organization"), 10).isEmpty());
+    }
+
+
+    @Test
+    void graphIngestReadsTenantOwnedTextFileAndUsesContentDigestAsVersion(@TempDir Path temp) throws Exception {
+        InMemoryGraphStore store = new InMemoryGraphStore();
+        FileStore files = new FileStore(temp);
+        FileStore.Info file = files.put("tenant-a", "annual-report.txt",
+                SOURCE_TEXT.getBytes(StandardCharsets.UTF_8), null);
+        ServiceHandler.Connector connector = extension(store, files).connectors().get("graph-ingest");
+
+        Map<String, Object> result = connector.call(config(), Map.of("fileId", file.id()));
+
+        assertEquals(true, result.get("ingested"));
+        assertEquals(file.id(), result.get("sourceId"));
+        assertEquals(file.sha256(), result.get("sourceVersion"));
+        var graph = store.traverse(new GraphQuery("tenant-a", "companies",
+                Set.of(entityId(store, "Acme")), GraphQuery.Direction.OUTGOING, Set.of(), 1, 10, 10));
+        assertEquals(file.id(), graph.relationships().get(0).evidence().get(0).sourceId());
+        assertEquals(file.sha256(), graph.relationships().get(0).evidence().get(0).sourceVersion());
+    }
+
+    @Test
+    void graphIngestCannotReadAnotherTenantsFile(@TempDir Path temp) throws Exception {
+        InMemoryGraphStore store = new InMemoryGraphStore();
+        FileStore files = new FileStore(temp);
+        FileStore.Info file = files.put("tenant-b", "annual-report.txt",
+                SOURCE_TEXT.getBytes(StandardCharsets.UTF_8), null);
+        ServiceHandler.Connector connector = extension(store, files).connectors().get("graph-ingest");
+
+        Map<String, Object> result = connector.call(config(), Map.of("fileId", file.id()));
+
+        assertEquals(false, result.get("ingested"));
+        assertTrue(String.valueOf(result.get("reason")).contains("not found for the current tenant"));
+        assertTrue(store.findCandidates("tenant-a", "companies", Set.of("Organization"), 10).isEmpty());
+    }
+
+    @Test
+    void graphIngestRejectsBinaryFileTypes(@TempDir Path temp) throws Exception {
+        InMemoryGraphStore store = new InMemoryGraphStore();
+        FileStore files = new FileStore(temp);
+        FileStore.Info file = files.put("tenant-a", "report.pdf", new byte[] {1, 2, 3}, null);
+        ServiceHandler.Connector connector = extension(store, files).connectors().get("graph-ingest");
+
+        ServiceHandler.ConnectorException failure = assertThrows(ServiceHandler.ConnectorException.class,
+                () -> connector.call(config(), Map.of("fileId", file.id())));
+
+        assertTrue(failure.getMessage().contains("supports text files only"));
+        assertTrue(store.findCandidates("tenant-a", "companies", Set.of("Organization"), 10).isEmpty());
+    }
+
+    @Test
+    void graphIngestRequiresExactlyOneTextSource() throws Exception {
+        InMemoryGraphStore store = new InMemoryGraphStore();
+        ServiceHandler.Connector connector = extension(store).connectors().get("graph-ingest");
+
+        Map<String, Object> result = connector.call(config(),
+                Map.of("sourceId", "annual-report", "text", SOURCE_TEXT, "fileId", "000000000000000000000000"));
+
+        assertEquals(false, result.get("ingested"));
+        assertTrue(String.valueOf(result.get("reason")).contains("exactly one of text or fileId"));
     }
 
     @Test
