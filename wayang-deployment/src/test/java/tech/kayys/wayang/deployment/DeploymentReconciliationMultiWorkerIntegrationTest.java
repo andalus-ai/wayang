@@ -49,6 +49,7 @@ class DeploymentReconciliationMultiWorkerIntegrationTest {
                       operation_key VARCHAR(200) NOT NULL,
                       command_fingerprint CHAR(64) NOT NULL,
                       status VARCHAR(32) NOT NULL,
+                      claim_token VARCHAR(64),
                       lease_until TIMESTAMP WITH TIME ZONE,
                       retry_at TIMESTAMP WITH TIME ZONE,
                       detail VARCHAR(2048),
