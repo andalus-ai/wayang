@@ -48,7 +48,7 @@ The following builders are explicitly registered in
 | channels | `ChannelsScreen` | Uses `WdsPageHeader`, `WdsBadge`, `WdsEmptyState` and `WdsSurface` for trigger/account cards; trigger lifecycle, OAuth consent, credentials and allow-lists remain feature-owned | Adopted in M16; surface consistency completed in M22 |
 | mapper | `MapperScreen` | Uses `WdsPageHeader`, `WdsButton`, `WdsSurface` and `WdsSectionHeader` for the three-pane preview workspace; field/pipeline builders, JSON editing, debounce, request sequencing and preview execution remain feature-owned | Adopted in M23; specialized mapping editors intentionally remain feature-owned |
 | mcp | `McpScreen` | Uses `WdsPageHeader`, `WdsButton`, `WdsIconButton`, `WdsBadge`, `WdsEmptyState` and `WdsSurface` for server cards; OpenAPI preview/import, lazy tool details, security and lifecycle remain feature-owned | Adopted in M16; surface consistency completed in M22 |
-| secrets | `SecretsScreen` | Candidate for table and field presentation; secret values and reveal policy stay feature-owned | Registered; screen internals not yet scanned |
+| secrets | `SecretsScreen` | Uses `WdsPageHeader`, `WdsFilterToolbar`, `WdsSearchField`, `WdsSurface`, `WdsBadge`, `WdsButton`, `WdsIconButton` and `WdsEmptyState`; keyring status is responsive; secret values remain write-only and reference-only copy is feature-owned | Migrated in M17; regression test covers empty state and write-only contract |
 | config | `ConfigScreen` | Uses `WdsPageHeader`, `WdsButton`, `WdsEmptyState`, `WdsSurface`, `WdsIconButton` and `WdsFieldGroup`; scope, validation, persistence and confirmation remain feature-owned | Migrated in M18 |
 | workspace | `WorkspaceScreen` | Uses `WdsPageHeader`, `WdsSurface`, `WdsButton`, `WdsSectionHeader`, `WdsBadge` and WDS empty states across export/import, release planning, template gallery and reports | Migrated in M18 |
 | surfaces | `SurfacesScreen` / `SurfaceView` | Uses `WdsPageHeader`, `WdsSectionHeader`, `WdsButton`, `WdsBadge`, `WdsSurface`, `WdsEmptyState`, `WdsFieldMessage` and `WdsPropertyRow`; dynamic parsing, server validation, action allow-listing and task authorization remain feature-owned | Migrated in M21 |
@@ -376,3 +376,25 @@ runtime and cannot be exhaustively listed here. The contribution boundary is:
   extension contract must not depend on WDS private implementation details.
 - WDS remains a presentation library; it does not discover, activate, authorize
   or execute plugins.
+
+
+## M24 — Post-merge analysis correction and remaining static-screen audit
+
+The M23 pull request was merged, but its Studio CI job failed at
+`flutter analyze --no-fatal-infos`. The analyzer reported syntax errors in
+`FeedbackScreen.build`; the Java, Andalus and Wayang Core adapter jobs
+completed successfully. M24 isolates that feedback composition into named
+header, toolbar and content widgets to make the widget tree easier to review
+and fixes the parser failure before further screen migration.
+
+The remaining static screen inventory was rechecked against source:
+Secrets is already migrated (M17), and Settings is already migrated (M17).
+There is no additional unclassified static screen in the current
+`_platformScreenBuilders` list. Plugin-contributed screens remain dynamic and
+must be inventoried from installed plugin metadata separately; they are not
+part of this static census.
+
+The inventory remains explicit that a complete repository-wide legacy-widget
+call-site count requires a local `rg` scan. GitHub's code-search index did not
+provide reliable source matches during this pass, so no unsupported global
+counts are published.
