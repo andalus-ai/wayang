@@ -282,6 +282,21 @@ class DeploymentLifecycleReconciliationWorkerTest {
             }
             return false;
         }
+        private final Map<String, String> owners = new HashMap<>();
+        @Override public synchronized DeploymentLifecycleReconciliationWorkClaim claimOwned(
+                DeploymentOperationReceipt receipt, Instant now, Instant leaseUntil) {
+            if (!claim(receipt, now, leaseUntil)) return null;
+            String token = java.util.UUID.randomUUID().toString();
+            owners.put(key(receipt), token);
+            return new DeploymentLifecycleReconciliationWorkClaim(receipt, token);
+        }
+        @Override public synchronized void complete(DeploymentLifecycleReconciliationWorkClaim claim,
+                DeploymentLifecycleReconciliationWorkStatus status, String detail, Instant now, Instant retryAt) {
+            String key = key(claim.receipt());
+            if (!claim.ownershipToken().equals(owners.get(key))) throw new IllegalStateException("stale claim");
+            complete(claim.receipt(), status, detail, now, retryAt);
+            owners.remove(key);
+        }
         @Override public synchronized void complete(DeploymentOperationReceipt receipt,
                 DeploymentLifecycleReconciliationWorkStatus status, String detail, Instant now, Instant retryAt) {
             if (statuses.get(key(receipt)) != DeploymentLifecycleReconciliationWorkStatus.CLAIMED) {

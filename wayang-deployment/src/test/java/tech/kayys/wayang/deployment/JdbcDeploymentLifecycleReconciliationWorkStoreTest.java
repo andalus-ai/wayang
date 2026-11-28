@@ -31,7 +31,7 @@ class JdbcDeploymentLifecycleReconciliationWorkStoreTest {
             statement.execute("""
                     CREATE TABLE wayang_deployment_reconciliation_work (
                       deployment_id VARCHAR(160) NOT NULL, operation_key VARCHAR(200) NOT NULL,
-                      command_fingerprint CHAR(64) NOT NULL, status VARCHAR(32) NOT NULL,
+                      command_fingerprint CHAR(64) NOT NULL, status VARCHAR(32) NOT NULL, claim_token VARCHAR(64),
                       lease_until TIMESTAMP WITH TIME ZONE, retry_at TIMESTAMP WITH TIME ZONE,
                       detail VARCHAR(2048), created_at TIMESTAMP WITH TIME ZONE NOT NULL,
                       updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -92,5 +92,22 @@ class JdbcDeploymentLifecycleReconciliationWorkStoreTest {
         var different = new DeploymentOperationReceipt("dep", "op", "b".repeat(64), "ACTIVATE",
                 DeploymentOperationStatus.SUCCEEDED, 1, "target-op", "SUCCEEDED", "ok", null, NOW, NOW);
         assertThrows(SecurityException.class, () -> store.claim(different, NOW, NOW.plusSeconds(60)));
+    }
+
+    @Test
+    void expiredWorkerCannotCompleteAfterAnotherWorkerReclaimsLease() {
+        var firstOwner = store.claimOwned(receipt, NOW, NOW.plusSeconds(30));
+        assertNotNull(firstOwner);
+        var secondOwner = store.claimOwned(receipt, NOW.plusSeconds(31), NOW.plusSeconds(90));
+        assertNotNull(secondOwner);
+        assertNotEquals(firstOwner.ownershipToken(), secondOwner.ownershipToken());
+
+        assertThrows(IllegalStateException.class, () -> store.complete(firstOwner,
+                DeploymentLifecycleReconciliationWorkStatus.RECONCILED, "stale result",
+                NOW.plusSeconds(32), null));
+
+        store.complete(secondOwner, DeploymentLifecycleReconciliationWorkStatus.RECONCILED,
+                "current owner result", NOW.plusSeconds(33), null);
+        assertFalse(store.claimOwned(receipt, NOW.plusSeconds(120), NOW.plusSeconds(180)) != null);
     }
 }
