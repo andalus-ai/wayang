@@ -8,6 +8,7 @@ import '../../data/api_client.dart';
 import '../../data/workspace_model.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
+import '../../design_system/wds.dart';
 
 final keyStatusProvider = FutureProvider.autoDispose<KeyStatus?>((ref) async {
   try {
@@ -45,12 +46,14 @@ class SecretsScreen extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ScreenHeader(
+          WdsPageHeader(
             title: 'Secrets',
-            subtitle: r'Write-only. Use in a node config as ${secret:NAME}.',
-            icon: Icons.key_rounded,
+            description: r'Write-only. Use in a node config as ${secret:NAME}.',
             actions: [
-              OutlinedButton.icon(
+              WdsButton(
+                label: 'Rotate keys',
+                icon: Icons.autorenew_rounded,
+                variant: WdsButtonVariant.secondary,
                 onPressed: () async {
                   try {
                     final n = await ref.read(repositoryProvider).rotateSecrets();
@@ -61,26 +64,15 @@ class SecretsScreen extends ConsumerWidget {
                     if (context.mounted) showToast(context, errText(e), isError: true);
                   }
                 },
-                icon: const Icon(Icons.autorenew_rounded, size: 16),
-                label: const Text('Rotate keys'),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: () => _put(context, ref),
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('Set secret'),
-              ),
+                ),
+              WdsButton(label: 'Set secret', icon: Icons.add_rounded, onPressed: () => _put(context, ref)),
             ],
           ),
           const SizedBox(height: 12),
           _KeyBanner(onReload: () => _reload(context, ref)),
           const SizedBox(height: 12),
-          SizedBox(
-            width: 320,
-            child: TextField(
-              decoration: const InputDecoration(hintText: 'Search secrets', prefixIcon: Icon(Icons.search_rounded), isDense: true),
-              onChanged: (v) => ref.read(secretSearchProvider.notifier).state = v,
-            ),
+          WdsFilterToolbar(
+            search: WdsSearchField(hint: 'Search secrets', onChanged: (value) => ref.read(secretSearchProvider.notifier).state = value),
           ),
           const SizedBox(height: 12),
           Expanded(
@@ -90,7 +82,7 @@ class SecretsScreen extends ConsumerWidget {
               data: (all) {
                 final list = filterSecrets(all, ref.watch(secretSearchProvider));
                 if (all.isEmpty) return const EmptyState(icon: Icons.key_off_outlined, title: 'No secrets', message: 'Use Set secret, then refer to it as \${secret:NAME} in a node config.');
-                if (list.isEmpty) return const EmptyState(icon: Icons.search_off_rounded, title: 'No secret matches');
+                if (list.isEmpty) return const WdsEmptyState(icon: Icons.search_off_rounded, title: 'No secret matches');
                 return ListView(children: [
                       for (final s in list)
                         Card(
@@ -101,22 +93,22 @@ class SecretsScreen extends ConsumerWidget {
                               style: const TextStyle(fontSize: 11),
                             ),
                             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                              IconButton(
+                              WdsIconButton(
                                 tooltip: 'Copy reference \${secret:${s.name}}',
-                                icon: const Icon(Icons.copy_rounded, size: 17),
+                                icon: Icons.copy_rounded,
                                 onPressed: () async {
                                   await Clipboard.setData(ClipboardData(text: secretReference(s.name)));
                                   if (context.mounted) showToast(context, 'Copied ${secretReference(s.name)}');
                                 },
                               ),
-                              IconButton(
-                                tooltip: 'Replace the value',
-                                icon: const Icon(Icons.edit_outlined, size: 17),
+                              WdsIconButton(
+                                tooltip: 'Replace the value,
+                                icon: Icons.edit_outlined,
                                 onPressed: () => _put(context, ref, fixedName: s.name),
                               ),
-                              IconButton(
-                              tooltip: 'Delete secret',
-                              icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                              WdsIconButton(
+                              tooltip: 'Delete secret,
+                              icon: Icons.delete_outline_rounded,
                               onPressed: () async {
                                 final ok = await showConfirmDialog(context,
                                     title: 'Delete ${s.name}?',
@@ -229,16 +221,14 @@ class _KeyBanner extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final st = ref.watch(keyStatusProvider).valueOrNull;
     if (st == null) return const SizedBox.shrink();
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        child: Row(children: [
-          Icon(st.needRotation == 0 ? Icons.verified_user_outlined : Icons.warning_amber_rounded, size: 18),
-          const SizedBox(width: 10),
-          Expanded(child: Text(st.summary, style: const TextStyle(fontSize: 12))),
-          TextButton(onPressed: onReload, child: const Text('Reload keyring')),
-        ]),
-      ),
+    return WdsSurface(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: Row(children: [
+        WdsBadge(label: st.needRotation == 0 ? 'Keyring healthy' : 'Rotation needed', tone: st.needRotation == 0 ? WdsBadgeTone.success : WdsBadgeTone.warning, icon: st.needRotation == 0 ? Icons.verified_user_outlined : Icons.warning_amber_rounded),
+        const SizedBox(width: 12),
+        Expanded(child: Text(st.summary, style: Theme.of(context).textTheme.bodySmall)),
+        WdsButton(label: 'Reload keyring', variant: WdsButtonVariant.tertiary, onPressed: onReload),
+      ]),
     );
   }
 }
