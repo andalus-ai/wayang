@@ -20,6 +20,7 @@ Future<void> showFeedbackDialog(
 }) =>
     showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (_) => FeedbackDialog(kind: kind, error: error, extra: details, message: message),
     );
 
@@ -66,6 +67,17 @@ class _FeedbackDialogState extends ConsumerState<FeedbackDialog> {
           if (_withStack && widget.error != null) 'stack': widget.error!.stack,
         },
       );
+
+  /// Cancel keeps what the person typed from vanishing by accident: confirm when the text was changed.
+  Future<void> _cancel() async {
+    final initial = widget.message ?? widget.error?.message ?? '';
+    if (_message.text.trim() != initial.trim()) {
+      final ok = await showConfirmDialog(context,
+          title: 'Discard this feedback?', message: 'What you wrote will be lost.', confirmLabel: 'Discard', destructive: true);
+      if (!ok || !mounted) return;
+    }
+    Navigator.pop(context);
+  }
 
   Future<void> _send() async {
     final problem = feedbackProblem(_kind, rating: _rating, message: _message.text);
@@ -159,7 +171,7 @@ class _FeedbackDialogState extends ConsumerState<FeedbackDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: _busy ? null : () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(onPressed: _busy ? null : _cancel, child: const Text('Cancel')),
         FilledButton(onPressed: _busy ? null : _send, child: Text(_busy ? 'Sending...' : 'Send')),
       ],
     );
