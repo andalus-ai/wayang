@@ -332,9 +332,10 @@ class _RunDetail extends ConsumerWidget {
             ],
             const SizedBox(height: 14),
             Wrap(spacing: 8, children: [
-              OutlinedButton.icon(
-                icon: const Icon(Icons.account_tree_outlined, size: 16),
-                label: const Text('Show path on canvas'),
+              WdsButton(
+                label: 'Show path on canvas',
+                icon: Icons.account_tree_outlined,
+                variant: WdsButtonVariant.secondary,
                 onPressed: () {
                   ref.read(runHighlightProvider.notifier).state = r.executedNodes.toSet();
                   ref.read(activeBpmnDiagramIdProvider.notifier).state = r.processId;
@@ -342,9 +343,10 @@ class _RunDetail extends ConsumerWidget {
                 },
               ),
               if (!r.status.isTerminal)
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.stop_circle_outlined, size: 16, color: AppColors.danger),
-                  label: const Text('Cancel run'),
+                WdsButton(
+                  label: 'Cancel run',
+                  icon: Icons.stop_circle_outlined,
+                  variant: WdsButtonVariant.danger,
                   onPressed: () async {
                     try {
                       await ref.read(repositoryProvider).cancelRun(r.id);
@@ -391,7 +393,7 @@ class _RunDetail extends ConsumerWidget {
             _EventLog(id: id),
             const SizedBox(height: 14),
             if (r.variables['surface'] is Map) ...[
-              const PanelSectionLabel('Surface'),
+              const WdsSectionHeader(title: 'Surface'),
               _RunSurface(runId: r.id, surface: Map<String, dynamic>.from(r.variables['surface'] as Map)),
               const SizedBox(height: 14),
             ],
