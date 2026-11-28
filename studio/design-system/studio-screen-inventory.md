@@ -46,13 +46,13 @@ The following builders are explicitly registered in
 | tasks | `TasksScreen` | Uses `WdsPageHeader`, `WdsFilterToolbar`, `WdsSearchField`, `WdsSurface`, `WdsBadge`, `WdsButton` and `WdsIconButton`; overdue ordering, task completion, message delivery and due-time logic remain feature-owned | Migrated in M19 |
 | projects | `ProjectsScreen` | Uses `WdsPageHeader`, `WdsButton`, `WdsFilterToolbar`, `WdsSearchField`, `WdsDataTable`, `WdsIconButton`, `WdsBadge` and `WdsEmptyState`; project lifecycle and active-project state remain feature-owned | Migrated in M15; search/filter is feature-owned |
 | channels | `ChannelsScreen` | Uses `WdsPageHeader`, `WdsBadge`, `WdsEmptyState` and `WdsSurface` for trigger/account cards; trigger lifecycle, OAuth consent, credentials and allow-lists remain feature-owned | Adopted in M16; surface consistency completed in M22 |
-| mapper | `MapperScreen` | Editor-specific; inspect editor toolbar/panel and property inspector | Registered; screen internals not yet scanned |
+| mapper | `MapperScreen` | Uses `WdsPageHeader`, `WdsButton`, `WdsSurface` and `WdsSectionHeader` for the three-pane preview workspace; field/pipeline builders, JSON editing, debounce, request sequencing and preview execution remain feature-owned | Adopted in M23; specialized mapping editors intentionally remain feature-owned |
 | mcp | `McpScreen` | Uses `WdsPageHeader`, `WdsButton`, `WdsIconButton`, `WdsBadge`, `WdsEmptyState` and `WdsSurface` for server cards; OpenAPI preview/import, lazy tool details, security and lifecycle remain feature-owned | Adopted in M16; surface consistency completed in M22 |
 | secrets | `SecretsScreen` | Candidate for table and field presentation; secret values and reveal policy stay feature-owned | Registered; screen internals not yet scanned |
 | config | `ConfigScreen` | Uses `WdsPageHeader`, `WdsButton`, `WdsEmptyState`, `WdsSurface`, `WdsIconButton` and `WdsFieldGroup`; scope, validation, persistence and confirmation remain feature-owned | Migrated in M18 |
 | workspace | `WorkspaceScreen` | Uses `WdsPageHeader`, `WdsSurface`, `WdsButton`, `WdsSectionHeader`, `WdsBadge` and WDS empty states across export/import, release planning, template gallery and reports | Migrated in M18 |
 | surfaces | `SurfacesScreen` / `SurfaceView` | Uses `WdsPageHeader`, `WdsSectionHeader`, `WdsButton`, `WdsBadge`, `WdsSurface`, `WdsEmptyState`, `WdsFieldMessage` and `WdsPropertyRow`; dynamic parsing, server validation, action allow-listing and task authorization remain feature-owned | Migrated in M21 |
-| feedback | `FeedbackScreen` | Form and submission behavior stay feature-owned; WDS controls may be reused | Registered; screen internals not yet scanned |
+| feedback | `FeedbackScreen` | Uses `WdsPageHeader`, `WdsButton`, `WdsIconButton`, `WdsFilterToolbar`, `WdsSearchField`, `WdsSurface` and `WdsEmptyState`; feedback policy, filters, permissions and repository operations remain feature-owned | Adopted in M23 |
 | settings | `SettingsScreen` | Uses `WdsPageHeader`, `WdsInspectorSection`, `WdsFieldGroup`, `WdsButton`, `WdsSurface` and `WdsBadge`; API config, token masking and connection testing remain feature-owned | Migrated in M17 |
 
 Dashboard is inserted as the first navigation item. Plugin screens are supplied
@@ -344,3 +344,35 @@ consent, secret references, allow-lists and provider state. MCP continues to
 own OpenAPI parsing/preview, stale-preview invalidation, endpoint security,
 lazy tool-detail loading, credential configuration and server lifecycle.
 WDS owns only the reusable visual surface and semantic presentation.
+
+
+## M23 — Feedback and Mapper presentation
+
+Feedback now uses the shared page header, responsive filter toolbar, search
+field, action buttons, icon action, resource surfaces and empty states. Its
+filter/query state, tenant-admin access, CSV export/copy behavior, status
+updates, feedback submission, credential masking and confirmation behavior
+remain in the Feedback feature and repository.
+
+Mapper now uses the shared page header, primary run action, surfaces and
+section headings for its three-pane preview workspace. The specialized field
+mapping and EIP pipeline builders remain feature-owned: their row models,
+transforms, expression/path completion, JSON editing, sample selection,
+debounced preview requests, stale-response sequencing and result interpretation
+are domain-specific and should not be generalized into WDS. The preview remains
+side-effect-free and connector-free.
+
+## Dynamic plugin screen boundary
+
+The static inventory above describes only platform-owned screen builders.
+Plugin-contributed destinations are discovered and composed by the host at
+runtime and cannot be exhaustively listed here. The contribution boundary is:
+
+- The host resolves plugin registration, discovery, route/destination identity,
+  availability, authorization and navigation composition.
+- A plugin owns its screen state, data access, validation, domain interactions
+  and lifecycle.
+- A plugin may optionally compose public WDS presentation primitives, but its
+  extension contract must not depend on WDS private implementation details.
+- WDS remains a presentation library; it does not discover, activate, authorize
+  or execute plugins.
