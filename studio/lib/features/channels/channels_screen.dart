@@ -242,6 +242,7 @@ class _TriggerCard extends ConsumerWidget {
             },
           ),
           IconButton(
+            tooltip: 'Delete trigger',
             icon: const Icon(Icons.delete_outline_rounded, size: 18),
             onPressed: () async {
               final ok = await showConfirmDialog(context,
@@ -540,6 +541,7 @@ class _ConnectionCard extends ConsumerWidget {
             child: Text(c.status == 'CONNECTED' ? 'Reconnect' : 'Authorise'),
           ),
           IconButton(
+            tooltip: 'Remove connected account',
             icon: const Icon(Icons.delete_outline_rounded, size: 18),
             onPressed: () async {
               final ok = await showConfirmDialog(context,

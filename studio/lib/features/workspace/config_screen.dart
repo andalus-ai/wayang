@@ -71,6 +71,7 @@ class ConfigScreen extends ConsumerWidget {
                             subtitle: Text(c.value, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
                             onTap: () => _edit(context, ref, scope, c),
                             trailing: IconButton(
+                              tooltip: 'Delete setting',
                               icon: const Icon(Icons.delete_outline_rounded, size: 18),
                               onPressed: () async {
                                 final ok = await showConfirmDialog(context,
