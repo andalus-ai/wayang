@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/widgets.dart';
 import '../../data/api_client.dart';
 import '../../providers/app_providers.dart';
+import '../../design_system/wds.dart';
 import 'field_mapping_builder.dart';
 import 'pipeline_builder.dart';
 
@@ -142,10 +143,9 @@ class _MapperScreenState extends ConsumerState<MapperScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ScreenHeader(
+          WdsPageHeader(
             title: 'Mapper',
-            subtitle: 'Try a field mapping or an integration pipeline on sample data. Nothing is saved or called.',
-            icon: Icons.swap_horiz_rounded,
+            description: 'Try a field mapping or an integration pipeline on sample data. Nothing is saved or called.',
             actions: [
               PopupMenuButton<_Sample>(
                 tooltip: 'Examples',
@@ -156,11 +156,11 @@ class _MapperScreenState extends ConsumerState<MapperScreen> {
                 },
                 itemBuilder: (_) => [for (final s in _samples) PopupMenuItem(value: s, child: Text(s.label))],
               ),
-              const SizedBox(width: 4),
-              ElevatedButton.icon(
+              WdsButton(
+                label: 'Run',
+                icon: Icons.play_arrow_rounded,
                 onPressed: _busy ? null : _run,
-                icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                label: const Text('Run'),
+                isLoading: _busy,
               ),
             ],
           ),
@@ -264,12 +264,15 @@ class _MapperScreenState extends ConsumerState<MapperScreen> {
     return SingleChildScrollView(child: SelectableText(_result!, style: _mono));
   }
 
-  Widget _pane(String label, {required Widget child}) => SurfacePanel(
+  Widget _pane(String label, {required Widget child}) => WdsSurface(
         padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          PanelSectionLabel(label),
-          const SizedBox(height: 6),
-          Expanded(child: child),
-        ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            WdsSectionHeader(title: label),
+            const SizedBox(height: 8),
+            Expanded(child: child),
+          ],
+        ),
       );
 }
