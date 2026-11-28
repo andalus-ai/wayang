@@ -212,3 +212,16 @@ lifecycle, credential references and allow-lists. MCP owns OpenAPI
 preview/import, stale-preview invalidation, security declarations, lazy tool
 details and server lifecycle. Neither feature's state, authorization, API
 access or validation moves into WDS.
+
+
+## M23 — Feedback and Mapper
+
+Feedback adopts shared page, filter/search, action, surface and empty-state
+components while retaining its submission, tenant authorization, masking,
+export and status behavior in the feature/repository.
+
+Mapper adopts shared page and pane framing. Its field-mapping and integration
+pipeline builders remain specialized feature components; WDS does not own
+mapping expressions, transformation semantics, preview requests or result
+interpretation. Plugin screens may optionally use WDS, while registration,
+discovery, routing and permissions remain host-owned.

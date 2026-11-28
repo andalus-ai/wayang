@@ -7,6 +7,7 @@ import '../../core/widgets.dart';
 import '../../data/api_client.dart';
 import '../../data/feedback_model.dart';
 import '../../providers/app_providers.dart';
+import '../../design_system/wds.dart';
 
 /// Opens the feedback form. [error] pre-fills an error report with what the app caught (the person can edit or remove it before sending);
 /// [details] adds short named details such as a run id. Nothing leaves the app until the person presses Send, and the form shows exactly
@@ -162,17 +163,22 @@ class _FeedbackDialogState extends ConsumerState<FeedbackDialog> {
                 ],
               ),
               if (_problem != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(_problem!, style: const TextStyle(fontSize: 12, color: AppColors.danger)),
-                ),
+                WdsFieldMessage(message: _problem!),
             ],
           ),
         ),
       ),
       actions: [
-        TextButton(onPressed: _busy ? null : _cancel, child: const Text('Cancel')),
-        FilledButton(onPressed: _busy ? null : _send, child: Text(_busy ? 'Sending...' : 'Send')),
+        WdsButton(
+          label: 'Cancel',
+          variant: WdsButtonVariant.tertiary,
+          onPressed: _busy ? null : _cancel,
+        ),
+        WdsButton(
+          label: _busy ? 'Sending...' : 'Send',
+          onPressed: _busy ? null : _send,
+          isLoading: _busy,
+        ),
       ],
     );
   }

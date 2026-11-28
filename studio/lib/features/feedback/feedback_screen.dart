@@ -8,6 +8,7 @@ import '../../core/widgets.dart';
 import '../../data/api_client.dart';
 import '../../data/feedback_model.dart';
 import '../../providers/app_providers.dart';
+import '../../design_system/wds.dart';
 import 'feedback_dialog.dart';
 
 /// Which kind the admin list is filtered to (null = all).
@@ -38,18 +39,20 @@ class FeedbackScreen extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ScreenHeader(
+          WdsPageHeader(
             title: 'Feedback',
-            subtitle: 'Ratings, comments, bugs, ideas and error reports from your users. Credentials are masked before they are stored.',
-            icon: Icons.feedback_outlined,
+            description: 'Ratings, comments, bugs, ideas and error reports from your users. Credentials are masked before they are stored.',
             actions: [
-              OutlinedButton.icon(
+              WdsButton(
+                label: 'Send feedback',
+                icon: Icons.edit_outlined,
+                variant: WdsButtonVariant.secondary,
                 onPressed: () => showFeedbackDialog(context),
-                icon: const Icon(Icons.edit_outlined, size: 16),
-                label: const Text('Send feedback'),
               ),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
+              WdsButton(
+                label: 'Copy CSV',
+                icon: Icons.content_copy_rounded,
+                variant: WdsButtonVariant.secondary,
                 onPressed: () async {
                   try {
                     final csv = await ref.read(repositoryProvider).exportFeedbackCsv(kind: filter);
@@ -59,69 +62,66 @@ class FeedbackScreen extends ConsumerWidget {
                     if (context.mounted) showToast(context, errText(e), isError: true);
                   }
                 },
-                icon: const Icon(Icons.content_copy_rounded, size: 16),
-                label: const Text('Copy CSV'),
               ),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
+              WdsButton(
+                label: 'Export CSV',
+                icon: Icons.download_rounded,
+                variant: WdsButtonVariant.secondary,
                 onPressed: () async {
                   final command = feedbackExportCommand(ref.read(apiConfigProvider).baseUrl, kind: filter);
                   await Clipboard.setData(ClipboardData(text: command));
                   if (context.mounted) showToast(context, 'Copied a command that downloads the CSV. It holds no token: set WAYANG_TOKEN in your shell.');
                 },
-                icon: const Icon(Icons.download_rounded, size: 16),
-                label: const Text('Export CSV'),
               ),
-              const SizedBox(width: 8),
-              IconButton(tooltip: 'Refresh', onPressed: () {
-                ref.invalidate(feedbackListProvider);
-                ref.invalidate(feedbackSummaryProvider);
-              }, icon: const Icon(Icons.refresh_rounded, size: 18)),
+              WdsIconButton(
+                tooltip: 'Refresh',
+                icon: Icons.refresh_rounded,
+                onPressed: () {
+                  ref.invalidate(feedbackListProvider);
+                  ref.invalidate(feedbackSummaryProvider);
+                },
+              ),
             ],
           ),
           if (summary != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(summary.line, style: const TextStyle(fontSize: 12))),
           const SizedBox(height: 12),
-          Wrap(spacing: 8, children: [
-            ChoiceChip(label: const Text('All'), selected: filter == null, onSelected: (_) => ref.read(feedbackKindFilterProvider.notifier).state = null),
-            for (final k in FeedbackKind.values)
-              ChoiceChip(
-                label: Text(summary != null && summary.openOf(k.api) > 0 ? '${k.label} (${summary.openOf(k.api)})' : k.label),
-                selected: filter == k.api,
-                onSelected: (_) => ref.read(feedbackKindFilterProvider.notifier).state = k.api,
-              ),
-          ]),
-          const SizedBox(height: 8),
-          Row(children: [
-            SizedBox(
-              width: 280,
-              child: TextField(
-                onChanged: (v) => ref.read(_feedbackQueryProvider.notifier).state = v,
-                decoration: const InputDecoration(isDense: true, prefixIcon: Icon(Icons.search_rounded, size: 18), hintText: 'Search feedback'),
-              ),
+          WdsFilterToolbar(
+            search: WdsSearchField(
+              hint: 'Search feedback',
+              onChanged: (v) => ref.read(_feedbackQueryProvider.notifier).state = v,
             ),
-            const SizedBox(width: 12),
-            FilterChip(
-              label: const Text('Hide done'),
-              selected: hideDone,
-              onSelected: (v) => ref.read(_feedbackHideDoneProvider.notifier).state = v,
-            ),
-          ]),
+            filters: [
+              ChoiceChip(label: const Text('All'), selected: filter == null, onSelected: (_) => ref.read(feedbackKindFilterProvider.notifier).state = null),
+              for (final k in FeedbackKind.values)
+                ChoiceChip(
+                  label: Text(summary != null && summary.openOf(k.api) > 0 ? '${k.label} (${summary.openOf(k.api)})' : k.label),
+                  selected: filter == k.api,
+                  onSelected: (_) => ref.read(feedbackKindFilterProvider.notifier).state = k.api,
+                ),
+              FilterChip(
+                label: const Text('Hide done'),
+                selected: hideDone,
+                onSelected: (v) => ref.read(_feedbackHideDoneProvider.notifier).state = v,
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
           Expanded(
             child: items.when(
               loading: () => const LoadingView(),
               error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(feedbackListProvider)),
               data: (list) {
-                if (list.isEmpty) return const EmptyState(icon: Icons.feedback_outlined, title: 'No feedback yet');
+                if (list.isEmpty) return const WdsEmptyState(icon: Icons.feedback_outlined, title: 'No feedback yet', description: 'Feedback submitted by users will appear here.');
                 final shown = filterFeedback(list, query, hideDone: hideDone);
                 if (shown.isEmpty) {
-                  return const EmptyState(icon: Icons.search_off_rounded, title: 'Nothing matches', message: 'Change the search or show done items.');
+                  return const WdsEmptyState(icon: Icons.search_off_rounded, title: 'Nothing matches', description: 'Change the search or show done items.');
                 }
                 return ListView(children: [for (final f in shown) _FeedbackCard(item: f)]);
               },
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -135,8 +135,11 @@ class _FeedbackCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final stack = item.context['stack'];
     final details = {for (final e in item.context.entries) if (e.key != 'stack') e.key: e.value};
-    return Card(
-      child: ExpansionTile(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: WdsSurface(
+        padding: EdgeInsets.zero,
+        child: ExpansionTile(
         leading: Icon(
           item.rating == 'up'
               ? Icons.thumb_up_alt_rounded
@@ -183,6 +186,7 @@ class _FeedbackCard extends ConsumerWidget {
               child: SelectableText(stack, style: const TextStyle(fontSize: 10.5, fontFamily: 'monospace')),
             ),
         ],
+        ),
       ),
     );
   }

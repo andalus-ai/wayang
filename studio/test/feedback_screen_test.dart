@@ -7,6 +7,7 @@ import 'package:wayang_studio/data/wayang_repository.dart';
 import 'package:wayang_studio/features/feedback/feedback_dialog.dart';
 import 'package:wayang_studio/features/feedback/feedback_screen.dart';
 import 'package:wayang_studio/providers/app_providers.dart';
+import 'package:wayang_studio/design_system/wds.dart';
 
 class _FakeRepo extends WayangRepository {
   _FakeRepo(this.items) : super(ApiClient(const ApiConfig(baseUrl: 'http://localhost:0')));
@@ -49,6 +50,10 @@ void main() {
   testWidgets('search and Hide done narrow the list', (tester) async {
     final repo = _FakeRepo([_item('1', 'Save button broken'), _item('2', 'Crash on run'), _item('3', 'Old crash', status: 'done')]);
     await _pump(tester, repo, const FeedbackScreen());
+    expect(find.byType(WdsPageHeader), findsOneWidget);
+    expect(find.byType(WdsFilterToolbar), findsOneWidget);
+    expect(find.byType(WdsSearchField), findsOneWidget);
+    expect(find.byType(WdsSurface), findsNWidgets(3));
     expect(find.text('Save button broken'), findsOneWidget);
     expect(find.text('Old crash'), findsOneWidget);
 
