@@ -168,6 +168,20 @@ class AgentPackageArtifactVerifierTest {
                 "evidence/provenance.json", invalidProvenance));
         assertThrows(AgentPackageArtifactVerifier.VerificationException.class,
                 () -> verifier.verify(invalidAttestation, sign(invalidAttestation, "acme:support", "1.2.0", "acme:publisher")));
+
+        byte[] malformedDigestProvenance = """
+                {"_type":"https://in-toto.io/Statement/v1","subject":[{"name":"acme:support","digest":{"sha256":"not-a-sha256"}}],
+                 "predicateType":"https://slsa.dev/provenance/v1","predicate":{}}
+                """.getBytes(StandardCharsets.UTF_8);
+        String malformedDigestManifest = withResources(List.of(resource(
+                "evidence/provenance.json", "application/vnd.in-toto+json",
+                sha256(malformedDigestProvenance), "provenance")));
+        byte[] malformedDigestArchive = archive(Map.of(
+                AgentPackageArtifactVerifier.JSON_MANIFEST, malformedDigestManifest.getBytes(StandardCharsets.UTF_8),
+                "evidence/provenance.json", malformedDigestProvenance));
+        assertThrows(AgentPackageArtifactVerifier.VerificationException.class,
+                () -> verifier.verify(malformedDigestArchive,
+                        sign(malformedDigestArchive, "acme:support", "1.2.0", "acme:publisher")));
     }
 
     @Test
