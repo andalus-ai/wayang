@@ -567,3 +567,10 @@ class TemplateInfo {
             p.name: (values[p.name] ?? '').trim(),
       };
 }
+
+/// What an import with [o] can do that is hard to undo, as short sentences for a confirmation; empty when nothing needs one.
+List<String> applyWarnings(ImportOptions o) => [
+      if (o.onConflict == 'overwrite') 'Existing definitions with the same id are overwritten.',
+      if (o.tenantConfig) 'Tenant-wide settings are replaced for everyone.',
+      if (o.allowUnsigned) 'The bundle is accepted without a signature check.',
+    ];
