@@ -281,5 +281,90 @@ void main() {
       expect(find.text('Support agent'), findsOneWidget);
       expect(find.text('A name is required'), findsOneWidget);
     });
+
+    testWidgets('WdsEditorToolbar composes title and actions responsively', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        theme: ThemeData(useMaterial3: true),
+        home: Scaffold(
+          body: SizedBox(
+            width: 360,
+            child: WdsEditorToolbar(
+              title: 'Customer onboarding',
+              subtitle: 'Draft workflow',
+              actions: [
+                IconButton(
+                  tooltip: 'Undo',
+                  onPressed: () {},
+                  icon: const Icon(Icons.undo),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ));
+      expect(find.text('Customer onboarding'), findsOneWidget);
+      expect(find.text('Draft workflow'), findsOneWidget);
+      expect(find.byTooltip('Undo'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('WdsEditorPanel renders header, content and footer', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        theme: ThemeData(useMaterial3: true),
+        home: Scaffold(
+          body: SizedBox(
+            height: 500,
+            child: WdsEditorPanel(
+              title: 'Properties',
+              description: 'Selected node',
+              child: const Text('Inspector content'),
+              footer: const Text('Panel footer'),
+            ),
+          ),
+        ),
+      ));
+      expect(find.text('Properties'), findsOneWidget);
+      expect(find.text('Inspector content'), findsOneWidget);
+      expect(find.text('Panel footer'), findsOneWidget);
+    });
+
+    testWidgets('WdsNodeCard renders ports, status and callbacks', (tester) async {
+      WdsNodePortData? selectedPort;
+      var nodeSelected = false;
+      await tester.pumpWidget(MaterialApp(
+        theme: ThemeData(useMaterial3: true),
+        home: Scaffold(
+          body: Center(
+            child: WdsNodeCard(
+              title: 'HTTP Request',
+              subtitle: 'Integration',
+              selected: true,
+              status: const WdsBadge(label: 'Ready', tone: WdsBadgeTone.success),
+              inputs: const [
+                WdsNodePortData(id: 'url', label: 'URL', isRequired: true),
+              ],
+              outputs: const [
+                WdsNodePortData(
+                  id: 'response',
+                  label: 'Response',
+                  kind: WdsNodePortKind.event,
+                  isConnected: true,
+                ),
+              ],
+              onTap: () => nodeSelected = true,
+              onPortTap: (port) => selectedPort = port,
+            ),
+          ),
+        ),
+      ));
+      expect(find.text('HTTP Request'), findsOneWidget);
+      expect(find.text('Ready'), findsOneWidget);
+      expect(find.text('URL *'), findsOneWidget);
+      expect(find.text('Response'), findsOneWidget);
+      await tester.tap(find.text('HTTP Request'));
+      expect(nodeSelected, isTrue);
+      await tester.tap(find.text('URL *'));
+      expect(selectedPort?.id, 'url');
+    });
   });
 }
