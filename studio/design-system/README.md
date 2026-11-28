@@ -98,3 +98,22 @@ to each feature module. See [execution view examples](examples/execution-views.m
 for Agent Builder run inspection, ESB connector traces, BPMN process-instance
 history and BI pipeline execution. The examples define presentation patterns,
 not shared domain models or runtime contracts.
+
+
+## Component showcase
+
+Mount `WdsComponentShowcase(examples: WdsShowcaseCatalog.examples)` from a
+host-owned route to browse the starter catalog. The showcase supports text
+search, category filters, responsive card columns, light/dark preview themes
+and copyable Dart snippets. Hosts may supply their own `WdsShowcaseExample`
+values and remain responsible for route registration and access control. See
+[showcase guide](showcase.md) for the extension contract and examples.
+
+
+## Legacy widget migration
+
+The compatibility inventory in [legacy widget migration](legacy-widget-migration.md)
+classifies existing `core/widgets.dart` APIs, distinguishes true presentation
+primitives from feature-owned behavior, and defines a staged migration with
+compatibility and test requirements. It is an inventory and migration guide,
+not a mandate to remove legacy APIs in one pass.
