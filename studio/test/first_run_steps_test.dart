@@ -23,7 +23,6 @@ void main() {
     expect(firstRunSteps(connected: true, processes: 0, runs: 0, executes: false).map((e) => e.navKey), ['settings', 'bpmn']);
     expect(firstRunSteps(connected: true, processes: 1, runs: 0, executes: false), isEmpty);
   });
-}
 
 
   test('dashboard maps API run statuses to neutral WDS execution states', () {
@@ -33,3 +32,4 @@ void main() {
     expect(dashboardRunStatus(RunStatus.failed), WdsExecutionStatus.failed);
     expect(dashboardRunStatus(RunStatus.cancelled), WdsExecutionStatus.cancelled);
   });
+}
