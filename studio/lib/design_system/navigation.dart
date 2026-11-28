@@ -44,11 +44,12 @@ class WdsNavigationRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Container(
       width: extended ? WdsLayout.sidebarExpandedWidth : WdsLayout.sidebarCompactWidth,
-      decoration: const BoxDecoration(
-        color: AppColors.darkSurface,
-        border: Border(right: BorderSide(color: AppColors.darkBorder)),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border(right: BorderSide(color: scheme.outlineVariant)),
       ),
       child: SafeArea(
         child: Column(
@@ -80,7 +81,7 @@ class WdsNavigationRail extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleMedium?.copyWith(
-                          color: AppColors.textPrimaryDark,
+                          color: scheme.onSurface,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -89,7 +90,7 @@ class WdsNavigationRail extends StatelessWidget {
                 ],
               ),
             ),
-            const Divider(height: 1),
+            Divider(height: 1, color: scheme.outlineVariant),
             if (sectionLabel != null && extended)
               Padding(
                 padding: const EdgeInsets.fromLTRB(WdsSpacing.lg, WdsSpacing.lg, WdsSpacing.md, WdsSpacing.xs),
@@ -98,7 +99,7 @@ class WdsNavigationRail extends StatelessWidget {
                   child: Text(
                     sectionLabel!.toUpperCase(),
                     style: theme.textTheme.labelSmall?.copyWith(
-                      color: AppColors.textMutedDark,
+                      color: scheme.onSurfaceVariant,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1,
                     ),
@@ -141,7 +142,9 @@ class _WdsRailItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground = selected ? AppColors.primaryBright : AppColors.textMutedDark;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final foreground = selected ? scheme.primary : scheme.onSurfaceVariant;
     return Padding(
       padding: const EdgeInsets.only(bottom: WdsSpacing.xs),
       child: Tooltip(
@@ -163,10 +166,10 @@ class _WdsRailItem extends StatelessWidget {
                   vertical: WdsSpacing.sm,
                 ),
                 decoration: BoxDecoration(
-                  color: selected ? AppColors.primary.withValues(alpha: 0.16) : null,
+                  color: selected ? scheme.primary.withValues(alpha: 0.14) : null,
                   borderRadius: BorderRadius.circular(WdsRadius.md),
                   border: selected
-                      ? Border.all(color: AppColors.primary.withValues(alpha: 0.4))
+                      ? Border.all(color: scheme.primary.withValues(alpha: 0.45))
                       : null,
                 ),
                 alignment: extended ? Alignment.centerLeft : Alignment.center,
@@ -181,10 +184,10 @@ class _WdsRailItem extends StatelessWidget {
                           item.label,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: theme.textTheme.labelLarge?.copyWith(
                             fontSize: 13,
                             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                            color: selected ? AppColors.textPrimaryDark : AppColors.textMutedDark,
+                            color: foreground,
                           ),
                         ),
                       ),
@@ -216,9 +219,11 @@ class WdsCompactNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final activeIndex = items.indexWhere((item) => item.key == selectedKey);
+    if (items.isEmpty) return const SizedBox.shrink();
     return NavigationBar(
-      backgroundColor: AppColors.darkSurface,
+      backgroundColor: theme.colorScheme.surface,
       selectedIndex: activeIndex >= 0 ? activeIndex : 0,
       onDestinationSelected: (index) => onSelected(items[index].key),
       destinations: [
