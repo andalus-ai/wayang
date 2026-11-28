@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/widgets.dart';
 import '../../data/api_client.dart';
+import '../../data/project_edit.dart';
 import '../../providers/app_providers.dart';
 
 class ProjectsScreen extends ConsumerWidget {
@@ -34,7 +35,14 @@ class ProjectsScreen extends ConsumerWidget {
             child: projects.when(
               loading: () => const LoadingView(),
               error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(projectsProvider)),
-              data: (list) => ListView(children: [
+              data: (list) => list.isEmpty
+                  ? EmptyState(
+                      icon: Icons.folder_open_rounded,
+                      title: 'No projects yet',
+                      message: 'Create one to group related agents, pipelines and processes.',
+                      action: ElevatedButton(onPressed: () => _edit(context, ref, null, null), child: const Text('New project')),
+                    )
+                  : ListView(children: [
                 Card(
                   child: RadioListTile<String?>(
                     value: null,
@@ -83,29 +91,66 @@ class ProjectsScreen extends ConsumerWidget {
   }
 
   Future<void> _edit(BuildContext context, WidgetRef ref, String? id, String? current) async {
+    final others = (ref.read(projectsProvider).valueOrNull ?? const []).where((p) => p.id != id).map((p) => p.name).toList();
+    final repo = ref.read(repositoryProvider);
     final ctrl = TextEditingController(text: current ?? '');
-    final name = await showDialog<String>(
+    String? error;
+    var busy = false;
+    final saved = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(id == null ? 'New project' : 'Rename project'),
-        content: TextField(controller: ctrl, autofocus: true, decoration: const InputDecoration(labelText: 'Name')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, ctrl.text), child: const Text('Save')),
-        ],
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) {
+          Future<void> submit() async {
+            if (busy) return;
+            final problem = projectNameProblem(ctrl.text, others);
+            if (problem != null) return setState(() => error = problem);
+            final name = ctrl.text.trim();
+            if (id != null && name == current) return Navigator.pop(ctx, false);
+            setState(() {
+              busy = true;
+              error = null;
+            });
+            try {
+              if (id == null) {
+                await repo.createProject(name);
+              } else {
+                await repo.updateProject(id, name);
+              }
+              if (ctx.mounted) Navigator.pop(ctx, true);
+            } catch (e) {
+              if (ctx.mounted) {
+                setState(() {
+                  busy = false;
+                  error = errText(e);
+                });
+              }
+            }
+          }
+
+          return AlertDialog(
+            title: Text(id == null ? 'New project' : 'Rename project'),
+            content: TextField(
+              controller: ctrl,
+              autofocus: true,
+              maxLength: kMaxProjectName,
+              enabled: !busy,
+              onSubmitted: (_) => submit(),
+              decoration: InputDecoration(labelText: 'Name', errorText: error),
+            ),
+            actions: [
+              TextButton(onPressed: busy ? null : () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+              ElevatedButton(
+                onPressed: busy ? null : submit,
+                child: busy
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Save'),
+              ),
+            ],
+          );
+        },
       ),
     );
-    if (name == null || name.trim().isEmpty) return;
-    try {
-      final repo = ref.read(repositoryProvider);
-      if (id == null) {
-        await repo.createProject(name.trim());
-      } else {
-        await repo.updateProject(id, name.trim());
-      }
-      ref.invalidate(projectsProvider);
-    } catch (e) {
-      if (context.mounted) showToast(context, errText(e), isError: true);
-    }
+    if (saved == true) ref.invalidate(projectsProvider);
   }
 }
