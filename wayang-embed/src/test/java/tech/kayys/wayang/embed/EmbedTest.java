@@ -277,6 +277,24 @@ class EmbedTest {
     // ------------------------------------------------------------------ CLI
 
     @Test
+    void theCliRefusesAnInputFileOverOneMegabyteAndReadsASmallOne(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        var rt = runtime(Map.of("WAYANG_SECRET_GREET_KEY", "k"), null);
+        var out = new java.io.ByteArrayOutputStream();
+        var err = new java.io.ByteArrayOutputStream();
+        var po = new java.io.PrintStream(out);
+        var pe = new java.io.PrintStream(err);
+        java.nio.file.Path big = dir.resolve("big.json");
+        java.nio.file.Files.write(big, new byte[1_000_001]);
+        assertEquals(64, Cli.run(new String[] { "run", "simple", "--input", big.toString() }, rt, k -> null, new java.io.ByteArrayInputStream(new byte[0]), po, pe));
+        assertTrue(err.toString().contains("larger than 1 MB"), err.toString());
+        java.nio.file.Path small = dir.resolve("small.json");
+        java.nio.file.Files.writeString(small, "{\"person\":\"Cy\"}");
+        assertEquals(0, Cli.run(new String[] { "run", "simple", "--input", small.toString() }, rt, k -> null, new java.io.ByteArrayInputStream(new byte[0]), po, pe));
+        assertEquals(1_000_001, Cli.readAtMost(big, 1_000_001).length);
+        assertEquals(10, Cli.readAtMost(big, 10).length, "never reads past the limit");
+    }
+
+    @Test
     void theCliRunsOnceAndReportsWithExitCodes() throws Exception {
         var rt = runtime(Map.of("WAYANG_SECRET_GREET_KEY", "k"), null);
         var out = new java.io.ByteArrayOutputStream();

@@ -149,7 +149,7 @@ public class VaultClient {
     public static Supplier<String> tokenFile(java.nio.file.Path file) {
         return () -> {
             try {
-                return java.nio.file.Files.readString(file).strip();
+                return tech.kayys.wayang.api.secret.BoundedFiles.readString(file, tech.kayys.wayang.api.secret.BoundedFiles.SMALL).strip();
             } catch (IOException e) {
                 throw new VaultException("Cannot read the Vault token file", 0);
             }
