@@ -182,3 +182,19 @@ The dashboard feature continues to own API aggregation, provider refresh,
 first-run progress, connection recovery, navigation, recent-run selection and
 the mapping from API run states to neutral WDS execution states. WDS does not
 fetch metrics, infer health, or own navigation.
+
+
+## M21 — Declarative UI Surfaces adoption
+
+The Surfaces workbench uses `WdsPageHeader`, `WdsSectionHeader`,
+`WdsButton`, `WdsBadge`, `WdsSurface`, `WdsEmptyState` and
+`WdsFieldMessage` for its editor/preview composition, validation state and
+actions. The editor and preview switch from a side-by-side layout to a stacked
+layout at compact widths.
+
+The dynamic `SurfaceView` renderer uses semantic WDS badges, property rows
+and cards. Its domain renderer remains feature-owned: JSON parsing and size
+limits, server validation, allowed action mapping, task-action authorization,
+navigation allow-listing and safe rendering rules do not move into WDS.
+Pasted surfaces remain read-only; they cannot complete tasks, fetch images or
+submit arbitrary actions.
