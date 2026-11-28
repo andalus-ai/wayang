@@ -9,6 +9,7 @@ import '../../data/api_client.dart';
 import '../../data/mcp_edit.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
+import '../../design_system/wds.dart';
 
 final mcpServersProvider = FutureProvider.autoDispose<List<McpServerInfo>>((ref) => ref.watch(repositoryProvider).listMcpServers());
 
@@ -25,20 +26,22 @@ class McpScreen extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ScreenHeader(
+          WdsPageHeader(
             title: 'MCP servers',
-            subtitle: 'Turn an OpenAPI / Swagger spec into an MCP server. Read-only operations by default.',
-            icon: Icons.hub_rounded,
+            description: 'Turn an OpenAPI / Swagger spec into an MCP server. Read-only operations by default.',
             actions: [
-              IconButton(tooltip: 'Refresh', onPressed: () => ref.invalidate(mcpServersProvider), icon: const Icon(Icons.refresh_rounded)),
-              const SizedBox(width: 4),
-              ElevatedButton.icon(
+              WdsIconButton(
+                tooltip: 'Refresh',
+                onPressed: () => ref.invalidate(mcpServersProvider),
+                icon: Icons.refresh_rounded,
+              ),
+              WdsButton(
+                label: 'Import OpenAPI',
+                icon: Icons.add_rounded,
                 onPressed: () async {
                   final done = await showDialog<bool>(context: context, builder: (_) => const _ImportDialog());
                   if (done == true) ref.invalidate(mcpServersProvider);
                 },
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('Import OpenAPI'),
               ),
             ],
           ),
@@ -48,7 +51,7 @@ class McpScreen extends ConsumerWidget {
               loading: () => const LoadingView(),
               error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(mcpServersProvider)),
               data: (list) => list.isEmpty
-                  ? const EmptyState(icon: Icons.hub_outlined, title: 'No MCP servers', message: 'Import an OpenAPI document to create one.')
+                  ? const WdsEmptyState(icon: Icons.hub_outlined, title: 'No MCP servers', description: 'Import an OpenAPI document to create one.')
                   : ListView(children: [for (final s in list) _ServerCard(s: s)]),
             ),
           ),
@@ -167,7 +170,11 @@ class _Tools extends StatelessWidget {
           title: Row(children: [
             Text(t.name, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w600)),
             const SizedBox(width: 8),
-            StatusPill(label: t.readOnly ? 'read-only' : (t.destructive ? 'destructive' : 'writes'), color: t.readOnly ? Colors.green : (t.destructive ? Colors.red : Colors.orange), dense: true),
+            WdsBadge(
+              label: t.readOnly ? 'read-only' : (t.destructive ? 'destructive' : 'writes'),
+              tone: t.readOnly ? WdsBadgeTone.success : (t.destructive ? WdsBadgeTone.danger : WdsBadgeTone.warning),
+              dense: true,
+            ),
           ]),
           subtitle: Text('${t.args.isEmpty ? 'no arguments' : t.args.join(', ')}\n${t.description.split('\n').first}', style: const TextStyle(fontSize: 11)),
           isThreeLine: true,

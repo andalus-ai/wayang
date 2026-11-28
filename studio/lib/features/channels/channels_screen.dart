@@ -10,6 +10,7 @@ import '../../data/api_client.dart';
 import '../../data/channel_edit.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
+import '../../design_system/wds.dart';
 
 final triggersProvider = FutureProvider.autoDispose<List<TriggerInfo>>((ref) => ref.watch(repositoryProvider).listTriggers());
 
@@ -119,10 +120,9 @@ class ChannelsScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const ScreenHeader(
+            const WdsPageHeader(
               title: 'Channels',
-              subtitle: 'Start processes from chats and mail. Every channel needs an allow-list of who may reach the assistant.',
-              icon: Icons.forum_rounded,
+              description: 'Start processes from chats and mail. Every channel needs an allow-list of who may reach the assistant.',
             ),
             const SizedBox(height: 8),
             const TabBar(tabs: [Tab(text: 'Triggers'), Tab(text: 'Connected accounts')]),
@@ -217,10 +217,10 @@ class _TriggerCard extends ConsumerWidget {
         title: Row(children: [
           Text(t.id, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w600)),
           const SizedBox(width: 8),
-          StatusPill(label: t.channel, color: Colors.blueGrey, dense: true),
+          WdsBadge(label: t.channel, tone: WdsBadgeTone.info, dense: true),
           const SizedBox(width: 6),
-          if (!t.enabled) const StatusPill(label: 'disabled', color: Colors.grey, dense: true),
-          if (failing) StatusPill(label: 'failing x${t.consecutiveFailures}', color: Colors.red, dense: true),
+          if (!t.enabled) const WdsBadge(label: 'disabled', tone: WdsBadgeTone.neutral, dense: true),
+          if (failing) WdsBadge(label: 'failing x${t.consecutiveFailures}', tone: WdsBadgeTone.danger, dense: true),
         ]),
         subtitle: Text(
           '${t.kind} → ${t.processId}'
@@ -425,10 +425,10 @@ class _AccountsTab extends ConsumerWidget {
             loading: () => const LoadingView(),
             error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(oauthConnectionsProvider)),
             data: (list) => list.isEmpty
-                ? const EmptyState(
+                ? const WdsEmptyState(
                     icon: Icons.link_off_rounded,
                     title: 'No connected accounts',
-                    message: 'Needs wayang.secrets.key and wayang.oauth.redirect-uri on the server.',
+                    description: 'Needs wayang.secrets.key and wayang.oauth.redirect-uri on the server.',
                   )
                 : ListView(children: [for (final c in list) _ConnectionCard(c: c)]),
           ),
@@ -518,18 +518,17 @@ class _ConnectionCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final color = switch (c.status) {
-      'CONNECTED' => Colors.green,
-      'REVOKED' => Colors.red,
-      _ => Colors.orange,
-    };
     return Card(
       child: ListTile(
         leading: const Icon(Icons.account_circle_outlined),
         title: Row(children: [
           Text(c.id, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w600)),
           const SizedBox(width: 8),
-          StatusPill(label: c.status.toLowerCase(), color: color, dense: true),
+          WdsBadge(
+            label: c.status.toLowerCase(),
+            tone: c.status == 'CONNECTED' ? WdsBadgeTone.success : (c.status == 'REVOKED' ? WdsBadgeTone.danger : WdsBadgeTone.warning),
+            dense: true,
+          ),
         ]),
         subtitle: SelectableText(
           'Use as ${c.secretRef}${c.connectedAt == null ? '' : ' · connected ${formatDateShort(c.connectedAt!)}'}',
