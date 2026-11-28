@@ -139,6 +139,14 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
 
   Future<void> _run({required bool dry}) async {
     setState(() => _error = null);
+    if (!dry) {
+      final warnings = applyWarnings(_options);
+      if (warnings.isNotEmpty) {
+        final ok = await showConfirmDialog(context,
+            title: 'Apply this import?', message: warnings.join('\n'), confirmLabel: 'Apply', destructive: true);
+        if (!ok || !mounted) return;
+      }
+    }
     final bundle = _parse();
     if (bundle == null) return;
     setState(() => _busy = true);
@@ -190,7 +198,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                     hint: const Text('Project'),
                     value: list.any((p) => p.id == _exportProject) ? _exportProject : null,
                     items: [for (final p in list) DropdownMenuItem(value: p.id, child: Text(p.name))],
-                    onChanged: (v) => setState(() => _exportProject = v),
+                    onChanged: (v) => setState(() {
+                      _exportProject = v;
+                      _plan = null;
+                      _planError = null;
+                    }),
                   ),
                   const SizedBox(width: 12),
                   Checkbox(value: _withTenantConfig, onChanged: (v) => setState(() => _withTenantConfig = v ?? false)),
@@ -327,7 +339,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       }
     } catch (e) {
       if (mounted) setState(() => _tplReport = null);
-      if (mounted) showToast(context, errText(e));
+      if (mounted) showToast(context, errText(e), isError: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -484,7 +496,10 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           child: TextFormField(
             initialValue: value,
             decoration: InputDecoration(labelText: label, isDense: true),
-            onChanged: (v) => setState(() => set(v.trim())),
+            onChanged: (v) => setState(() {
+              set(v.trim());
+              _plan = null;
+            }),
           ),
         );
     Widget lines(String title, List<String> xs) => xs.isEmpty
@@ -512,12 +527,18 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             DropdownButton<String>(
               value: _release.target,
               items: [for (final t in ReleaseForm.targets) DropdownMenuItem(value: t, child: Text(switch (t) { 'SERVICE' => 'HTTP service', 'GAMELAN' => 'Durable service (Gamelan)', _ => 'Standalone program' }))],
-              onChanged: (v) => setState(() => _release = _release.copyWith(target: v)),
+              onChanged: (v) => setState(() {
+                _release = _release.copyWith(target: v);
+                _plan = null;
+              }),
             ),
             DropdownButton<String>(
               value: _release.profile,
               items: [for (final p in ReleaseForm.profiles) DropdownMenuItem(value: p, child: Text('Profile: $p'))],
-              onChanged: (v) => setState(() => _release = _release.copyWith(profile: v)),
+              onChanged: (v) => setState(() {
+                _release = _release.copyWith(profile: v);
+                _plan = null;
+              }),
             ),
             field('groupId', _release.groupId, (v) => _release = _release.copyWith(groupId: v)),
             field('artifactId (optional)', _release.artifactId, (v) => _release = _release.copyWith(artifactId: v)),
