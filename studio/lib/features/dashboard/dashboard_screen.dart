@@ -163,7 +163,7 @@ class DashboardScreen extends ConsumerWidget {
               if (steps.isEmpty || processes.isLoading || runs.isLoading) return const SizedBox.shrink();
               return Padding(
                 padding: const EdgeInsets.only(bottom: 16),
-                child: SurfacePanel(
+                child: WdsSurface(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -253,7 +253,7 @@ class DashboardScreen extends ConsumerWidget {
             const SizedBox(height: 8),
             runs.when(
               loading: () => const LoadingView(label: 'Loading recent runs…'),
-              error: (error, _) => SurfacePanel(
+              error: (error, _) => WdsSurface(
                 child: Text(
                   'Runs are unavailable: ${errText(error)}',
                   style: const TextStyle(color: AppColors.textSecondaryDark, fontSize: 12),
@@ -265,7 +265,7 @@ class DashboardScreen extends ConsumerWidget {
                       title: 'No executions yet',
                       description: 'Run a workflow from a designer to see execution activity here.',
                     )
-                  : SurfacePanel(
+                  : WdsSurface(
                       padding: EdgeInsets.zero,
                       child: Column(
                         children: [
