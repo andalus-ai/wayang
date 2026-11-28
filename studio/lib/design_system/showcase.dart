@@ -66,10 +66,11 @@ class _WdsComponentShowcaseState extends State<WdsComponentShowcase> {
     super.dispose();
   }
 
-  List<String> get _categories => [
-        'All',
-        ...widget.examples.map((example) => example.category).toSet().toList()..sort(),
-      ];
+  List<String> get _categories {
+    final categories = widget.examples.map((example) => example.category).toSet().toList()
+      ..sort();
+    return ['All', ...categories];
+  }
 
   List<WdsShowcaseExample> get _visibleExamples => widget.examples.where((example) {
         final categoryMatches = _selectedCategory == 'All' || example.category == _selectedCategory;
@@ -78,7 +79,15 @@ class _WdsComponentShowcaseState extends State<WdsComponentShowcase> {
 
   ThemeData _previewTheme(ThemeData source) {
     final brightness = _darkPreview ? Brightness.dark : Brightness.light;
-    final scheme = source.colorScheme.copyWith(brightness: brightness);
+    final generatedScheme = ColorScheme.fromSeed(
+      seedColor: source.colorScheme.primary,
+      brightness: brightness,
+    );
+    final scheme = generatedScheme.copyWith(
+      primary: source.colorScheme.primary,
+      secondary: source.colorScheme.secondary,
+      error: source.colorScheme.error,
+    );
     return source.copyWith(
       brightness: brightness,
       colorScheme: scheme,
