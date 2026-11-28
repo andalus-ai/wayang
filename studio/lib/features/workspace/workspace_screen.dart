@@ -224,13 +224,13 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          _releaseCard(),
+          _releaseWdsSurface(padding: EdgeInsets.zero,),
           const SizedBox(height: 12),
-          _templateCard(),
+          _templateWdsSurface(padding: EdgeInsets.zero,),
           const SizedBox(height: 12),
           TemplateGallery(onCreated: () => ref.invalidate(projectsProvider)),
           const SizedBox(height: 12),
-          Card(
+          WdsSurface(padding: EdgeInsets.zero,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -345,7 +345,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     }
   }
 
-  Widget _templateCard() {
+  Widget _templateWdsSurface(padding: EdgeInsets.zero,) {
     final idKey = _tplSlack ? 'channelId' : 'chatId';
     final fields = {idKey: _tplChat, 'model': _tplModel, 'persona': _tplPersona, 'name': _tplName, 'lookupUrl': _tplLookup, 'lookupDescription': _tplLookupDesc, 'lookupSecret': _tplLookupSecret, if (_tplBrief) ...{'cron': _tplCron, 'timezone': _tplZone}, if (!_tplBrief && _tplCalendar) 'calendarConnection': _tplCalConn, if (!_tplBrief && _tplImages) 'imageModel': _tplImageModel, if (!_tplBrief) ...{'memoryTurns': _tplMemory, 'emailRecipients': _tplEmail}};
     final ok = fields.entries.every((e) => assistantFieldProblem(e.key, e.value.text) == null) && (!_tplBrief || assistantFieldProblem('topic', _tplTopic.text) == null);
@@ -478,9 +478,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           ]),
           const SizedBox(height: 10),
           Row(children: [
-            OutlinedButton(onPressed: _busy || !ok || _tplChat.text.trim().isEmpty ? null : () => _createFromTemplate(dry: true), child: const Text('Check')),
+            WdsButton(label: 'Check', variant: WdsButtonVariant.secondary, onPressed: _busy || !ok || _tplChat.text.trim().isEmpty ? null : () => _createFromTemplate(dry: true)),
             const SizedBox(width: 8),
-            ElevatedButton(onPressed: _busy || !ok || _tplChat.text.trim().isEmpty ? null : () => _createFromTemplate(dry: false), child: const Text('Create project')),
+            WdsButton(label: 'Create project', icon: Icons.add_rounded, onPressed: _busy || !ok || _tplChat.text.trim().isEmpty ? null : () => _createFromTemplate(dry: false)),
           ]),
           if (_tplReport != null) ...[const SizedBox(height: 12), ReportView(report: _tplReport!)],
         ]),
@@ -488,7 +488,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     );
   }
 
-  Widget _releaseCard() {
+  Widget _releaseWdsSurface(padding: EdgeInsets.zero,) {
     final plan = _plan;
     final base = ref.watch(apiConfigProvider).baseUrl;
     Widget field(String label, String value, void Function(String) set, {double width = 170}) => SizedBox(
@@ -511,7 +511,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               for (final x in xs) Text('• $x', style: const TextStyle(fontSize: 12)),
             ]),
           );
-    return Card(
+    return WdsSurface(padding: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
