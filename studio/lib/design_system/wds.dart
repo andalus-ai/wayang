@@ -9,4 +9,5 @@ export 'data_table.dart';
 export 'inspector.dart';
 
 export 'editor.dart';
+export 'execution.dart';
 export 'node.dart';
