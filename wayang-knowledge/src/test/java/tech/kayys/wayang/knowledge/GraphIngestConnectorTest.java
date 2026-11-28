@@ -21,6 +21,7 @@ import tech.kayys.wayang.rag.EntityExtractor;
 import tech.kayys.wayang.rag.GraphQuery;
 import tech.kayys.wayang.rag.InMemoryGraphStore;
 import tech.kayys.wayang.rag.KnowledgeSchema;
+import tech.kayys.wayang.rag.InMemoryKnowledgeSchemaRegistry;
 import tech.kayys.wayang.rag.RelationshipCandidate;
 import tech.kayys.wayang.rag.RelationshipExtractor;
 import tech.kayys.wayang.rag.RelationshipTypeDefinition;
@@ -175,6 +176,62 @@ class GraphIngestConnectorTest {
 
         assertEquals(false, result.get("ingested"));
         assertTrue(String.valueOf(result.get("reason")).contains("exactly one of text or fileId"));
+    }
+
+    @Test
+    void graphIngestResolvesExactPinnedSchemaVersionFromRegistry() throws Exception {
+        InMemoryGraphStore store = new InMemoryGraphStore();
+        InMemoryKnowledgeSchemaRegistry schemas = new InMemoryKnowledgeSchemaRegistry();
+        schemas.register(schema());
+        KnowledgeExtension extension = new KnowledgeExtension(null, UrlGuard.strict(), store,
+                store, entities(), relationships(), schemas);
+        ServiceHandler.Connector connector = extension.connectors().get("graph-ingest");
+
+        Map<String, Object> graphConfig = new java.util.HashMap<>(config());
+        graphConfig.put("graphSchemaId", "organizations");
+        graphConfig.put("graphSchemaVersion", "1");
+
+        Map<String, Object> result = connector.call(graphConfig, inputs("annual-report", "v1"));
+
+        assertEquals(true, result.get("ingested"));
+        assertEquals(2, result.get("entitiesUpserted"));
+        assertEquals(1, result.get("relationshipsUpserted"));
+    }
+
+    @Test
+    void graphIngestDoesNotFallBackWhenPinnedSchemaVersionIsMissing() throws Exception {
+        InMemoryGraphStore store = new InMemoryGraphStore();
+        InMemoryKnowledgeSchemaRegistry schemas = new InMemoryKnowledgeSchemaRegistry();
+        schemas.register(schema());
+        KnowledgeExtension extension = new KnowledgeExtension(null, UrlGuard.strict(), store,
+                store, entities(), relationships(), schemas);
+        ServiceHandler.Connector connector = extension.connectors().get("graph-ingest");
+
+        Map<String, Object> graphConfig = new java.util.HashMap<>(config());
+        graphConfig.put("graphSchemaId", "organizations");
+        graphConfig.put("graphSchemaVersion", "2");
+
+        ServiceHandler.ConnectorException failure = assertThrows(ServiceHandler.ConnectorException.class,
+                () -> connector.call(graphConfig, inputs("annual-report", "v1")));
+
+        assertTrue(failure.getMessage().contains("schema version not found"));
+        assertTrue(store.findCandidates("tenant-a", "companies", Set.of("Organization"), 10).isEmpty());
+    }
+
+    @Test
+    void registryBackedGraphIngestRequiresExplicitSchemaIdAndVersion() throws Exception {
+        InMemoryGraphStore store = new InMemoryGraphStore();
+        InMemoryKnowledgeSchemaRegistry schemas = new InMemoryKnowledgeSchemaRegistry();
+        schemas.register(schema());
+        KnowledgeExtension extension = new KnowledgeExtension(null, UrlGuard.strict(), store,
+                store, entities(), relationships(), schemas);
+        ServiceHandler.Connector connector = extension.connectors().get("graph-ingest");
+
+        ServiceHandler.ConnectorException failure = assertThrows(ServiceHandler.ConnectorException.class,
+                () -> connector.call(config(), inputs("annual-report", "v1")));
+
+        assertTrue(failure.getMessage().contains("graphSchemaId"));
+        assertTrue(store.findCandidates("tenant-a", "companies", Set.of("Organization"), 10).isEmpty());
     }
 
     @Test
