@@ -45,14 +45,31 @@ contracts that must be preserved until their consumers are migrated.
 
 ## Suggested migration sequence
 
-### Wave A — already delegated
+### Wave A — compatibility facades delegated (implemented)
+
+The legacy `SurfacePanel` and `AppSearchField` wrappers already delegate to WDS.
+They remain available to avoid breaking existing feature imports.
+
+
 
 - `SurfacePanel` → `WdsSurface`
 - `AppSearchField` → `WdsSearchField`
 
 These wrappers should remain source-compatible during gradual import cleanup.
 
-### Wave B — low-risk presentation
+### Wave B — low-risk presentation (adapter implementation added)
+
+The legacy `EmptyState`, `ScreenHeader` and `KeyValueRow` implementations now
+compose `WdsEmptyState`, `WdsSectionHeader` and `WdsPropertyRow` respectively.
+Their public constructors remain unchanged. `ScreenHeader` retains its optional
+brand icon treatment; `KeyValueRow` retains its monospace option and start-aligned
+value presentation. Regression widget tests cover these compatibility adapters.
+
+This is an adapter migration, not a verified mass call-site rewrite. Existing
+screens can continue importing `core/widgets.dart` while adopting WDS behavior
+without immediate source changes.
+
+
 
 - `EmptyState` → `WdsEmptyState`, preserving icon, title, message and action.
 - `ScreenHeader` → `WdsSectionHeader` or `WdsPageHeader` where the
@@ -75,7 +92,7 @@ These wrappers should remain source-compatible during gradual import cleanup.
 - [ ] Light and dark themes are checked.
 - [ ] Compact width and text scaling are checked where applicable.
 - [ ] Semantics and keyboard/focus behavior are checked.
-- [ ] Widget tests cover representative old and new behavior.
+- [x] Widget tests cover the migrated compatibility adapters.\n- [ ] Feature-level regression tests cover representative migrated screens.
 - [ ] No feature state, navigation, provider, network or persistence behavior
       has leaked into WDS.
 - [ ] Compatibility wrapper remains until all consumers are migrated.
