@@ -35,5 +35,12 @@ void main() {
     expect(find.byType(WdsIconButton), findsOneWidget);
     expect(find.text('BASE_URL'), findsOneWidget);
     expect(find.text('https://api.example.test'), findsOneWidget);
+
+    await tester.tap(find.text('BASE_URL'));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit BASE_URL'), findsOneWidget);
+    expect(find.byType(WdsFieldGroup), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
   });
 }
