@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/workspace_model.dart';
+import '../../design_system/wds.dart';
 
 /// The outcome of an import or template run: problems, warnings, what still needs setting up, and each item.
 class ReportView extends StatelessWidget {
@@ -20,9 +21,12 @@ class ReportView extends StatelessWidget {
             ]),
           );
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(
-        report.ok ? (report.dryRun ? 'Looks fine. Nothing was written.' : 'Done.') : (report.dryRun ? 'Problems found. Nothing was written.' : 'Stopped.'),
-        style: TextStyle(fontWeight: FontWeight.w700, color: report.ok ? Colors.green : scheme.error),
+      WdsBadge(
+        label: report.ok
+            ? (report.dryRun ? 'Check passed · nothing written' : 'Completed')
+            : (report.dryRun ? 'Check failed · nothing written' : 'Stopped'),
+        tone: report.ok ? WdsBadgeTone.success : WdsBadgeTone.danger,
+        icon: report.ok ? Icons.check_circle_outline_rounded : Icons.error_outline_rounded,
       ),
       lines('Problems', report.problems, color: scheme.error),
       lines('Warnings', report.warnings),
