@@ -30,6 +30,11 @@ void main() {
       status: RunStatus.running,
       executedNodes: const ['validate', 'charge'],
     );
+    // The detail is a lazy ListView and the event log sits below the run's other sections: a tall surface builds it.
+    tester.view.physicalSize = const Size(1600, 3000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(ProviderScope(
       overrides: [
         runsProvider.overrideWith((ref) async => [run]),
@@ -46,8 +51,11 @@ void main() {
       ],
       child: const MaterialApp(home: Scaffold(body: RunsScreen())),
     ));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 20));
+    // The run list, the run detail and the event stream are three separate async providers; each needs a frame to deliver.
+    // (pumpAndSettle is avoided: the live panel may keep timers running.)
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
 
     expect(find.byType(WdsExecutionStatusIndicator), findsWidgets);
     expect(find.byType(WdsExecutionTimeline), findsOneWidget);

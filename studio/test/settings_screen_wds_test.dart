@@ -34,6 +34,7 @@ void main() {
           widget.decoration?.labelText?.startsWith('API key or bearer token') == true),
     );
     expect(tokenField.obscureText, isTrue);
-    expect(find.text('sensitive-token'), findsNothing);
+    // find.text also matches an EditableText's (obscured) value, so look for the token shown as plain text instead.
+    expect(find.byWidgetPredicate((w) => w is Text && (w.data ?? '').contains('sensitive-token')), findsNothing);
   });
 }
