@@ -27,6 +27,8 @@ void main() {
 
   test('run event types map to WDS timeline states', () {
     expect(runEventExecutionStatus(const RunEventView(type: 'NODE_STARTED', runId: 'r1')), WdsExecutionStatus.running);
+    expect(runEventExecutionStatus(const RunEventView(type: 'NODE_RETRYING', runId: 'r1')), WdsExecutionStatus.retrying);
+    expect(runEventExecutionStatus(const RunEventView(type: 'NODE_SKIPPED', runId: 'r1')), WdsExecutionStatus.skipped);
     expect(runEventExecutionStatus(const RunEventView(type: 'NODE_COMPLETED', runId: 'r1')), WdsExecutionStatus.succeeded);
     expect(runEventExecutionStatus(const RunEventView(type: 'NODE_FAILED', runId: 'r1')), WdsExecutionStatus.failed);
     expect(runEventExecutionStatus(const RunEventView(type: 'RUN_CANCELLED', runId: 'r1')), WdsExecutionStatus.cancelled);
