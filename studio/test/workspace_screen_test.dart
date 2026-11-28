@@ -63,6 +63,7 @@ void main() {
     // Plain: check, then apply with no confirmation.
     await tester.tap(find.text('Check (dry run)'));
     await tester.pumpAndSettle();
+    expect(find.byType(WdsBadge), findsOneWidget, reason: 'dry-run result uses semantic WDS status');
     await tester.tap(find.text('Apply'));
     await tester.pumpAndSettle();
     expect(find.text('Apply this import?'), findsNothing);
