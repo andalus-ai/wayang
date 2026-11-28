@@ -83,7 +83,7 @@ void main() {
       const Project(id: 'a', name: 'Billing', description: 'Invoices'),
       const Project(id: 'b', name: 'Support', description: 'Customer care'),
     ]));
-    await tester.enterText(find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField)).first, 'support customer');
+    await tester.enterText(find.descendant(of: find.byType(WdsSearchField), matching: find.byType(TextField)).first, 'support customer');
     await tester.pumpAndSettle();
     expect(find.text('Support'), findsOneWidget);
     expect(find.text('Billing'), findsNothing);
