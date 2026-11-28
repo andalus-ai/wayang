@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
-import '../../core/widgets.dart';
 import '../../design_system/navigation.dart';
+import '../../design_system/components.dart';
 import '../../plugins/plugin.dart';
 import '../../plugins/registry.dart';
 import '../../providers/app_providers.dart';
@@ -180,8 +180,8 @@ class _TopBar extends ConsumerWidget {
     return Container(
       height: 58,
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.darkBorder)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
       ),
       child: Row(
         children: [
@@ -194,9 +194,9 @@ class _TopBar extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 10),
-          const StatusPill(
+          const WdsBadge(
             label: 'COMPOSE',
-            color: AppColors.primaryBright,
+            tone: WdsBadgeTone.brand,
             dense: true,
             icon: Icons.edit_note_rounded,
           ),
@@ -235,25 +235,11 @@ class _EnvPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: AppColors.darkSurfaceRaised,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.darkBorder),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: const BoxDecoration(color: AppColors.success, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
-          Text(label, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
-        ],
-      ),
+    return WdsBadge(
+      label: label,
+      tone: WdsBadgeTone.neutral,
+      dense: true,
+      icon: Icons.folder_open_outlined,
     );
   }
 }

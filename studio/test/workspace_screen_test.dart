@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wayang_studio/data/api_client.dart';
+import 'package:wayang_studio/design_system/wds.dart';
 import 'package:wayang_studio/data/wayang_repository.dart';
 import 'package:wayang_studio/data/workspace_model.dart';
 import 'package:wayang_studio/features/workspace/workspace_screen.dart';
@@ -46,6 +47,9 @@ Future<_FakeRepo> _open(WidgetTester tester) async {
     child: const MaterialApp(home: Scaffold(body: WorkspaceScreen())),
   ));
   await tester.pumpAndSettle();
+  expect(find.byType(WdsPageHeader), findsOneWidget);
+  expect(find.byType(WdsSurface), findsWidgets);
+  expect(find.byType(WdsSectionHeader), findsOneWidget);
   return repo;
 }
 
@@ -59,6 +63,7 @@ void main() {
     // Plain: check, then apply with no confirmation.
     await tester.tap(find.text('Check (dry run)'));
     await tester.pumpAndSettle();
+    expect(find.byType(WdsBadge), findsOneWidget, reason: 'dry-run result uses semantic WDS status');
     await tester.tap(find.text('Apply'));
     await tester.pumpAndSettle();
     expect(find.text('Apply this import?'), findsNothing);

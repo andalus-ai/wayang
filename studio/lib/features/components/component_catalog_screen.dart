@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/component_inputs.dart';
+import '../../design_system/wds.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
 
@@ -41,35 +41,33 @@ class _ComponentCatalogScreenState extends ConsumerState<ComponentCatalogScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const ScreenHeader(
+          const WdsPageHeader(
+            eyebrow: 'Runtime',
             title: 'Component Catalog',
-            subtitle: 'Reusable capabilities available in this runtime profile, including their configuration contracts.',
-            icon: Icons.widgets_outlined,
+            description: 'Reusable capabilities available in this runtime profile, including their configuration contracts.',
           ),
-          const SizedBox(height: 12),
-          TextField(
-            decoration: const InputDecoration(
-              isDense: true,
-              prefixIcon: Icon(Icons.search, size: 18),
-              hintText: 'Search components (name, category, capability…)',
+          const SizedBox(height: 16),
+          WdsFilterToolbar(
+            search: WdsSearchField(
+              hint: 'Search components (name, category, capability…)',
+              onChanged: (value) => setState(() => _query = value),
             ),
-            onChanged: (v) => setState(() => _query = v),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           Expanded(
             child: catalog.when(
               loading: () => const LoadingView(label: 'Loading component catalog…'),
-              error: (e, _) => ErrorView(
-                message: '$e',
+              error: (error, _) => ErrorView(
+                message: '$error',
                 onRetry: () => ref.invalidate(componentCatalogProvider),
               ),
               data: (items) => items.isEmpty
-                  ? const EmptyState(
+                  ? const WdsEmptyState(
                       icon: Icons.widgets_outlined,
                       title: 'No components available',
-                      message: 'Check the active runtime profile and installed extensions.',
+                      description: 'Check the active runtime profile and installed extensions.',
                     )
-                  : _list(filterComponents(items, _query), items.length),
+                  : _list(filterComponents(items, _query)),
             ),
           ),
         ],
@@ -78,9 +76,13 @@ class _ComponentCatalogScreenState extends ConsumerState<ComponentCatalogScreen>
   }
 }
 
-Widget _list(List<ComponentCatalogEntry> shown, int total) {
+Widget _list(List<ComponentCatalogEntry> shown) {
   if (shown.isEmpty) {
-    return const EmptyState(icon: Icons.search_off, title: 'No component matches', message: 'Try fewer or different words.');
+    return const WdsEmptyState(
+      icon: Icons.search_off,
+      title: 'No component matches',
+      description: 'Try fewer or different words.',
+    );
   }
   return ListView.separated(
     itemCount: shown.length,
@@ -98,81 +100,90 @@ class _ComponentCard extends StatelessWidget {
     final properties = asMap(component.configSchema['properties']);
     final requiredFields = asList(component.configSchema['required']).map((e) => '$e').toSet();
     final dependencies = component.dependencies;
-    return Card(
-      color: AppColors.darkSurface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        side: const BorderSide(color: AppColors.darkBorder),
-      ),
+
+    return WdsSurface(
+      padding: EdgeInsets.zero,
       child: ExpansionTile(
         tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        leading: const Icon(Icons.extension_outlined, color: AppColors.primaryBright),
+        leading: Icon(Icons.extension_outlined, color: Theme.of(context).colorScheme.primary),
         title: Row(
           children: [
-            Expanded(child: Text(component.displayName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-            Text(component.version, style: const TextStyle(fontSize: 10.5, color: AppColors.textMutedDark)),
+            Expanded(
+              child: Text(
+                component.displayName,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            WdsBadge(label: component.version, tone: WdsBadgeTone.neutral, dense: true),
           ],
         ),
         subtitle: Text(
           '${component.category} · ${component.kind} · ${component.executorType}',
-          style: const TextStyle(fontSize: 11, color: AppColors.textMutedDark),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
         children: [
           if (component.description.isNotEmpty)
-            Align(alignment: Alignment.centerLeft, child: Text(component.description, style: const TextStyle(fontSize: 12))),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(component.description, style: Theme.of(context).textTheme.bodyMedium),
+            ),
           const SizedBox(height: 12),
-          _MetaLine(label: 'Component ID', value: component.id),
-          _MetaLine(label: 'Isolation', value: component.isolationLevel),
-          if (component.requiredFeatures.isNotEmpty)
-            _MetaLine(label: 'Required profile features', value: component.requiredFeatures.join(', ')),
-          if (component.capabilities.isNotEmpty)
-            _MetaLine(label: 'Capabilities', value: component.capabilities.join(', ')),
-          if (dependencies.isNotEmpty)
-            _MetaLine(label: 'Dependencies', value: dependencies.map((d) => '${d['componentId']}@${d['version']}').join(', ')),
-          const Divider(height: 22),
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Text('Configuration contract', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
-          ),
-          if (properties.isEmpty)
-            const Align(alignment: Alignment.centerLeft, child: Text('No configuration fields.', style: TextStyle(fontSize: 11, color: AppColors.textMutedDark)))
-          else
-            for (final field in properties.entries)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        '${field.key}${requiredFields.contains(field.key) ? ' *' : ''}',
-                        style: const TextStyle(fontFamily: 'monospace', fontSize: 11.5, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        _fieldSummary(asMap(field.value)),
-                        style: const TextStyle(fontSize: 11, color: AppColors.textMutedDark),
-                      ),
-                    ),
-                  ],
+          WdsFieldGroup(
+            spacing: 10,
+            children: [
+              _MetaLine(label: 'Component ID', value: component.id),
+              _MetaLine(label: 'Isolation', value: component.isolationLevel),
+              if (component.requiredFeatures.isNotEmpty)
+                _MetaLine(label: 'Required profile features', value: component.requiredFeatures.join(', ')),
+              if (component.capabilities.isNotEmpty)
+                _MetaLine(label: 'Capabilities', value: component.capabilities.join(', ')),
+              if (dependencies.isNotEmpty)
+                _MetaLine(
+                  label: 'Dependencies',
+                  value: dependencies.map((dependency) => '${dependency['componentId']}@${dependency['version']}').join(', '),
                 ),
-              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          WdsInspectorSection(
+            title: 'Configuration contract',
+            description: 'Schema fields exposed by this runtime component',
+            child: properties.isEmpty
+                ? Text('No configuration fields.', style: Theme.of(context).textTheme.bodySmall)
+                : WdsFieldGroup(
+                    spacing: 10,
+                    children: [
+                      for (final field in properties.entries)
+                        WdsPropertyRow(
+                          label: '${field.key}${requiredFields.contains(field.key) ? ' *' : ''}',
+                          value: SelectableText(
+                            _fieldSummary(asMap(field.value)),
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+                          ),
+                          valueAlignment: CrossAxisAlignment.start,
+                        ),
+                    ],
+                  ),
+          ),
           if (componentInputs(component).isNotEmpty) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 14),
             _MetaLine(
               label: 'Inputs (mandatory ones only warn when missing)',
-              value: componentInputs(component).map((i) => '${i.name}: ${i.type}${i.mandatory ? ' (mandatory)' : ''}').join(' · '),
+              value: componentInputs(component)
+                  .map((input) => '${input.name}: ${input.type}${input.mandatory ? ' (mandatory)' : ''}')
+                  .join(' · '),
             ),
           ],
-          if (component.uiHints.keys.any((k) => k != 'inputs')) ...[
+          if (component.uiHints.keys.any((key) => key != 'inputs')) ...[
             const SizedBox(height: 10),
             _MetaLine(
-                label: 'UI hints',
-                value: component.uiHints.entries.where((e) => e.key != 'inputs').map((e) => '${e.key}: ${e.value}').join(' · ')),
+              label: 'UI hints',
+              value: component.uiHints.entries
+                  .where((entry) => entry.key != 'inputs')
+                  .map((entry) => '${entry.key}: ${entry.value}')
+                  .join(' · '),
+            ),
           ],
         ],
       ),
@@ -185,7 +196,9 @@ class _ComponentCard extends StatelessWidget {
     if (schema['enum'] is List) details.add('options: ${(schema['enum'] as List).join(', ')}');
     if (schema['minimum'] != null) details.add('min ${schema['minimum']}');
     if (schema['maximum'] != null) details.add('max ${schema['maximum']}');
-    if (schema['description'] is String && (schema['description'] as String).isNotEmpty) details.add(schema['description'] as String);
+    if (schema['description'] is String && (schema['description'] as String).isNotEmpty) {
+      details.add(schema['description'] as String);
+    }
     return details.join(' · ');
   }
 }
@@ -196,14 +209,9 @@ class _MetaLine extends StatelessWidget {
   final String value;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(top: 7),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(width: 150, child: Text(label, style: const TextStyle(fontSize: 10.5, color: AppColors.textMutedDark))),
-            Expanded(child: SelectableText(value, style: const TextStyle(fontSize: 10.5, fontFamily: 'monospace'))),
-          ],
-        ),
+  Widget build(BuildContext context) => WdsPropertyRow(
+        label: label,
+        value: SelectableText(value, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontFamily: 'monospace')),
+        valueAlignment: CrossAxisAlignment.start,
       );
 }
