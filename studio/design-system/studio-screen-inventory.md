@@ -51,7 +51,7 @@ The following builders are explicitly registered in
 | secrets | `SecretsScreen` | Candidate for table and field presentation; secret values and reveal policy stay feature-owned | Registered; screen internals not yet scanned |
 | config | `ConfigScreen` | Uses `WdsPageHeader`, `WdsButton`, `WdsEmptyState`, `WdsSurface`, `WdsIconButton` and `WdsFieldGroup`; scope, validation, persistence and confirmation remain feature-owned | Migrated in M18 |
 | workspace | `WorkspaceScreen` | Uses `WdsPageHeader`, `WdsSurface`, `WdsButton`, `WdsSectionHeader`, `WdsBadge` and WDS empty states across export/import, release planning, template gallery and reports | Migrated in M18 |
-| surfaces | `SurfacesScreen` | Candidate for catalog/table and detail patterns | Registered; screen internals not yet scanned |
+| surfaces | `SurfacesScreen` / `SurfaceView` | Uses `WdsPageHeader`, `WdsSectionHeader`, `WdsButton`, `WdsBadge`, `WdsSurface`, `WdsEmptyState`, `WdsFieldMessage` and `WdsPropertyRow`; dynamic parsing, server validation, action allow-listing and task authorization remain feature-owned | Migrated in M21 |
 | feedback | `FeedbackScreen` | Form and submission behavior stay feature-owned; WDS controls may be reused | Registered; screen internals not yet scanned |
 | settings | `SettingsScreen` | Uses `WdsPageHeader`, `WdsInspectorSection`, `WdsFieldGroup`, `WdsButton`, `WdsSurface` and `WdsBadge`; API config, token masking and connection testing remain feature-owned | Migrated in M17 |
 
@@ -309,3 +309,18 @@ Runs and Tasks were inspected as distinct operational screens and migrated witho
 - Run tests cover API status and server-event status mapping, including unknown and incomplete event types.
 - New Runs and Tasks widget tests assert WDS page/filter/action/surface/badge composition.
 - No runtime, repository, WebSocket or Riverpod dependencies were added to WDS.
+
+
+## M21 — Declarative UI Surfaces adoption
+
+The Surfaces workbench now uses WDS page/section headers, responsive editor
+and preview composition, shared actions, validation messages, status badges,
+surfaces and empty states. The preview stacks below the editor at compact
+widths. The dynamic renderer uses semantic badges, property rows and card
+surfaces.
+
+The Surfaces feature retains ownership of JSON parsing and safety budgets,
+server-side validation, read-only rendering policy, navigation allow-listing,
+refresh behavior and task completion authorization. Pasted surfaces cannot
+complete tasks or perform arbitrary actions. Focused widget coverage checks
+the workbench composition, semantic badge mapping and disabled pasted actions.
