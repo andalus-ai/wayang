@@ -39,7 +39,9 @@ a guarantee: it errs on the side of masking, and the form tells people not to pa
   ADMIN role, so anyone else sees the server's refusal there but can still use Send feedback.
 * **Export CSV** in the Feedback section copies a `curl` command (for the current kind filter) that downloads the CSV; like the release
   download it holds no token, your shell supplies `WAYANG_TOKEN`.
-* In the Feedback section each entry has **Mark as done / Reopen**.
+* In the Feedback section each entry has **Mark as done / Reopen**. A search box (message, user, kind, context) and a **Hide done** chip
+  narrow the list on the client; they act on what the server returned for the kind filter. The Send feedback dialog does not close on an
+  outside click and Cancel asks before discarding edited text.
 * **Copy CSV** (Feedback section) puts the same CSV as the export endpoint on the clipboard (the selected kind, newest 500). It is a copy, not a file save: Studio has no file-saving dependency yet.
 * A line under the title shows how many entries are open and the thumbs up/down (from `/feedback/summary`; a `+` means the server counted only its newest 500), and the kind chips show their open counts.
 * A failed run has "Report this error": it sends the run's error text and its run id, process id and version, never its variables or outputs.

@@ -59,6 +59,8 @@ The report: `ok`, `items` (project, each definition, setting, trigger, with acti
 `missingSecrets` (checked against this tenant's secrets when the caller may list them; otherwise `secretsChecked` is false and it
 lists every secret the bundle needs), `missingConfig`, `oauthConnections`, `webhookSecrets`.
 
+Apply asks for a confirmation first when the options can overwrite or widen things (*overwrite* on conflict, tenant-wide settings, accepting an unsigned bundle); a plain import does not. The release plan in the Release card is cleared whenever the project or any release setting changes, so the shown summary and download command always describe the current form. **Projects** has an empty state, and its name dialog refuses a blank name, one over 80 characters (a client-side limit; the server's own limit for project names was not checked) or a case-insensitive duplicate, submits on Enter and shows server errors inside the dialog.
+
 Studio adds one line counting the items (`3 new · 1 replaced · 4 unchanged · 1 skipped · 1 problem`) and marks the ones left alone with a dash instead of a tick.
 
 Everything goes through the normal services, so every permission, size limit and id rule applies as if the calls were made one by
