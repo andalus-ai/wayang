@@ -28,8 +28,8 @@ void main() {
 
       final semantics = tester.getSemantics(find.text('Home').first);
       expect(semantics.label, contains('Home'));
-      expect(semantics.hasFlag(SemanticsFlag.isButton), isTrue);
-      expect(semantics.hasFlag(SemanticsFlag.isSelected), isTrue);
+      // containsSemantics does not name the flag enum, which newer Flutter versions renamed (SemanticsFlag is undefined there).
+      expect(semantics, containsSemantics(isButton: true, isSelected: true));
     });
 
     testWidgets('compact navigation safely handles an empty destination set', (tester) async {
