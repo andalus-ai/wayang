@@ -115,6 +115,7 @@ class SecretsScreen extends ConsumerWidget {
                                 onPressed: () => _put(context, ref, fixedName: s.name),
                               ),
                               IconButton(
+                              tooltip: 'Delete secret',
                               icon: const Icon(Icons.delete_outline_rounded, size: 18),
                               onPressed: () async {
                                 final ok = await showConfirmDialog(context,

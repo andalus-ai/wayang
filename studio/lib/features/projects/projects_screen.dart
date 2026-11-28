@@ -59,8 +59,9 @@ class ProjectsScreen extends ConsumerWidget {
                       title: Text(p.name),
                       subtitle: Text(p.description ?? p.id, style: const TextStyle(fontSize: 11)),
                       secondary: Row(mainAxisSize: MainAxisSize.min, children: [
-                        IconButton(icon: const Icon(Icons.edit_outlined, size: 18), onPressed: () => _edit(context, ref, p.id, p.name)),
+                        IconButton(tooltip: 'Rename project', icon: const Icon(Icons.edit_outlined, size: 18), onPressed: () => _edit(context, ref, p.id, p.name)),
                         IconButton(
+                          tooltip: 'Delete project',
                           icon: const Icon(Icons.delete_outline_rounded, size: 18),
                           onPressed: () async {
                             final ok = await showConfirmDialog(context,

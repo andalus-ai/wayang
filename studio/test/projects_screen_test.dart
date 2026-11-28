@@ -35,6 +35,12 @@ Future<void> _pump(WidgetTester tester, _FakeRepo repo) async {
 }
 
 void main() {
+  testWidgets('the icon-only buttons of a project row say what they do', (tester) async {
+    await _pump(tester, _FakeRepo([const Project(id: 'a', name: 'Billing')]));
+    expect(find.byTooltip('Rename project'), findsOneWidget);
+    expect(find.byTooltip('Delete project'), findsOneWidget);
+  });
+
   testWidgets('no projects shows the empty state', (tester) async {
     await _pump(tester, _FakeRepo([]));
     expect(find.text('No projects yet'), findsOneWidget);
