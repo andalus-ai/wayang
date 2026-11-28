@@ -94,8 +94,10 @@ WdsExecutionStatus runEventExecutionStatus(RunEventView event) {
   final type = event.type.toUpperCase();
   if (type.contains('FAIL') || type.contains('ERROR')) return WdsExecutionStatus.failed;
   if (type.contains('CANCEL')) return WdsExecutionStatus.cancelled;
+  if (type.contains('SKIP')) return WdsExecutionStatus.skipped;
   if (type.endsWith('_COMPLETED') || type.endsWith('_SUCCEEDED') || type == 'RUN_COMPLETED') return WdsExecutionStatus.succeeded;
-  if (type.contains('RETR') || type.contains('START')) return WdsExecutionStatus.running;
+  if (type.contains('RETR')) return WdsExecutionStatus.retrying;
+  if (type.contains('START')) return WdsExecutionStatus.running;
   if (type.contains('QUEUE') || type.contains('WAIT')) return WdsExecutionStatus.queued;
   return WdsExecutionStatus.pending;
 }
