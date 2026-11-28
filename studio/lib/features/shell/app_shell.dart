@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
-import '../../core/widgets.dart';
 import '../../design_system/navigation.dart';
 import '../../design_system/components.dart';
 import '../../plugins/plugin.dart';

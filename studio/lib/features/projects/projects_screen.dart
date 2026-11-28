@@ -179,67 +179,123 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
   }
 
   Future<void> _edit(BuildContext context, WidgetRef ref, String? id, String? current) async {
-    final others = (ref.read(projectsProvider).valueOrNull ?? const []).where((project) => project.id != id).map((project) => project.name).toList();
+    final others = (ref.read(projectsProvider).valueOrNull ?? const [])
+        .where((project) => project.id != id)
+        .map((project) => project.name)
+        .toList();
     final repo = ref.read(repositoryProvider);
-    final controller = TextEditingController(text: current ?? '');
-    String? error;
-    var busy = false;
+
+    Future<void> save(String name) async {
+      if (id == null) {
+        await repo.createProject(name);
+      } else {
+        await repo.updateProject(id, name);
+      }
+    }
+
     final saved = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) {
-          Future<void> submit() async {
-            if (busy) return;
-            final problem = projectNameProblem(controller.text, others);
-            if (problem != null) return setDialogState(() => error = problem);
-            final name = controller.text.trim();
-            if (id != null && name == current) return Navigator.pop(dialogContext, false);
-            setDialogState(() {
-              busy = true;
-              error = null;
-            });
-            try {
-              if (id == null) {
-                await repo.createProject(name);
-              } else {
-                await repo.updateProject(id, name);
-              }
-              if (dialogContext.mounted) Navigator.pop(dialogContext, true);
-            } catch (exception) {
-              if (dialogContext.mounted) {
-                setDialogState(() {
-                  busy = false;
-                  error = errText(exception);
-                });
-              }
-            }
-          }
-
-          return AlertDialog(
-            title: Text(id == null ? 'New project' : 'Rename project'),
-            content: TextField(
-              controller: controller,
-              autofocus: true,
-              maxLength: kMaxProjectName,
-              enabled: !busy,
-              onSubmitted: (_) => submit(),
-              decoration: InputDecoration(labelText: 'Name', errorText: error),
-            ),
-            actions: [
-              TextButton(onPressed: busy ? null : () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-              ElevatedButton(
-                onPressed: busy ? null : submit,
-                child: busy
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Save'),
-              ),
-            ],
-          );
-        },
+      builder: (_) => _ProjectEditDialog(
+        id: id,
+        current: current,
+        others: others,
+        onSave: save,
       ),
     );
-    controller.dispose();
     if (saved == true) ref.invalidate(projectsProvider);
+  }
+}
+
+class _ProjectEditDialog extends StatefulWidget {
+  const _ProjectEditDialog({
+    required this.id,
+    required this.current,
+    required this.others,
+    required this.onSave,
+  });
+
+  final String? id;
+  final String? current;
+  final List<String> others;
+  final Future<void> Function(String name) onSave;
+
+  @override
+  State<_ProjectEditDialog> createState() => _ProjectEditDialogState();
+}
+
+class _ProjectEditDialogState extends State<_ProjectEditDialog> {
+  late final TextEditingController _controller;
+  String? _error;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.current ?? '');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_busy) return;
+    final problem = projectNameProblem(_controller.text, widget.others);
+    if (problem != null) {
+      setState(() => _error = problem);
+      return;
+    }
+
+    final name = _controller.text.trim();
+    if (widget.id != null && name == widget.current) {
+      Navigator.pop(context, false);
+      return;
+    }
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.onSave(name);
+      if (mounted) Navigator.pop(context, true);
+    } catch (exception) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = errText(exception);
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.id == null ? 'New project' : 'Rename project'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLength: kMaxProjectName,
+        enabled: !_busy,
+        onSubmitted: (_) => _submit(),
+        decoration: InputDecoration(labelText: 'Name', errorText: _error),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _busy ? null : _submit,
+          child: _busy
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Save'),
+        ),
+      ],
+    );
   }
 }

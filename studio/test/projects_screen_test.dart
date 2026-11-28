@@ -57,13 +57,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Enter a name.'), findsOneWidget);
 
-    await tester.enterText(find.byType(TextField), ' billing ');
+    await tester.enterText(find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField)), ' billing ');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(find.text('Another project already has this name.'), findsOneWidget);
     expect(repo.created, isEmpty);
 
-    await tester.enterText(find.byType(TextField), 'Support');
+    await tester.enterText(find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField)), 'Support');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(repo.created, ['Support']);
@@ -83,7 +83,7 @@ void main() {
       const Project(id: 'a', name: 'Billing', description: 'Invoices'),
       const Project(id: 'b', name: 'Support', description: 'Customer care'),
     ]));
-    await tester.enterText(find.byType(TextField).first, 'support customer');
+    await tester.enterText(find.descendant(of: find.byType(WdsSearchField), matching: find.byType(TextField)).first, 'support customer');
     await tester.pumpAndSettle();
     expect(find.text('Support'), findsOneWidget);
     expect(find.text('Billing'), findsNothing);

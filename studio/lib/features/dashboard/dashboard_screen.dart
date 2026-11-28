@@ -5,7 +5,16 @@ import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/api_client.dart';
 import '../../models/wayang.dart';
+import '../../design_system/wds.dart';
 import '../../providers/app_providers.dart';
+
+WdsExecutionStatus dashboardRunStatus(RunStatus status) => switch (status) {
+      RunStatus.running => WdsExecutionStatus.running,
+      RunStatus.waiting => WdsExecutionStatus.queued,
+      RunStatus.completed => WdsExecutionStatus.succeeded,
+      RunStatus.failed => WdsExecutionStatus.failed,
+      RunStatus.cancelled => WdsExecutionStatus.cancelled,
+    };
 
 Color runStatusColor(RunStatus status) => switch (status) {
       RunStatus.running => AppColors.primaryBright,
@@ -83,24 +92,24 @@ class DashboardScreen extends ConsumerWidget {
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            ScreenHeader(
+            WdsPageHeader(
               title: 'Overview',
-              subtitle: 'Your workflow design workspace at a glance.',
-              icon: Icons.space_dashboard_rounded,
+              description: 'Your workflow design workspace at a glance.',
+              eyebrow: 'Studio',
               actions: [
-                IconButton(
+                WdsIconButton(
                   tooltip: 'Refresh overview',
+                  icon: Icons.refresh_rounded,
                   onPressed: () => _refresh(ref),
-                  icon: const Icon(Icons.refresh_rounded),
                 ),
               ],
             ),
             const SizedBox(height: 12),
             Row(
               children: const [
-                StatusPill(
+                WdsBadge(
                   label: 'COMPOSE MODE',
-                  color: AppColors.primaryBright,
+                  tone: WdsBadgeTone.brand,
                   icon: Icons.edit_note_rounded,
                 ),
                 SizedBox(width: 8),
@@ -114,7 +123,7 @@ class DashboardScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 20),
             if (hasError) ...[
-              SurfacePanel(
+              WdsSurface(
                 borderColor: AppColors.warning.withValues(alpha: 0.45),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -154,7 +163,7 @@ class DashboardScreen extends ConsumerWidget {
               if (steps.isEmpty || processes.isLoading || runs.isLoading) return const SizedBox.shrink();
               return Padding(
                 padding: const EdgeInsets.only(bottom: 16),
-                child: SurfacePanel(
+                child: WdsSurface(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -233,7 +242,7 @@ class DashboardScreen extends ConsumerWidget {
             const SizedBox(height: 26),
             Row(
               children: [
-                const Expanded(child: PanelSectionLabel('Recent runs')),
+                const Expanded(child: WdsSectionHeader(title: 'Recent runs')),
                 TextButton.icon(
                   onPressed: () => ref.read(selectedNavKeyProvider.notifier).state = 'runs',
                   icon: const Icon(Icons.arrow_forward_rounded, size: 15),
@@ -244,19 +253,19 @@ class DashboardScreen extends ConsumerWidget {
             const SizedBox(height: 8),
             runs.when(
               loading: () => const LoadingView(label: 'Loading recent runs…'),
-              error: (error, _) => SurfacePanel(
+              error: (error, _) => WdsSurface(
                 child: Text(
                   'Runs are unavailable: ${errText(error)}',
                   style: const TextStyle(color: AppColors.textSecondaryDark, fontSize: 12),
                 ),
               ),
               data: (items) => items.isEmpty
-                  ? const EmptyState(
+                  ? const WdsEmptyState(
                       icon: Icons.play_circle_outline_rounded,
                       title: 'No executions yet',
-                      message: 'Run a workflow from a designer to see execution activity here.',
+                      description: 'Run a workflow from a designer to see execution activity here.',
                     )
-                  : SurfacePanel(
+                  : WdsSurface(
                       padding: EdgeInsets.zero,
                       child: Column(
                         children: [
@@ -301,10 +310,10 @@ class DashboardScreen extends ConsumerWidget {
                                       color: AppColors.textMutedDark,
                                     ),
                                   ),
-                                  trailing: StatusPill(
+                                  trailing: WdsExecutionStatusIndicator(
+                                    status: dashboardRunStatus(run.status),
                                     label: run.status.name,
-                                    color: runStatusColor(run.status),
-                                    dense: true,
+                                    compact: true,
                                   ),
                                   onTap: () {
                                     ref.read(selectedRunIdProvider.notifier).state = run.id;
@@ -319,7 +328,7 @@ class DashboardScreen extends ConsumerWidget {
                     ),
             ),
             const SizedBox(height: 20),
-            const SurfacePanel(
+            const WdsSurface(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

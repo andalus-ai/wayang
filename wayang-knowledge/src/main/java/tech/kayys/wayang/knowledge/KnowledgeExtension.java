@@ -44,7 +44,7 @@ public final class KnowledgeExtension implements WayangExtension {
 
     /** Uses a bounded process-local graph store for local development and standalone use. */
     public KnowledgeExtension(FileStore files, UrlGuard guard, GraphStore graphStore) {
-        this(files, guard, graphStore, null, null, null, null);
+        this(files, guard, graphStore, null, null, null, (KnowledgeSchema) null);
     }
 
     /**
