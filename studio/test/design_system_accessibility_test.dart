@@ -9,41 +9,6 @@ void main() {
       WdsNavigationItem(key: 'runs', label: 'Runs', icon: Icons.play_arrow),
     ];
 
-    testWidgets('navigation rail uses the active light color scheme', (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: const ColorScheme.light(
-            primary: Color(0xFF174EA6),
-            surface: Color(0xFFFDFBFF),
-            onSurface: Color(0xFF191B20),
-            outlineVariant: Color(0xFF777777),
-          ),
-        ),
-        home: Scaffold(
-          body: Row(
-            children: [
-              WdsNavigationRail(
-                items: items,
-                selectedKey: 'home',
-                onSelected: (_) {},
-              ),
-              const Expanded(child: SizedBox()),
-            ],
-          ),
-        ),
-      ));
-
-      final rail = tester.widget<Container>(
-        find.ancestor(
-          of: find.text('Wayang'),
-          matching: find.byType(Container),
-        ).first,
-      );
-      expect(rail, isNotNull);
-      expect(tester.takeException(), isNull);
-    });
-
     testWidgets('navigation rail exposes selected state and label to semantics', (tester) async {
       await tester.pumpWidget(MaterialApp(
         theme: ThemeData(useMaterial3: true),
@@ -82,7 +47,7 @@ void main() {
       expect(find.byType(NavigationBar), findsNothing);
     });
 
-    testWidgets('navigation adapts its surface to a light theme', (tester) async {
+    testWidgets('navigation rail uses the active light color scheme', (tester) async {
       const surface = Color(0xFFFDFBFF);
       await tester.pumpWidget(MaterialApp(
         theme: ThemeData(
@@ -105,6 +70,7 @@ void main() {
         ).first,
       );
       expect((railContainer.decoration as BoxDecoration).color, surface);
+      expect(tester.takeException(), isNull);
     });
   });
 }
