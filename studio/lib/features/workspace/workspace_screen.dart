@@ -581,7 +581,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   await Clipboard.setData(ClipboardData(text: releaseDownloadCommand(base, _exportProject ?? '', _release, plan.zipName)));
                   if (mounted) showToast(context, 'Copied. The command holds no token.');
                 },
-                child: const Text('Copy'),
               ),
             ]),
           ],
