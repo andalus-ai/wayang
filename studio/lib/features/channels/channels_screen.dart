@@ -162,7 +162,7 @@ class _TriggersTab extends ConsumerWidget {
             loading: () => const LoadingView(),
             error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(triggersProvider)),
             data: (list) => list.isEmpty
-                ? const EmptyState(icon: Icons.bolt_outlined, title: 'No triggers')
+                ? const WdsEmptyState(icon: Icons.bolt_outlined, title: 'No triggers', description: 'Create a trigger to start a process from a channel or schedule.')
                 : ListView(children: [for (final t in list) _TriggerCard(t: t)]),
           ),
         ),
@@ -211,7 +211,8 @@ class _TriggerCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final failing = t.lastError != null && t.lastError!.isNotEmpty;
-    return Card(
+    return WdsSurface(
+      padding: EdgeInsets.zero,
       child: ListTile(
         leading: Icon(_icon(t.channel)),
         title: Row(children: [
