@@ -16,7 +16,8 @@ public final class JdbcSchema {
     private static final List<String> SCRIPTS = List.of(
             "/wayang/schema-wait-registry.sql",
             "/wayang/schema-definitions.sql",
-            "/wayang/schema-knowledge-graph.sql");
+            "/wayang/schema-knowledge-graph.sql",
+            "/wayang/schema-knowledge-schema-registry.sql");
 
     private JdbcSchema() {
     }
@@ -33,7 +34,7 @@ public final class JdbcSchema {
                 } catch (IOException e) {
                     throw new IllegalStateException(e);
                 }
-                for (String stmt : ddl.replaceAll("--[^\n]*", "").split(";")) {
+                for (String stmt : ddl.replaceAll("--[^\\n]*", "").split(";")) {
                     if (!stmt.isBlank()) {
                         st.execute(stmt);
                     }
