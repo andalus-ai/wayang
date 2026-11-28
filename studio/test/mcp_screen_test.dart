@@ -28,6 +28,9 @@ class _FakeRepo extends WayangRepository {
   Future<List<McpServerInfo>> listMcpServers() async => [_server('pets')];
 
   @override
+  @override
+  Future<McpServerInfo> getMcpServer(String id) async => _server(id);
+
   Future<McpServerInfo> previewMcpServer(Map<String, dynamic> request) async {
     previews.add(request);
     return _server('preview');
