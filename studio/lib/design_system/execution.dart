@@ -470,7 +470,6 @@ class _WdsExecutionEventTile extends StatelessWidget {
             formatWdsTimestamp(event.timestamp),
             style: theme.textTheme.labelSmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
-              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
         ],
