@@ -174,7 +174,9 @@ class TasksScreen extends ConsumerWidget {
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            ElevatedButton(
+            WdsButton(
+              label: 'Complete',
+              isLoading: completing,
               onPressed: completing
                   ? null
                   : () async {
@@ -195,9 +197,6 @@ class TasksScreen extends ConsumerWidget {
                         });
                       }
                     },
-              child: completing
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Complete'),
             ),
           ],
         ),
@@ -236,7 +235,8 @@ class TasksScreen extends ConsumerWidget {
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-            ElevatedButton(
+            WdsButton(
+              label: 'Send',
               onPressed: () async {
                 final parsed = tryParseJsonObject(payload.text);
                 if (parsed == null) return setState(() => error = 'Not a JSON object');
@@ -251,7 +251,6 @@ class TasksScreen extends ConsumerWidget {
                   setState(() => error = errText(e));
                 }
               },
-              child: const Text('Send'),
             ),
           ],
         ),
