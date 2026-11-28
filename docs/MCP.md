@@ -83,7 +83,10 @@ references; literals are refused. Point any MCP client at `https://<host>/api/v1
 token; it is stateless and answers with plain JSON (no SSE, no sessions).
 
 In the Studio: **MCP servers -> Import OpenAPI** (URL or pasted spec, method/tag/path filters, credential headers) shows a
-preview of the generated tools and warnings before **Create**.
+preview of the generated tools and warnings before **Create**. The form checks the server id (letters, digits, `_`, `-`, up to 60,
+not already used), that at least one method is picked and that each "Only paths" entry compiles as a regular expression (Dart's
+syntax, close to but not identical with the server's Java one); changing any input clears the preview, so Create always matches
+what was previewed.
 
 ## The `openapi` node: a spec and an operation, nothing else
 
