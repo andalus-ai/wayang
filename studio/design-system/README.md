@@ -198,3 +198,17 @@ limits, server validation, allowed action mapping, task-action authorization,
 navigation allow-listing and safe rendering rules do not move into WDS.
 Pasted surfaces remain read-only; they cannot complete tasks, fetch images or
 submit arbitrary actions.
+
+
+## M22 — Integration resource surface consistency
+
+Channels trigger/account resources and MCP server expansion cards now use
+`WdsSurface`, completing the shared visual framing for these integration
+catalogs. The trigger empty state also uses `WdsEmptyState`. Existing
+`WdsPageHeader`, `WdsBadge` and MCP page-action composition is retained.
+
+This is a presentation-only alignment. Channels owns trigger and OAuth
+lifecycle, credential references and allow-lists. MCP owns OpenAPI
+preview/import, stale-preview invalidation, security declarations, lazy tool
+details and server lifecycle. Neither feature's state, authorization, API
+access or validation moves into WDS.

@@ -67,7 +67,8 @@ class _ServerCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Card(
+    return WdsSurface(
+      padding: EdgeInsets.zero,
       child: ExpansionTile(
         leading: const Icon(Icons.hub_rounded),
         title: Text(s.id, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w600)),
