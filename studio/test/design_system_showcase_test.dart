@@ -43,8 +43,8 @@ void main() {
     });
 
     testWidgets('search filters examples by title and tags', (tester) async {
-      await tester.view.setPhysicalSize(const Size(1200, 1600));
-      await tester.view.setDevicePixelRatio(1);
+      tester.view.physicalSize = const Size(1200, 1600);
+      tester.view.devicePixelRatio = 1;
       await tester.pumpWidget(MaterialApp(
         theme: ThemeData(useMaterial3: true),
         home: Scaffold(
@@ -56,12 +56,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Success badge'), findsOneWidget);
       expect(find.text('Primary action'), findsNothing);
-      await tester.view.resetPhysicalSize();
+      tester.view.resetPhysicalSize();
     });
 
     testWidgets('can switch preview theme', (tester) async {
-      await tester.view.setPhysicalSize(const Size(1200, 1600));
-      await tester.view.setDevicePixelRatio(1);
+      tester.view.physicalSize = const Size(1200, 1600);
+      tester.view.devicePixelRatio = 1;
       await tester.pumpWidget(MaterialApp(
         theme: ThemeData(useMaterial3: true),
         home: Scaffold(
@@ -73,12 +73,12 @@ void main() {
       await tester.tap(find.byType(Switch));
       await tester.pumpAndSettle();
       expect(find.text('Dark preview'), findsOneWidget);
-      await tester.view.resetPhysicalSize();
+      tester.view.resetPhysicalSize();
     });
 
     testWidgets('shows an empty state when no examples match', (tester) async {
-      await tester.view.setPhysicalSize(const Size(1200, 1600));
-      await tester.view.setDevicePixelRatio(1);
+      tester.view.physicalSize = const Size(1200, 1600);
+      tester.view.devicePixelRatio = 1;
       await tester.pumpWidget(MaterialApp(
         theme: ThemeData(useMaterial3: true),
         home: Scaffold(
@@ -89,7 +89,7 @@ void main() {
       await tester.enterText(find.byType(TextField), 'not-a-component');
       await tester.pumpAndSettle();
       expect(find.text('No components found'), findsOneWidget);
-      await tester.view.resetPhysicalSize();
+      tester.view.resetPhysicalSize();
     });
   });
 }
