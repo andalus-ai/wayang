@@ -518,11 +518,6 @@ class _ConnectionCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final color = switch (c.status) {
-      'CONNECTED' => Colors.green,
-      'REVOKED' => Colors.red,
-      _ => Colors.orange,
-    };
     return Card(
       child: ListTile(
         leading: const Icon(Icons.account_circle_outlined),
