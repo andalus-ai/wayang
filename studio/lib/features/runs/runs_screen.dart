@@ -254,7 +254,9 @@ class RunsScreen extends ConsumerWidget {
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            ElevatedButton(
+            WdsButton(
+              label: 'Start',
+              isLoading: starting,
               onPressed: processId == null || starting
                   ? null
                   : () async {
@@ -276,9 +278,6 @@ class RunsScreen extends ConsumerWidget {
                         });
                       }
                     },
-              child: starting
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Start'),
             ),
           ],
         ),
