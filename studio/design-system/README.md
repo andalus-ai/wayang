@@ -110,6 +110,11 @@ values and remain responsible for route registration and access control. See
 [showcase guide](showcase.md) for the extension contract and examples.
 
 
+## Studio-wide adoption roadmap
+
+See [Studio adoption audit and migration roadmap](studio-adoption-roadmap.md) for the cross-mode adoption matrix, ownership boundaries, migration waves, architecture and sequence diagrams, quality gates, and the required source-wide call-site census.
+
+
 ## Legacy widget migration
 
 The [legacy widget migration inventory](legacy-widget-migration.md) tracks the staged
