@@ -108,9 +108,9 @@ class SecretsScreen extends ConsumerWidget {
                                 onPressed: () => _put(context, ref, fixedName: s.name),
                               ),
                               WdsIconButton(
-                              tooltip: 'Delete secret',
-                              icon: Icons.delete_outline_rounded,
-                              onPressed: () async {
+                                tooltip: 'Delete secret',
+                                icon: Icons.delete_outline_rounded,
+                                onPressed: () async {
                                 final ok = await showConfirmDialog(context,
                                     title: 'Delete ${s.name}?',
                                     message: 'Nodes referencing it will fail until it is set again.',
@@ -123,8 +123,8 @@ class SecretsScreen extends ConsumerWidget {
                                 } catch (e) {
                                   if (context.mounted) showToast(context, errText(e), isError: true);
                                 }
-                              },
-                            ),
+                                },
+                              ),
                             ]),
                           ),
                         ),
@@ -222,14 +222,40 @@ class _KeyBanner extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final st = ref.watch(keyStatusProvider).valueOrNull;
     if (st == null) return const SizedBox.shrink();
+    final status = WdsBadge(
+      label: st.needRotation == 0 ? 'Keyring healthy' : 'Rotation needed',
+      tone: st.needRotation == 0 ? WdsBadgeTone.success : WdsBadgeTone.warning,
+      icon: st.needRotation == 0 ? Icons.verified_user_outlined : Icons.warning_amber_rounded,
+    );
+    final summary = Text(st.summary, style: Theme.of(context).textTheme.bodySmall);
+    final action = WdsButton(
+      label: 'Reload keyring',
+      variant: WdsButtonVariant.tertiary,
+      onPressed: onReload,
+    );
     return WdsSurface(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      child: Row(children: [
-        WdsBadge(label: st.needRotation == 0 ? 'Keyring healthy' : 'Rotation needed', tone: st.needRotation == 0 ? WdsBadgeTone.success : WdsBadgeTone.warning, icon: st.needRotation == 0 ? Icons.verified_user_outlined : Icons.warning_amber_rounded),
-        const SizedBox(width: 12),
-        Expanded(child: Text(st.summary, style: Theme.of(context).textTheme.bodySmall)),
-        WdsButton(label: 'Reload keyring', variant: WdsButtonVariant.tertiary, onPressed: onReload),
-      ]),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 560) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                status,
+                const SizedBox(height: 8),
+                summary,
+                Align(alignment: Alignment.centerRight, child: action),
+              ],
+            );
+          }
+          return Row(children: [
+            status,
+            const SizedBox(width: 12),
+            Expanded(child: summary),
+            action,
+          ]);
+        },
+      ),
     );
   }
 }
