@@ -243,7 +243,7 @@ resource-management surfaces:
   outcomes. Item details and one-time webhook secret display retain their
   existing feature-owned behavior.
 - `ConfigScreen` uses `WdsPageHeader`, `WdsButton`, `WdsSurface`,
-  `WdsIconButton` and `WdsEmptyState`.
+  `WdsIconButton`, `WdsFieldGroup` and `WdsEmptyState`.
 
 The migration preserves all domain and safety behavior:
 
