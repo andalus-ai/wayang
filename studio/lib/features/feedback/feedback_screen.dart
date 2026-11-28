@@ -121,7 +121,6 @@ class FeedbackScreen extends ConsumerWidget {
             ),
           ),
         ],
-        ),
       ),
     );
   }
