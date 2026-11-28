@@ -49,8 +49,8 @@ The following builders are explicitly registered in
 | mapper | `MapperScreen` | Editor-specific; inspect editor toolbar/panel and property inspector | Registered; screen internals not yet scanned |
 | mcp | `McpScreen` | Candidate for integration catalog, status and configuration inspector | Registered; screen internals not yet scanned |
 | secrets | `SecretsScreen` | Candidate for table and field presentation; secret values and reveal policy stay feature-owned | Registered; screen internals not yet scanned |
-| config | `ConfigScreen` | Candidate for page header, field groups and property rows | Registered; screen internals not yet scanned |
-| workspace | `WorkspaceScreen` | Candidate for page header, inspector and resource-list patterns | Registered; screen internals not yet scanned |
+| config | `ConfigScreen` | Uses `WdsPageHeader`, `WdsButton`, `WdsEmptyState`, `WdsSurface` and `WdsIconButton`; scope, validation, persistence and confirmation remain feature-owned | Migrated in M18 |
+| workspace | `WorkspaceScreen` | Uses `WdsPageHeader`, `WdsSurface`, `WdsButton`, `WdsSectionHeader`, `WdsBadge` and WDS empty states across export/import, release planning, template gallery and reports | Migrated in M18 |
 | surfaces | `SurfacesScreen` | Candidate for catalog/table and detail patterns | Registered; screen internals not yet scanned |
 | feedback | `FeedbackScreen` | Form and submission behavior stay feature-owned; WDS controls may be reused | Registered; screen internals not yet scanned |
 | settings | `SettingsScreen` | Candidate for page header, field groups and property rows | Registered; screen internals not yet scanned |
@@ -228,3 +228,38 @@ provider state and error recovery remain feature-owned.
 Focused widget assertions verify WDS page headers and semantic badges in both
 screens. Existing dialog validation and feature behavior remain covered by
 the original screen tests.
+
+
+## M18 — Workspace and configuration adoption
+
+The Workspace feature family now uses WDS composition across its static
+resource-management surfaces:
+
+- `WorkspaceScreen` uses `WdsPageHeader`, `WdsSurface` and `WdsButton`
+  for export, import, release planning and the built-in starter-template flow.
+- `TemplateGallery` uses `WdsSurface`, `WdsSectionHeader`,
+  `WdsEmptyState` and `WdsButton`; the gallery remains server-driven.
+- `ReportView` uses semantic `WdsBadge` status for dry-run and completed
+  outcomes. Item details and one-time webhook secret display retain their
+  existing feature-owned behavior.
+- `ConfigScreen` uses `WdsPageHeader`, `WdsButton`, `WdsSurface`,
+  `WdsIconButton` and `WdsEmptyState`.
+
+The migration preserves all domain and safety behavior:
+
+- Import is still a dry-run-first workflow. Apply remains available only for
+  the exact bundle text and options that passed the latest check.
+- Overwrite, tenant-wide configuration replacement and unsigned-import
+  warnings still require explicit confirmation.
+- Imports do not enable triggers; created triggers remain disabled.
+- Export selection, bundle integrity, release planning, validation,
+  download-command construction and template parameter validation remain
+  feature/repository-owned.
+- Release plans are cleared whenever a plan input changes.
+- Config scope, credential-name rejection, edit/delete confirmation,
+  provider invalidation and persistence remain in the Config feature.
+- Existing loading/error surfaces that navigate to application Settings
+  remain host-owned and are not extracted into WDS.
+
+Focused tests assert Workspace WDS composition and ConfigScreen WDS rendering
+while retaining the existing dry-run/apply and release-plan regression tests.
