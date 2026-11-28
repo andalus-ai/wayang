@@ -27,6 +27,7 @@ persistence, plugin activation, or execution services.
 - studio/lib/design_system/data_table.dart: controlled sorting/selection data table with loading and empty states.
 - studio/lib/design_system/inspector.dart: reusable inspector sections, field groups, property rows and field messages.
 - studio/lib/design_system/editor.dart: responsive editor toolbar and panel composition.
+- studio/lib/design_system/execution.dart: neutral execution statuses, step timeline, event list and display formatters.
 - studio/lib/design_system/node.dart: generic node cards and typed input/output port presentation.
 - studio/lib/design_system/wds.dart: public import surface.
 - studio/lib/core/theme.dart remains the ThemeData and brand-color source during
@@ -39,13 +40,13 @@ WdsSectionHeader, WdsSearchField, WdsEmptyState, WdsNavigationRail,
 WdsCompactNavigationBar, WdsBreadcrumbs, WdsPageHeader, WdsFilterToolbar,
 WdsCommandPalette, WdsDataTable, WdsInspectorSection, WdsFieldGroup,
 WdsPropertyRow, WdsFieldMessage, WdsEditorToolbar, WdsEditorPanel,
-WdsNodeCard and WdsNodePort.
+WdsNodeCard, WdsNodePort, WdsExecutionStatusIndicator, WdsExecutionTimeline and WdsExecutionEventList.
 
 The navigation widgets accept destination data and selection callbacks. The
 host application remains responsible for plugin discovery, filtering, routing,
 permissions and choosing compact destinations.
 
-Planned follow-up families: execution timelines and mode-specific templates.
+Planned follow-up families: mode-specific composition examples and templates.
 Planned components are not yet shipped.
 
 ## Contribution checklist
@@ -83,3 +84,8 @@ execution means. The Studio "Go to" flow now uses this shared component.
 `WdsEditorToolbar` composes editor identity, optional center content and action widgets; it adapts to compact widths. `WdsEditorPanel` provides a bounded-height panel layout with optional heading, actions and footer. Docking, resizing and panel persistence belong to the host editor.
 
 `WdsNodeCard` and `WdsNodePort` are visual primitives only. A node receives its title, status, input/output metadata and selection state from the host. Port kinds provide consistent visual differentiation; the host owns graph topology, connection validation, pointer gestures, hit testing, selection and mutations. These components intentionally do not encode Agent Builder, BPMN, DMN or runtime-specific rules.
+
+
+## Execution monitoring composition
+
+Use `WdsExecutionStatusIndicator` to present a host-mapped run or step status. `WdsExecutionTimeline` renders immutable `WdsExecutionStep` values in the order supplied and reports selection through a callback. Duration, attempt number and supporting messages are optional display metadata. `WdsExecutionEventList` presents immutable `WdsExecutionEvent` rows with severity, source and optional details. The host owns event acquisition, ordering, filtering, pagination, retention, retry semantics and the mapping from its runtime lifecycle to WDS status values. Timestamp and duration helpers are intentionally locale-neutral; applications may format values differently when they need localized output.
