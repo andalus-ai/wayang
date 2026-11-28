@@ -10,7 +10,7 @@ import '../../providers/app_providers.dart';
 /// Components matching [query]: every whitespace-separated word must appear (case-insensitive) in the name, id, category, kind,
 /// executor type, description or a capability. An empty query keeps everything.
 List<ComponentCatalogEntry> filterComponents(List<ComponentCatalogEntry> all, String query) {
-  final words = query.toLowerCase().split(RegExp(r'\\s+')).where((w) => w.isNotEmpty).toList();
+  final words = query.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
   if (words.isEmpty) return all;
   return [
     for (final c in all)
