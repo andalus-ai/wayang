@@ -31,7 +31,7 @@ class JdbcDeploymentLifecycleReconciliationWorkStoreTest {
             statement.execute("""
                     CREATE TABLE wayang_deployment_reconciliation_work (
                       deployment_id VARCHAR(160) NOT NULL, operation_key VARCHAR(200) NOT NULL,
-                      command_fingerprint CHAR(64) NOT NULL, status VARCHAR(32) NOT NULL,
+                      command_fingerprint CHAR(64) NOT NULL, status VARCHAR(32) NOT NULL, claim_token VARCHAR(64),
                       lease_until TIMESTAMP WITH TIME ZONE, retry_at TIMESTAMP WITH TIME ZONE,
                       detail VARCHAR(2048), created_at TIMESTAMP WITH TIME ZONE NOT NULL,
                       updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
