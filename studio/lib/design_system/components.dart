@@ -10,23 +10,32 @@ class WdsSurface extends StatelessWidget {
   final Color? color, borderColor;
   final double radius;
   final VoidCallback? onTap;
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surface = Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: color ?? (isDark ? AppColors.darkSurfaceAlt : AppColors.lightSurface),
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: borderColor ?? (isDark ? AppColors.darkBorder : AppColors.lightBorder)),
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(radius),
+      side: BorderSide(
+        color: borderColor ?? (isDark ? AppColors.darkBorder : AppColors.lightBorder),
       ),
-      // A transparent Material between the coloured box and the content: ListTile, InkWell and friends paint their ink on the
-      // nearest Material, which would otherwise sit above the box's colour (hiding splashes) and trips a framework assertion.
-      child: Material(type: MaterialType.transparency, child: child),
     );
-    if (onTap == null) return surface;
-    return Material(color: Colors.transparent, borderRadius: BorderRadius.circular(radius), clipBehavior: Clip.antiAlias,
-      child: InkWell(onTap: onTap, child: surface));
+
+    // Keep the surface itself as the Material ancestor for interactive descendants
+    // such as ListTile. A decorated Container between Material and ListTile hides
+    // ink effects and triggers Flutter's ListTile visibility assertion.
+    return Material(
+      color: color ?? (isDark ? AppColors.darkSurfaceAlt : AppColors.lightSurface),
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
+      child: onTap == null
+          ? Padding(padding: padding, child: child)
+          : InkWell(
+              onTap: onTap,
+              customBorder: shape,
+              child: Padding(padding: padding, child: child),
+            ),
+    );
   }
 }
 
