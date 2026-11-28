@@ -93,4 +93,21 @@ class JdbcDeploymentLifecycleReconciliationWorkStoreTest {
                 DeploymentOperationStatus.SUCCEEDED, 1, "target-op", "SUCCEEDED", "ok", null, NOW, NOW);
         assertThrows(SecurityException.class, () -> store.claim(different, NOW, NOW.plusSeconds(60)));
     }
+
+    @Test
+    void expiredWorkerCannotCompleteAfterAnotherWorkerReclaimsLease() {
+        var firstOwner = store.claimOwned(receipt, NOW, NOW.plusSeconds(30));
+        assertNotNull(firstOwner);
+        var secondOwner = store.claimOwned(receipt, NOW.plusSeconds(31), NOW.plusSeconds(90));
+        assertNotNull(secondOwner);
+        assertNotEquals(firstOwner.ownershipToken(), secondOwner.ownershipToken());
+
+        assertThrows(IllegalStateException.class, () -> store.complete(firstOwner,
+                DeploymentLifecycleReconciliationWorkStatus.RECONCILED, "stale result",
+                NOW.plusSeconds(32), null));
+
+        store.complete(secondOwner, DeploymentLifecycleReconciliationWorkStatus.RECONCILED,
+                "current owner result", NOW.plusSeconds(33), null);
+        assertFalse(store.claimOwned(receipt, NOW.plusSeconds(120), NOW.plusSeconds(180)) != null);
+    }
 }
