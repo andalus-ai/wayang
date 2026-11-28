@@ -42,15 +42,15 @@ The following builders are explicitly registered in
 |---|---|---|---|
 | dashboard | `DashboardScreen` | Inspect KPI/surface/page-header patterns; KPI meaning stays feature-owned | Registered; screen internals not yet scanned |
 | components | `ComponentCatalogScreen` | Uses `WdsPageHeader`, `WdsFilterToolbar`, `WdsSearchField`, `WdsSurface`, `WdsBadge`, `WdsInspectorSection`, `WdsFieldGroup`, `WdsPropertyRow` and `WdsEmptyState`; loading/error recovery remains host-owned | Migrated in M14; filtering remains feature-owned |
-| runs | `RunsScreen` | Candidate for execution status/timeline/event and inspector patterns | Registered; screen internals not yet scanned |
-| tasks | `TasksScreen` | Candidate for catalog/table/inspector and execution status patterns | Registered; screen internals not yet scanned |
+| runs | `RunsScreen` | Uses `WdsPageHeader`, `WdsFilterToolbar`, `WdsSearchField`, `WdsSurface`, `WdsExecutionStatusIndicator`, `WdsExecutionTimeline`, `WdsBadge`, `WdsButton` and `WdsIconButton`; run lifecycle, polling, WebSocket subscriptions, cancel/start and variables remain feature-owned | Migrated in M19 |
+| tasks | `TasksScreen` | Uses `WdsPageHeader`, `WdsFilterToolbar`, `WdsSearchField`, `WdsSurface`, `WdsBadge`, `WdsButton` and `WdsIconButton`; overdue ordering, task completion, message delivery and due-time logic remain feature-owned | Migrated in M19 |
 | projects | `ProjectsScreen` | Uses `WdsPageHeader`, `WdsButton`, `WdsFilterToolbar`, `WdsSearchField`, `WdsDataTable`, `WdsIconButton`, `WdsBadge` and `WdsEmptyState`; project lifecycle and active-project state remain feature-owned | Migrated in M15; search/filter is feature-owned |
 | channels | `ChannelsScreen` | Candidate for catalog/table/inspector patterns | Registered; screen internals not yet scanned |
 | mapper | `MapperScreen` | Editor-specific; inspect editor toolbar/panel and property inspector | Registered; screen internals not yet scanned |
 | mcp | `McpScreen` | Candidate for integration catalog, status and configuration inspector | Registered; screen internals not yet scanned |
-| secrets | `SecretsScreen` | Uses `WdsPageHeader`, `WdsFilterToolbar`, `WdsSearchField`, `WdsSurface`, `WdsBadge`, `WdsButton`, `WdsIconButton` and `WdsEmptyState`; secret values and reveal policy remain feature-owned | Migrated in M17 |
-| config | `ConfigScreen` | Candidate for page header, field groups and property rows | Registered; screen internals not yet scanned |
-| workspace | `WorkspaceScreen` | Candidate for page header, inspector and resource-list patterns | Registered; screen internals not yet scanned |
+| secrets | `SecretsScreen` | Candidate for table and field presentation; secret values and reveal policy stay feature-owned | Registered; screen internals not yet scanned |
+| config | `ConfigScreen` | Uses `WdsPageHeader`, `WdsButton`, `WdsEmptyState`, `WdsSurface`, `WdsIconButton` and `WdsFieldGroup`; scope, validation, persistence and confirmation remain feature-owned | Migrated in M18 |
+| workspace | `WorkspaceScreen` | Uses `WdsPageHeader`, `WdsSurface`, `WdsButton`, `WdsSectionHeader`, `WdsBadge` and WDS empty states across export/import, release planning, template gallery and reports | Migrated in M18 |
 | surfaces | `SurfacesScreen` | Candidate for catalog/table and detail patterns | Registered; screen internals not yet scanned |
 | feedback | `FeedbackScreen` | Form and submission behavior stay feature-owned; WDS controls may be reused | Registered; screen internals not yet scanned |
 | settings | `SettingsScreen` | Uses `WdsPageHeader`, `WdsInspectorSection`, `WdsFieldGroup`, `WdsButton`, `WdsSurface` and `WdsBadge`; API config, token masking and connection testing remain feature-owned | Migrated in M17 |
@@ -254,3 +254,58 @@ all security and connection behavior in their feature modules.
 No standalone static `ConfigScreen` was found in the current feature tree;
 this milestone therefore records the verified Secrets and Settings screens
 rather than claiming a separate configuration-screen migration.
+## M18 — Workspace and configuration adoption
+
+The Workspace feature family now uses WDS composition across its static
+resource-management surfaces:
+
+- `WorkspaceScreen` uses `WdsPageHeader`, `WdsSurface` and `WdsButton`
+  for export, import, release planning and the built-in starter-template flow.
+- `TemplateGallery` uses `WdsSurface`, `WdsSectionHeader`,
+  `WdsEmptyState` and `WdsButton`; the gallery remains server-driven.
+- `ReportView` uses semantic `WdsBadge` status for dry-run and completed
+  outcomes. Item details and one-time webhook secret display retain their
+  existing feature-owned behavior.
+- `ConfigScreen` uses `WdsPageHeader`, `WdsButton`, `WdsSurface`,
+  `WdsIconButton`, `WdsFieldGroup` and `WdsEmptyState`.
+
+The migration preserves all domain and safety behavior:
+
+- Import is still a dry-run-first workflow. Apply remains available only for
+  the exact bundle text and options that passed the latest check.
+- Overwrite, tenant-wide configuration replacement and unsigned-import
+  warnings still require explicit confirmation.
+- Imports do not enable triggers; created triggers remain disabled.
+- Export selection, bundle integrity, release planning, validation,
+  download-command construction and template parameter validation remain
+  feature/repository-owned.
+- Release plans are cleared whenever a plan input changes.
+- Config scope, credential-name rejection, edit/delete confirmation,
+  provider invalidation and persistence remain in the Config feature.
+- Existing loading/error surfaces that navigate to application Settings
+  remain host-owned and are not extracted into WDS.
+
+Focused tests assert Workspace WDS composition and ConfigScreen WDS rendering
+while retaining the existing dry-run/apply and release-plan regression tests.
+## M19 — Runs and Tasks execution experience
+
+Runs and Tasks were inspected as distinct operational screens and migrated without merging their interaction models.
+
+### Runs
+- Page heading, responsive filter/search composition, selected run surface, empty states and primary actions use WDS.
+- Run status maps to shared execution vocabulary: running → running, waiting → queued, completed → succeeded, failed → failed, cancelled → cancelled. The API `RunStatus` is unchanged.
+- The live event feed uses `WdsExecutionTimeline`. Items derive from server event type, node id and timestamp; unknown event types remain pending/neutral rather than being guessed successful.
+- The existing 200-event retention and 50-event presentation window remain feature-owned.
+- WebSocket ticket acquisition, event subscription, polling fallback, refresh, cancellation, start validation, canvas highlighting, feedback, variable preview/copy and surface validation remain feature-owned.
+
+### Tasks
+- Page heading, responsive search/filter toolbar, empty states and task rows use WDS.
+- Task kind and overdue state use semantic badges. Overdue calculation and sort order remain feature-owned.
+- Complete, send-message and refresh actions use shared WDS controls.
+- JSON validation, duplicate-submit protection, message correlation, buffered/delivered feedback and repository calls remain feature-owned.
+
+### Regression coverage
+- Existing run/task filtering tests remain.
+- Run tests cover API status and server-event status mapping, including unknown and incomplete event types.
+- New Runs and Tasks widget tests assert WDS page/filter/action/surface/badge composition.
+- No runtime, repository, WebSocket or Riverpod dependencies were added to WDS.

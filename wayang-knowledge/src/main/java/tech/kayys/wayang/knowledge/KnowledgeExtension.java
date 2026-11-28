@@ -12,6 +12,7 @@ import tech.kayys.wayang.rag.GraphEntityLookup;
 import tech.kayys.wayang.rag.GraphStore;
 import tech.kayys.wayang.rag.InMemoryGraphStore;
 import tech.kayys.wayang.rag.KnowledgeSchema;
+import tech.kayys.wayang.rag.KnowledgeSchemaRegistry;
 import tech.kayys.wayang.rag.RelationshipExtractor;
 import tech.kayys.wayang.runtime.ComponentDescriptor;
 import tech.kayys.wayang.runtime.ConnectorInput;
@@ -43,7 +44,7 @@ public final class KnowledgeExtension implements WayangExtension {
 
     /** Uses a bounded process-local graph store for local development and standalone use. */
     public KnowledgeExtension(FileStore files, UrlGuard guard, GraphStore graphStore) {
-        this(files, guard, graphStore, null, null, null, null);
+        this(files, guard, graphStore, null, null, null, (KnowledgeSchema) null);
     }
 
     /**
@@ -53,15 +54,30 @@ public final class KnowledgeExtension implements WayangExtension {
     public KnowledgeExtension(FileStore files, UrlGuard guard, GraphStore graphStore,
             GraphEntityLookup entityLookup, EntityExtractor entityExtractor,
             RelationshipExtractor relationshipExtractor, KnowledgeSchema schema) {
+        this(files, guard, graphStore, entityLookup, entityExtractor, relationshipExtractor, schema, null);
+    }
+
+    /** Uses an exact-version schema registry; workflow configuration must pin ID and version. */
+    public KnowledgeExtension(FileStore files, UrlGuard guard, GraphStore graphStore,
+            GraphEntityLookup entityLookup, EntityExtractor entityExtractor,
+            RelationshipExtractor relationshipExtractor, KnowledgeSchemaRegistry schemaRegistry) {
+        this(files, guard, graphStore, entityLookup, entityExtractor, relationshipExtractor, null, schemaRegistry);
+    }
+
+    private KnowledgeExtension(FileStore files, UrlGuard guard, GraphStore graphStore,
+            GraphEntityLookup entityLookup, EntityExtractor entityExtractor,
+            RelationshipExtractor relationshipExtractor, KnowledgeSchema schema,
+            KnowledgeSchemaRegistry schemaRegistry) {
         this.registry = new KnowledgeRegistry(
                 guard,
                 files == null ? null : new KnowledgePersistence(files.root().resolve("knowledge")),
                 files == null ? java.time.Clock.systemUTC() : files.clock());
         java.util.Objects.requireNonNull(graphStore, "graphStore");
         boolean anyExtractionDependency = entityLookup != null || entityExtractor != null
-                || relationshipExtractor != null || schema != null;
+                || relationshipExtractor != null || schema != null || schemaRegistry != null;
+        boolean hasExactlyOneSchemaSource = (schema != null) != (schemaRegistry != null);
         boolean allExtractionDependencies = entityLookup != null && entityExtractor != null
-                && relationshipExtractor != null && schema != null;
+                && relationshipExtractor != null && hasExactlyOneSchemaSource;
         if (anyExtractionDependency && !allExtractionDependencies) {
             throw new IllegalArgumentException("graph ingestion requires entity lookup, both extractors and a schema");
         }
@@ -80,8 +96,11 @@ public final class KnowledgeExtension implements WayangExtension {
         registered.put("graph-query", new GraphQueryConnector(graphStore));
         registered.put("graph-retract", new GraphRetractConnector(graphStore));
         if (allExtractionDependencies) {
-            registered.put("graph-ingest", new GraphIngestConnector(graphStore, files, entityLookup,
-                    entityExtractor, relationshipExtractor, schema));
+            registered.put("graph-ingest", schemaRegistry != null
+                    ? new RegistryGraphIngestConnector(graphStore, files, entityLookup,
+                            entityExtractor, relationshipExtractor, schemaRegistry)
+                    : new GraphIngestConnector(graphStore, files, entityLookup,
+                            entityExtractor, relationshipExtractor, schema));
         }
         this.connectors = Map.copyOf(registered);
     }
@@ -138,7 +157,11 @@ public final class KnowledgeExtension implements WayangExtension {
             result.add(component("graph-ingest", "Extract knowledge graph", "Extract and validate entities and relationships from source text using deployment-configured providers and ontology",
                     "knowledge.graph.ingest", "knowledge-graph",
                     Map.of("graphCollection", Map.of("type", "string", "minLength", 1, "maxLength", 200),
-                            "extractorId", Map.of("type", "string", "maxLength", 200)), List.of("graphCollection")));
+                            "extractorId", Map.of("type", "string", "maxLength", 200),
+                            "graphSchemaId", Map.of("type", "string", "maxLength", 200,
+                                    "description", "Exact schema ID from the deployment schema registry"),
+                            "graphSchemaVersion", Map.of("type", "string", "maxLength", 100,
+                                    "description", "Exact immutable schema version; no latest-version fallback")), List.of("graphCollection")));
         }
         return List.copyOf(result);
     }
