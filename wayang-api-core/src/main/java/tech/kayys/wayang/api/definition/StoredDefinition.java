@@ -1,5 +1,7 @@
 package tech.kayys.wayang.api.definition;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -56,6 +58,12 @@ public record StoredDefinition(String tenantId, DefinitionKind kind, String id, 
             list.forEach(item -> copy.add(immutableValue(item)));
             return Collections.unmodifiableList(copy);
         }
-        return value;
+        if (value == null || value instanceof String || value instanceof Boolean
+                || value instanceof Byte || value instanceof Short || value instanceof Integer || value instanceof Long
+                || value instanceof Float || value instanceof Double || value instanceof BigInteger
+                || value instanceof BigDecimal) {
+            return value;
+        }
+        throw new IllegalArgumentException("Unsupported value in definition JSON tree: " + value.getClass().getName());
     }
 }
