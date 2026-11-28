@@ -49,7 +49,7 @@ The following builders are explicitly registered in
 | mapper | `MapperScreen` | Editor-specific; inspect editor toolbar/panel and property inspector | Registered; screen internals not yet scanned |
 | mcp | `McpScreen` | Candidate for integration catalog, status and configuration inspector | Registered; screen internals not yet scanned |
 | secrets | `SecretsScreen` | Candidate for table and field presentation; secret values and reveal policy stay feature-owned | Registered; screen internals not yet scanned |
-| config | `ConfigScreen` | Uses `WdsPageHeader`, `WdsButton`, `WdsEmptyState`, `WdsSurface` and `WdsIconButton`; scope, validation, persistence and confirmation remain feature-owned | Migrated in M18 |
+| config | `ConfigScreen` | Uses `WdsPageHeader`, `WdsButton`, `WdsEmptyState`, `WdsSurface`, `WdsIconButton` and `WdsFieldGroup`; scope, validation, persistence and confirmation remain feature-owned | Migrated in M18 |
 | workspace | `WorkspaceScreen` | Uses `WdsPageHeader`, `WdsSurface`, `WdsButton`, `WdsSectionHeader`, `WdsBadge` and WDS empty states across export/import, release planning, template gallery and reports | Migrated in M18 |
 | surfaces | `SurfacesScreen` | Candidate for catalog/table and detail patterns | Registered; screen internals not yet scanned |
 | feedback | `FeedbackScreen` | Form and submission behavior stay feature-owned; WDS controls may be reused | Registered; screen internals not yet scanned |
