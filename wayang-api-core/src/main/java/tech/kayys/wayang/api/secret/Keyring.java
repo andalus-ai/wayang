@@ -100,7 +100,7 @@ public record Keyring(Map<String, byte[]> keys, String active) {
                     // not a POSIX file system: nothing to check
                 }
             }
-            return parse(java.nio.file.Files.readString(path));
+            return parse(BoundedFiles.readString(path, BoundedFiles.SMALL));
         } catch (java.io.IOException e) {
             throw new IllegalStateException("Cannot read keyring file " + path + ": " + e.getClass().getSimpleName());
         }

@@ -93,6 +93,13 @@ public final class Cli {
         }
     }
 
+    /** At most {@code limit} bytes of a file, so a wrong path (a huge file, an endless device) cannot exhaust memory; a longer file yields exactly {@code limit} bytes for the caller's size check. */
+    static byte[] readAtMost(Path file, int limit) throws IOException {
+        try (InputStream in = Files.newInputStream(file)) {
+            return in.readNBytes(limit);
+        }
+    }
+
     private static int runOnce(String[] a, ReleaseEngine rt, InputStream stdin, PrintStream out, PrintStream err) {
         if (a.length < 2) {
             throw new IllegalArgumentException("usage: run <process> [--input FILE|-] [--wait-seconds N]");
@@ -116,7 +123,7 @@ public final class Cli {
         Map<String, Object> input = Map.of();
         if (inputArg != null) {
             try {
-                byte[] b = inputArg.equals("-") ? stdin.readNBytes(1_000_001) : Files.readAllBytes(Path.of(inputArg));
+                byte[] b = inputArg.equals("-") ? stdin.readNBytes(1_000_001) : readAtMost(Path.of(inputArg), 1_000_001);
                 if (b.length > 1_000_000) {
                     throw new IllegalArgumentException("The input is larger than 1 MB");
                 }
@@ -173,7 +180,11 @@ public final class Cli {
         String keyFile = env.apply("WAYANG_API_KEY_FILE");
         if ((key == null || key.isBlank()) && keyFile != null && !keyFile.isBlank()) {
             try {
-                key = Files.readString(Path.of(keyFile), StandardCharsets.UTF_8).strip();
+                byte[] raw = readAtMost(Path.of(keyFile), 64 * 1024 + 1);
+                if (raw.length > 64 * 1024) {
+                    throw new IllegalStateException("WAYANG_API_KEY_FILE is larger than 64 KiB");
+                }
+                key = new String(raw, StandardCharsets.UTF_8).strip();
             } catch (IOException e) {
                 throw new IllegalStateException("Cannot read WAYANG_API_KEY_FILE");
             }
