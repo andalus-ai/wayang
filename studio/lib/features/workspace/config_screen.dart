@@ -61,28 +61,32 @@ class ConfigScreen extends ConsumerWidget {
                   ? const WdsEmptyState(icon: Icons.tune_rounded, title: 'No settings in this scope')
                   : ListView(children: [
                       for (final c in list)
-                        WdsSurface(padding: EdgeInsets.zero,
-                          child: ListTile(
-                            title: Text(c.key, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w600)),
-                            subtitle: Text(c.value, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-                            onTap: () => _edit(context, ref, scope, c),
-                            trailing: WdsIconButton(
-                              tooltip: 'Delete setting',
-                              icon: Icons.delete_outline_rounded,
-                              onPressed: () async {
-                                final ok = await showConfirmDialog(context,
-                                    title: 'Delete ${c.key}?',
-                                    message: 'Nodes using it fail until it is set again.',
-                                    confirmLabel: 'Delete',
-                                    destructive: true);
-                                if (!ok) return;
-                                try {
-                                  await ref.read(repositoryProvider).deleteConfig(c.key, project: scope);
-                                  ref.invalidate(configProvider);
-                                } catch (e) {
-                                  if (context.mounted) showToast(context, errText(e), isError: true);
-                                }
-                              },
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: WdsSurface(
+                            padding: EdgeInsets.zero,
+                            child: ListTile(
+                              title: Text(c.key, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+                              subtitle: Text(c.value, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                              onTap: () => _edit(context, ref, scope, c),
+                              trailing: WdsIconButton(
+                                tooltip: 'Delete setting',
+                                icon: Icons.delete_outline_rounded,
+                                onPressed: () async {
+                                  final ok = await showConfirmDialog(context,
+                                      title: 'Delete ${c.key}?',
+                                      message: 'Nodes using it fail until it is set again.',
+                                      confirmLabel: 'Delete',
+                                      destructive: true);
+                                  if (!ok) return;
+                                  try {
+                                    await ref.read(repositoryProvider).deleteConfig(c.key, project: scope);
+                                    ref.invalidate(configProvider);
+                                  } catch (e) {
+                                    if (context.mounted) showToast(context, errText(e), isError: true);
+                                  }
+                                },
+                              ),
                             ),
                           ),
                         ),
@@ -105,9 +109,8 @@ class ConfigScreen extends ConsumerWidget {
           title: Text(existing == null ? 'Add setting' : 'Edit ${existing.key}'),
           content: SizedBox(
             width: 460,
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
+            child: WdsFieldGroup(children: [
               TextField(controller: key, enabled: existing == null, autofocus: existing == null, decoration: const InputDecoration(labelText: 'Name (e.g. BASE_URL)')),
-              const SizedBox(height: 10),
               TextField(controller: value, minLines: 1, maxLines: 6, decoration: InputDecoration(labelText: 'Value', errorText: error)),
             ]),
           ),
