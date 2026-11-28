@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wayang_studio/features/runs/runs_screen.dart';
+import 'package:wayang_studio/data/run_events.dart';
+import 'package:wayang_studio/design_system/wds.dart';
 import 'package:wayang_studio/models/wayang.dart';
 
 RunView r(String id, String process, RunStatus s) => RunView(id: id, processId: process, version: 1, status: s);
@@ -13,6 +15,25 @@ void main() {
 
   test('no query and no status keeps every run', () {
     expect(filterRuns(all, '', null).length, 3);
+  });
+
+  test('run statuses map to shared execution semantics without changing runtime status', () {
+    expect(runExecutionStatus(RunStatus.running), WdsExecutionStatus.running);
+    expect(runExecutionStatus(RunStatus.waiting), WdsExecutionStatus.queued);
+    expect(runExecutionStatus(RunStatus.completed), WdsExecutionStatus.succeeded);
+    expect(runExecutionStatus(RunStatus.failed), WdsExecutionStatus.failed);
+    expect(runExecutionStatus(RunStatus.cancelled), WdsExecutionStatus.cancelled);
+  });
+
+  test('run event types map to WDS timeline states', () {
+    expect(runEventExecutionStatus(const RunEventView(type: 'NODE_STARTED', runId: 'r1')), WdsExecutionStatus.running);
+    expect(runEventExecutionStatus(const RunEventView(type: 'NODE_RETRYING', runId: 'r1')), WdsExecutionStatus.retrying);
+    expect(runEventExecutionStatus(const RunEventView(type: 'NODE_SKIPPED', runId: 'r1')), WdsExecutionStatus.skipped);
+    expect(runEventExecutionStatus(const RunEventView(type: 'NODE_COMPLETED', runId: 'r1')), WdsExecutionStatus.succeeded);
+    expect(runEventExecutionStatus(const RunEventView(type: 'NODE_FAILED', runId: 'r1')), WdsExecutionStatus.failed);
+    expect(runEventExecutionStatus(const RunEventView(type: 'RUN_CANCELLED', runId: 'r1')), WdsExecutionStatus.cancelled);
+    expect(runEventExecutionStatus(const RunEventView(type: 'CUSTOM_EVENT', runId: 'r1')), WdsExecutionStatus.pending);
+    expect(runEventExecutionStatus(const RunEventView(type: 'RUN_INCOMPLETE', runId: 'r1')), WdsExecutionStatus.pending);
   });
 
   test('the status narrows, and the words must all match process or run id', () {
