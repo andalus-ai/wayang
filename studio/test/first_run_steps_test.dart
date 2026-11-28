@@ -24,6 +24,7 @@ void main() {
     expect(firstRunSteps(connected: true, processes: 1, runs: 0, executes: false), isEmpty);
   });
 
+
   test('dashboard maps API run statuses to neutral WDS execution states', () {
     expect(dashboardRunStatus(RunStatus.running), WdsExecutionStatus.running);
     expect(dashboardRunStatus(RunStatus.waiting), WdsExecutionStatus.queued);

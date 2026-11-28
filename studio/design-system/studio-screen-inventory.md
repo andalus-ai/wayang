@@ -53,7 +53,7 @@ The following builders are explicitly registered in
 | workspace | `WorkspaceScreen` | Uses `WdsPageHeader`, `WdsSurface`, `WdsButton`, `WdsSectionHeader`, `WdsBadge` and WDS empty states across export/import, release planning, template gallery and reports | Migrated in M18 |
 | surfaces | `SurfacesScreen` | Candidate for catalog/table and detail patterns | Registered; screen internals not yet scanned |
 | feedback | `FeedbackScreen` | Form and submission behavior stay feature-owned; WDS controls may be reused | Registered; screen internals not yet scanned |
-| settings | `SettingsScreen` | Candidate for page header, field groups and property rows | Registered; screen internals not yet scanned |
+| settings | `SettingsScreen` | Uses `WdsPageHeader`, `WdsInspectorSection`, `WdsFieldGroup`, `WdsButton`, `WdsSurface` and `WdsBadge`; API config, token masking and connection testing remain feature-owned | Migrated in M17 |
 
 Dashboard is inserted as the first navigation item. Plugin screens are supplied
 dynamically through `allNavEntries(plugins)`; they cannot be enumerated from
@@ -230,6 +230,30 @@ screens. Existing dialog validation and feature behavior remain covered by
 the original screen tests.
 
 
+## M17 — Secrets and connection settings adoption
+
+The Secrets and Settings screens now use shared WDS composition while retaining
+all security and connection behavior in their feature modules.
+
+- Secrets uses `WdsPageHeader`, `WdsFilterToolbar`, `WdsSearchField`,
+  `WdsSurface`, `WdsBadge`, `WdsButton`, `WdsIconButton` and
+  `WdsEmptyState`.
+- The keyring status presentation adapts to compact widths. Healthy and
+  rotation-needed states are mapped to semantic badge tones.
+- Secret metadata remains the only secret-related data rendered. Secret values
+  are write-only, replacement remains an explicit operation, and copy actions
+  copy only the `\${secret:NAME}` reference.
+- Settings uses `WdsPageHeader`, `WdsInspectorSection`, `WdsFieldGroup`,
+  `WdsButton`, `WdsSurface` and `WdsBadge`.
+- The bearer-token field remains obscured. API configuration remains in
+  memory-only provider state, and the Apply/test operation still owns its API
+  call and result state.
+- Tests cover the Secrets empty state and Settings token masking/WDS
+  composition. No secret value is added to WDS APIs or component state.
+
+No standalone static `ConfigScreen` was found in the current feature tree;
+this milestone therefore records the verified Secrets and Settings screens
+rather than claiming a separate configuration-screen migration.
 ## M18 — Workspace and configuration adoption
 
 The Workspace feature family now uses WDS composition across its static
