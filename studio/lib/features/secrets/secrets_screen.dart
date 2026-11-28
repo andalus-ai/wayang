@@ -81,7 +81,7 @@ class SecretsScreen extends ConsumerWidget {
               error: (e, _) => ErrorView(message: errText(e), needsSettings: needsSettings(e), onRetry: () => ref.invalidate(secretsProvider)),
               data: (all) {
                 final list = filterSecrets(all, ref.watch(secretSearchProvider));
-                if (all.isEmpty) return const EmptyState(icon: Icons.key_off_outlined, title: 'No secrets', message: 'Use Set secret, then refer to it as \${secret:NAME} in a node config.');
+                if (all.isEmpty) return const WdsEmptyState(icon: Icons.key_off_outlined, title: 'No secrets', description: 'Use Set secret, then refer to it as \${secret:NAME} in a node config.');
                 if (list.isEmpty) return const WdsEmptyState(icon: Icons.search_off_rounded, title: 'No secret matches');
                 return ListView(children: [
                       for (final s in list)
