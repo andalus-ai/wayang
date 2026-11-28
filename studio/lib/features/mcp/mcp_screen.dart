@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/utils.dart';
 import '../../core/widgets.dart';
 import '../../data/api_client.dart';
+import '../../data/mcp_edit.dart';
 import '../../models/wayang.dart';
 import '../../providers/app_providers.dart';
 
@@ -77,7 +78,10 @@ class _ServerCard extends ConsumerWidget {
               child: SelectableText('MCP endpoint (POST, Authorization: Bearer <Wayang token>): ${s.endpoint}',
                   style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
             ),
-            IconButton(tooltip: 'Copy endpoint', icon: const Icon(Icons.copy_rounded, size: 16), onPressed: () => Clipboard.setData(ClipboardData(text: s.endpoint))),
+            IconButton(tooltip: 'Copy endpoint', icon: const Icon(Icons.copy_rounded, size: 16), onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: s.endpoint));
+              if (context.mounted) showToast(context, 'Endpoint copied');
+            }),
           ]),
           _ToolList(id: s.id),
           Row(children: [
@@ -118,15 +122,22 @@ class _ServerCard extends ConsumerWidget {
   }
 }
 
-/// The list call omits tools, so the detail is fetched when a card is expanded.
-class _ToolList extends ConsumerWidget {
+/// The list call omits tools, so the detail is fetched when a card is expanded (once, not on every rebuild).
+class _ToolList extends ConsumerStatefulWidget {
   const _ToolList({required this.id});
   final String id;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ToolList> createState() => _ToolListState();
+}
+
+class _ToolListState extends ConsumerState<_ToolList> {
+  late final Future<McpServerInfo> _future = ref.read(repositoryProvider).getMcpServer(widget.id);
+
+  @override
+  Widget build(BuildContext context) {
     return FutureBuilder<McpServerInfo>(
-      future: ref.read(repositoryProvider).getMcpServer(id),
+      future: _future,
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) return const Padding(padding: EdgeInsets.all(12), child: LinearProgressIndicator());
         if (snap.hasError) return Text(errText(snap.error!), style: const TextStyle(fontSize: 12));
@@ -192,6 +203,19 @@ class _ImportDialogState extends ConsumerState<_ImportDialog> {
   McpServerInfo? _preview;
 
   @override
+  void initState() {
+    super.initState();
+    for (final c in [_url, _spec, _baseUrl, _headers, _tags, _paths]) {
+      c.addListener(_stale);
+    }
+  }
+
+  /// The preview shows what the inputs produced; once they change it no longer applies, so Create is disabled until previewed again.
+  void _stale() {
+    if (_preview != null) setState(() => _preview = null);
+  }
+
+  @override
   void dispose() {
     for (final c in [_id, _url, _spec, _baseUrl, _headers, _tags, _paths]) {
       c.dispose();
@@ -211,6 +235,15 @@ class _ImportDialogState extends ConsumerState<_ImportDialog> {
       setState(() => _error = _useUrl ? 'Enter the spec URL' : 'Paste the spec');
       return null;
     }
+    if (_methods.isEmpty) {
+      setState(() => _error = 'Pick at least one HTTP method.');
+      return null;
+    }
+    final badPath = pathPatternProblem(_csv(_paths));
+    if (badPath != null) {
+      setState(() => _error = 'Only paths: $badPath');
+      return null;
+    }
     return {
       if (_useUrl) 'specUrl': _url.text.trim() else 'spec': _spec.text,
       if (_baseUrl.text.trim().isNotEmpty) 'baseUrl': _baseUrl.text.trim(),
@@ -224,7 +257,12 @@ class _ImportDialogState extends ConsumerState<_ImportDialog> {
   Future<void> _run(bool create) async {
     final req = _request();
     if (req == null) return;
-    if (create && _id.text.trim().isEmpty) return setState(() => _error = 'Give the server an id');
+    if (create) {
+      final existing = ref.read(mcpServersProvider).valueOrNull?.map((x) => x.id) ?? const <String>[];
+      final idProblem = mcpServerIdProblem(_id.text, existing);
+      if (idProblem != null) return setState(() => _error = idProblem);
+    }
+    if (_busy) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -256,7 +294,10 @@ class _ImportDialogState extends ConsumerState<_ImportDialog> {
             SegmentedButton<bool>(
               segments: const [ButtonSegment(value: true, label: Text('From URL')), ButtonSegment(value: false, label: Text('Paste spec'))],
               selected: {_useUrl},
-              onSelectionChanged: (v) => setState(() => _useUrl = v.first),
+              onSelectionChanged: (v) => setState(() {
+                _useUrl = v.first;
+                _preview = null;
+              }),
             ),
             const SizedBox(height: 10),
             if (_useUrl)
@@ -273,7 +314,10 @@ class _ImportDialogState extends ConsumerState<_ImportDialog> {
                 FilterChip(
                   label: Text(m),
                   selected: _methods.contains(m),
-                  onSelected: (v) => setState(() => v ? _methods.add(m) : _methods.remove(m)),
+                  onSelected: (v) => setState(() {
+                    v ? _methods.add(m) : _methods.remove(m);
+                    _preview = null;
+                  }),
                 ),
             ]),
             const Padding(padding: EdgeInsets.only(top: 4), child: Text('Only GET is on by default. Write methods let an agent change data in the target system.', style: TextStyle(fontSize: 11))),
@@ -299,7 +343,7 @@ class _ImportDialogState extends ConsumerState<_ImportDialog> {
       ),
       actions: [
         TextButton(onPressed: _busy ? null : () => Navigator.pop(context, false), child: const Text('Cancel')),
-        OutlinedButton(onPressed: _busy ? null : () => _run(false), child: const Text('Preview')),
+        OutlinedButton(onPressed: _busy ? null : () => _run(false), child: Text(_busy && _preview == null ? 'Working…' : 'Preview')),
         ElevatedButton(onPressed: _busy || _preview == null ? null : () => _run(true), child: const Text('Create')),
       ],
     );
