@@ -6,6 +6,7 @@ import 'package:wayang_studio/data/wayang_repository.dart';
 import 'package:wayang_studio/features/channels/channels_screen.dart';
 import 'package:wayang_studio/models/wayang.dart';
 import 'package:wayang_studio/providers/app_providers.dart';
+import 'package:wayang_studio/design_system/wds.dart';
 
 class _FakeRepo extends WayangRepository {
   _FakeRepo() : super(ApiClient(const ApiConfig(baseUrl: 'http://localhost:0')));
@@ -68,6 +69,8 @@ Future<_FakeRepo> _open(WidgetTester tester) async {
     child: const MaterialApp(home: Scaffold(body: ChannelsScreen())),
   ));
   await tester.pumpAndSettle();
+  expect(find.byType(WdsPageHeader), findsOneWidget);
+  expect(find.byType(WdsBadge), findsWidgets);
   return repo;
 }
 
